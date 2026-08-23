@@ -33,6 +33,12 @@ next-env.d.ts
 # supabase CLI local cache
 supabase/.temp/
 
+# opennextjs-cloudflare build output + local dev secrets
+.open-next/
+.wrangler/
+.dev.vars
+cloudflare-env.d.ts
+
 # agent scratch work (evidence files, one-off scripts/queries) - not repo deliverables
 /*_EVIDENCE.md
 /*_EVIDENCE_SUMMARY.md

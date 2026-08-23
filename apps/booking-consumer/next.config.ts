@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { initOpenNextCloudflareForDev } from "@opennextjs/cloudflare";
 
 const nextConfig: NextConfig = {
   /* config options here */
@@ -6,5 +7,7 @@ const nextConfig: NextConfig = {
   // hostnames rotate every run, so this stays a wildcard rather than a fixed host.
   allowedDevOrigins: ['*.trycloudflare.com'],
 };
+
+initOpenNextCloudflareForDev();
 
 export default nextConfig;
