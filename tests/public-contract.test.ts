@@ -30,3 +30,26 @@ test('merchant LINE credentials remain server-only', () => {
   assert.match(envTemplate, /LINE_MERCHANT_CHANNELS_JSON/);
   assert.doesNotMatch(envTemplate, /NEXT_PUBLIC_LINE_MERCHANT/);
 });
+test('public booking reads only approved service and staff columns', () => {
+  const service = read('apps/booking-consumer/src/lib/booking-service.ts');
+  assert.doesNotMatch(service, /\.from\('services'\)[\s\S]{0,80}\.select\('\*'\)/);
+  assert.doesNotMatch(service, /\.from\('staff'\)[\s\S]{0,80}\.select\('\*'\)/);
+  assert.match(service, /\.select\('id, shop_id, name, nickname'\)/);
+});
+
+test('staff auth mapping is not client-readable', () => {
+  const migration = read('supabase/migrations/20260829105155_bk_a_v1_contract_remediation.sql');
+  assert.match(migration, /DROP POLICY IF EXISTS "Public staff viewable by everyone"/);
+  assert.match(migration, /GRANT SELECT \(id, shop_id, name, nickname, is_active\) ON local_service\.staff TO anon/);
+  assert.doesNotMatch(migration, /GRANT SELECT \([^)]*user_id[^)]*\) ON local_service\.staff TO (?:anon|authenticated)/i);
+  assert.doesNotMatch(migration, /GRANT SELECT \([^)]*creation_idempotency_key[^)]*\) ON local_service\.staff TO (?:anon|authenticated)/i);
+});
+test('consumer Worker has an actual reminder schedule', () => {
+  const wrangler = read('apps/booking-consumer/wrangler.jsonc');
+  const worker = read('apps/booking-consumer/custom-worker.ts');
+  assert.match(wrangler, /"main": "custom-worker\.ts"/);
+  assert.match(wrangler, /"crons": \["\*\/5 \* \* \* \*"\]/);
+  assert.match(worker, /async scheduled/);
+  assert.match(worker, /\/api\/notifications\/dispatch/);
+  assert.match(worker, /NOTIFICATION_DISPATCH_SECRET/);
+});

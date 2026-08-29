@@ -1,11 +1,15 @@
 begin;
-select plan(15);
+select plan(19);
 
 select ok(
   (select not public from storage.buckets where id = 'deposit-slips'),
   'deposit slips bucket is private'
 );
 select has_column('local_service', 'staff', 'user_id', 'staff is linked to auth user');
+select ok(not has_column_privilege('anon', 'local_service.staff', 'user_id', 'SELECT'), 'anon cannot read staff auth user mapping');
+select ok(not has_column_privilege('authenticated', 'local_service.staff', 'user_id', 'SELECT'), 'merchant clients cannot read raw staff auth user mapping');
+select ok(has_column_privilege('anon', 'local_service.staff', 'name', 'SELECT'), 'anon can read public staff display name');
+select ok(not has_column_privilege('anon', 'local_service.services', 'creation_idempotency_key', 'SELECT'), 'anon cannot read service idempotency metadata');
 select has_column('local_service', 'shops', 'customer_cancel_before_hours', 'cancel policy is explicit');
 select has_column('local_service', 'shops', 'customer_reschedule_before_hours', 'reschedule policy is explicit');
 select has_table('local_service', 'auto_slip_attempts', 'auto slip attempts are audited');

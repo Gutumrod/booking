@@ -31,7 +31,6 @@ export interface Staff {
   shop_id: string;
   name: string;
   nickname: string;
-  phone: string;
 }
 
 export interface StaffSchedule {
@@ -105,7 +104,7 @@ export async function getShopBySlug(slug: string): Promise<Shop | null> {
 export async function getShopServices(shopId: string): Promise<Service[]> {
   const { data, error } = await supabase
     .from('services')
-    .select('*')
+    .select('id, shop_id, name, description, duration_minutes, price, deposit_amount')
     .eq('shop_id', shopId)
     .eq('is_active', true);
 
@@ -119,7 +118,7 @@ export async function getShopServices(shopId: string): Promise<Service[]> {
 export async function getShopStaff(shopId: string): Promise<Staff[]> {
   const { data, error } = await supabase
     .from('staff')
-    .select('*')
+    .select('id, shop_id, name, nickname')
     .eq('shop_id', shopId)
     .eq('is_active', true);
 

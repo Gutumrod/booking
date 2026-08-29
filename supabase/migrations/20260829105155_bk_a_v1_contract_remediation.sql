@@ -105,6 +105,21 @@ ALTER TABLE local_service.staff
 CREATE UNIQUE INDEX IF NOT EXISTS staff_shop_user_unique
     ON local_service.staff(shop_id, user_id)
     WHERE user_id IS NOT NULL;
+-- Public booking must never expose auth-user linkage or internal idempotency metadata.
+DROP POLICY IF EXISTS "Public staff viewable by everyone" ON local_service.staff;
+DROP POLICY IF EXISTS "BK-A public active staff" ON local_service.staff;
+CREATE POLICY "BK-A public active staff"
+ON local_service.staff FOR SELECT TO anon
+USING (is_active = true);
+
+
+REVOKE SELECT ON TABLE local_service.staff FROM anon, authenticated;
+GRANT SELECT (id, shop_id, name, nickname, is_active) ON local_service.staff TO anon;
+GRANT SELECT (id, shop_id, name, nickname, phone, is_active, created_at) ON local_service.staff TO authenticated;
+
+REVOKE SELECT ON TABLE local_service.services FROM anon, authenticated;
+GRANT SELECT (id, shop_id, name, description, duration_minutes, price, deposit_amount, is_active) ON local_service.services TO anon;
+GRANT SELECT (id, shop_id, name, description, duration_minutes, price, deposit_amount, is_active, created_at) ON local_service.services TO authenticated;
 
 CREATE OR REPLACE FUNCTION local_service.current_staff_id(p_shop_id uuid)
 RETURNS uuid
@@ -127,6 +142,14 @@ $$;
 
 REVOKE ALL ON FUNCTION local_service.current_staff_id(uuid) FROM PUBLIC, anon, service_role;
 GRANT EXECUTE ON FUNCTION local_service.current_staff_id(uuid) TO authenticated;
+
+DROP POLICY IF EXISTS "BK-A scoped staff reads" ON local_service.staff;
+CREATE POLICY "BK-A scoped staff reads"
+ON local_service.staff FOR SELECT TO authenticated
+USING (
+    local_service.has_shop_role(shop_id, ARRAY['owner', 'admin']::text[])
+    OR id = local_service.current_staff_id(shop_id)
+);
 
 CREATE OR REPLACE FUNCTION local_service.link_staff_user(p_staff_id uuid,p_user_email text)
 RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,local_service,auth AS $$
@@ -513,6 +536,7 @@ BEGIN
     v_start := (p_booking_date || ' ' || p_start_time)::timestamp AT TIME ZONE 'Asia/Bangkok';
     v_end := v_start + make_interval(mins => v_booking.service_duration_minutes);
     IF v_start <= now() THEN RAISE EXCEPTION 'New booking time must be in the future'; END IF;
+    IF NOT EXISTS (SELECT 1 FROM local_service.staff s WHERE s.id=v_booking.staff_id AND s.shop_id=v_booking.shop_id AND s.is_active=true) THEN RAISE EXCEPTION 'Assigned staff is no longer active'; END IF;
     IF NOT EXISTS (
         SELECT 1 FROM local_service.staff_schedules ss
         WHERE ss.shop_id=v_booking.shop_id AND ss.staff_id=v_booking.staff_id

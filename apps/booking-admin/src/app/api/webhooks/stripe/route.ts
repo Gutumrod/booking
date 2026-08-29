@@ -303,7 +303,7 @@ export async function POST(req: NextRequest) {
         }
 
         await syncSubscriptionState({
-          eventType: currentSub ? 'customer.subscription.updated' : event.type,
+          eventType: event.type,
           eventCreated: event.created,
           shopId: payload.shopId,
           stripeCustomerId: payload.stripeCustomerId,
@@ -322,7 +322,7 @@ export async function POST(req: NextRequest) {
         const payload = extractSubscription(currentSub);
 
         await syncSubscriptionState({
-          eventType: currentSub ? 'customer.subscription.updated' : event.type,
+          eventType: 'customer.subscription.updated',
           eventCreated: event.created,
           shopId: null,
           stripeCustomerId: null,
