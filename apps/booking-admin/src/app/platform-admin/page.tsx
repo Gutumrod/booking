@@ -68,6 +68,8 @@ export default function PlatformSuperAdminPage() {
   }, []);
 
   useEffect(() => {
+    // Initial synchronization with the remote platform shop list.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadShops();
   }, [loadShops]);
 

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { 
@@ -14,6 +14,8 @@ import {
   StaffSchedule, ShopHoliday,
 } from '../../../lib/booking-service';
 import { LanguageToggle } from '@/components/language-toggle';
+import { QRCodeSVG } from 'qrcode.react';
+import { createPromptPayPayload } from '../../../lib/promptpay';
 
 const CENTRAL_LINE_OA_ID = process.env.NEXT_PUBLIC_CENTRAL_LINE_OA_ID || 'central_booking_oa';
 
@@ -57,6 +59,7 @@ export default function BookingPage() {
   const [bookingSuccess, setBookingSuccess] = useState(false);
   const [holdResult, setHoldResult] = useState<HoldResponse | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const qrContainerRef = useRef<HTMLDivElement>(null);
 
   // 15-Minute Countdown Timer (900 seconds)
   const [timeLeft, setTimeLeft] = useState<number>(900);
@@ -125,6 +128,14 @@ export default function BookingPage() {
     ? `tel:${shop.phone.replace(/-/g, '')}`
     : undefined;
   const isBookingBlocked = shop?.is_accepting_online_bookings === false;
+  const depositAmount = selectedService?.deposit_amount ?? shop?.default_deposit_amount ?? 100;
+  const promptpayPayload = useMemo(() => {
+    try {
+      return createPromptPayPayload({ recipient: promptpayNumber, amount: depositAmount });
+    } catch {
+      return null;
+    }
+  }, [promptpayNumber, depositAmount]);
 
   const handleCopyPromptpay = () => {
     setCopiedPromptpay(true);
@@ -137,13 +148,13 @@ export default function BookingPage() {
   };
 
   const handleSaveQr = () => {
+    const svg = qrContainerRef.current?.querySelector('svg');
+    if (!svg) return;
     setSavedQrNotice(true);
-    const depositAmount = selectedService?.deposit_amount ?? shop?.default_deposit_amount ?? 100;
-    const qrUrl = `https://promptpay.io/${promptpayNumber.replace(/[^0-9]/g, '')}/${depositAmount}.png`;
+    const qrData = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg.outerHTML)}`;
     const link = document.createElement('a');
-    link.href = qrUrl;
-    link.download = `PromptPay-QR-Deposit-${depositAmount}THB.png`;
-    link.target = '_blank';
+    link.href = qrData;
+    link.download = `PromptPay-QR-Deposit-${depositAmount}THB.svg`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -279,12 +290,12 @@ export default function BookingPage() {
     setErrorMessage(null);
     setIsSubmitting(true);
     try {
-      const slipUrl = await uploadDepositSlip(holdResult.booking_id, slipFile, {
+      const slipObjectPath = await uploadDepositSlip(holdResult.booking_id, holdResult.link_token, slipFile, {
         unsupportedType: t('errors.slipUnsupportedType'),
         tooLarge: t('errors.slipTooLarge'),
         urlFailed: t('errors.slipUrlFailed'),
       });
-      await submitDepositSlip(holdResult.booking_id, slipUrl);
+      await submitDepositSlip(holdResult.booking_id, holdResult.link_token, slipObjectPath);
       setBookingSuccess(true);
     } catch (err: unknown) {
       setErrorMessage(getErrorMessage(err, t('errors.slipSubmitFailed')));
@@ -413,7 +424,7 @@ export default function BookingPage() {
             {/* Central LINE OA Binding Button */}
             <div className="space-y-2">
               <a
-                href={`https://line.me/R/oaMessage/@${CENTRAL_LINE_OA_ID}/?%E0%B8%9C%E0%B8%B9%E0%B8%81%E0%B8%84%E0%B8%B4%E0%B8%A7%20${holdResult?.booking_code}-${holdResult?.link_token}`}
+                href={`https://line.me/R/oaMessage/@${shop?.line_oa_id || CENTRAL_LINE_OA_ID}/?%E0%B8%9C%E0%B8%B9%E0%B8%81%E0%B8%84%E0%B8%B4%E0%B8%A7%20${holdResult?.booking_code}-${holdResult?.link_token}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="w-full bg-[#06C755] hover:bg-[#05b34c] text-white py-3.5 px-4 rounded-xl font-bold text-sm flex flex-col items-center justify-center gap-0.5 shadow-lg shadow-emerald-950/50 transition-all text-center"
@@ -424,6 +435,14 @@ export default function BookingPage() {
                 </div>
                 <span className="text-[11px] font-normal text-emerald-100 opacity-90">{t('success.lineSubtext', { lineId: CENTRAL_LINE_OA_ID })}</span>
               </a>
+              {holdResult && (
+                <a
+                  href={`/manage-booking?bookingId=${encodeURIComponent(holdResult.booking_id)}&token=${encodeURIComponent(holdResult.link_token)}`}
+                  className="block w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 text-center text-xs font-semibold text-slate-100 hover:bg-slate-700"
+                >
+                  {t('success.manageBooking')}
+                </a>
+              )}
 
               <a
                 href={shopPhoneHref}
@@ -655,12 +674,8 @@ export default function BookingPage() {
                   </div>
                   
                   <div className="pt-2">
-                    <div className="w-44 h-44 bg-white rounded-2xl p-2 mx-auto mb-2 flex items-center justify-center border border-slate-300 shadow-xl">
-                      <img 
-                        src={`https://promptpay.io/${promptpayNumber.replace(/[^0-9]/g, '')}/${selectedService?.deposit_amount ?? shop?.default_deposit_amount ?? 100}.png`} 
-                        alt={t('step3.promptpayQrAlt')}
-                        className="w-40 h-40 object-contain rounded-xl"
-                      />
+                    <div ref={qrContainerRef} className="w-44 h-44 bg-white rounded-2xl p-2 mx-auto mb-2 flex items-center justify-center border border-slate-300 shadow-xl" aria-label={t('step3.promptpayQrAlt')}>
+                      {promptpayPayload ? <QRCodeSVG value={promptpayPayload} size={160} level="M" /> : <AlertTriangle className="w-10 h-10 text-rose-500" />}
                     </div>
                     <button
                       type="button"

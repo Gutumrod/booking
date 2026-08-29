@@ -4,6 +4,8 @@
 **Rule:** Historical phases are evidence only; this roadmap governs future build order.
 
 ## BK-A — V1 Contract Remediation
+
+**2026-08-29 status:** implementation candidate completed for all non-provider-decision items; unit/static, lint, and production builds pass. BK-A is not release-complete because local database replay/pgTAP and DB-backed G2–G9 acceptance are blocked by unavailable local PostgreSQL. BK-B remains closed. Evidence: `docs/audit/BK-A-IMPLEMENTATION-EVIDENCE-2026-08-29.md`.
 Close all baseline→target gaps before public sale:
 1. private deposit-slip storage + authorized read path;
 2. explicit auth-user→staff identity and staff self-scope;

@@ -74,6 +74,8 @@ The public deposit-slip contract is nevertheless a P1 privacy/security mismatch 
 
 **BK-0 contradiction status: RESOLVED AT PRODUCT-CONTRACT LEVEL.** Owner decisions now resolve every listed P1 product/security/entitlement choice. Several baseline implementation gaps remain BK-A release blockers; they are not unresolved documentation contradictions.
 
+**BK-A implementation snapshot (2026-08-29):** the remediation migration, application paths, and static/unit coverage now exist. Build and lint pass, but database replay/RLS/pgTAP and real provider gates are blocked locally and are not accepted as PASS. See `BK-A-IMPLEMENTATION-EVIDENCE-2026-08-29.md`.
+
 ## 6. Downstream implementation gate
 
 Market and competitor evidence was reviewed and the owner approved the full recommendation set on 2026-08-28. Numbered SSOT is now locked to that product contract. BK-A must remediate baseline implementation gaps before any public V1 release; commercial price lock, provider allowances, and legal/operations approvals occur at their explicitly documented downstream gates.

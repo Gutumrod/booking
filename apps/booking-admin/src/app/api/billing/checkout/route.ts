@@ -1,11 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { createClient } from '@/lib/supabase/server';
-
-const PLAN_PRICE_ENV: Record<string, string | undefined> = {
-  basic_490: process.env.STRIPE_PRICE_BASIC,
-  pro_990: process.env.STRIPE_PRICE_PRO,
-};
+import { resolveMonthlyPlan } from '@/lib/commercial-contract';
 
 function getStripeClient(): Stripe {
   const secretKey = process.env.STRIPE_SECRET_KEY ?? '';
@@ -16,8 +12,8 @@ function getStripeClient(): Stripe {
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null);
   const plan = body?.plan;
-
-  const priceId = plan ? PLAN_PRICE_ENV[plan] : undefined;
+  const monthlyPlan = resolveMonthlyPlan(plan);
+  const priceId = monthlyPlan ? process.env[monthlyPlan.priceEnvName] : undefined;
   if (!priceId) {
     return NextResponse.json({ error: 'Invalid or unconfigured plan' }, { status: 400 });
   }

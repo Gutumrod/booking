@@ -35,6 +35,7 @@
       "confirmedTitle": "Booking confirmed",
       "reviewTitle": "Slip received, payment is being reviewed",
       "bookingCode": "Booking code:",
+      "manageBooking": "Reschedule or cancel this booking",
       "queueStatus": "Booking status",
       "statusConfirmed": "Confirmed",
       "statusReview": "Slip under review",
@@ -118,5 +119,15 @@
       "slipUrlFailed": "Could not create the slip URL.",
       "shopBlockedService": "This shop is not accepting online bookings right now."
     }
+  },
+  "manageBooking": {
+    "title": "Manage your booking",
+    "policy": "The server enforces the merchant's policy window. If a change fails, the original booking remains unchanged.",
+    "reason": "Reason for changing the booking",
+    "cancel": "Cancel booking",
+    "reschedule": "Reschedule",
+    "cancelled": "Booking cancelled",
+    "rescheduled": "Booking rescheduled",
+    "invalidLink": "This booking-management link is invalid or incomplete"
   }
 }

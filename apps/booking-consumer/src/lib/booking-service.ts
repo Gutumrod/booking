@@ -184,16 +184,20 @@ export async function createBookingHold(
   return data as HoldResponse;
 }
 
-export async function submitDepositSlip(bookingId: string, slipUrl: string, transRef?: string) {
+export async function submitDepositSlip(bookingId: string, recoveryToken: string, slipObjectPath: string, transRef?: string) {
   const { data, error } = await supabase.rpc('submit_deposit_slip', {
     p_booking_id: bookingId,
-    p_slip_url: slipUrl,
+    p_recovery_token: recoveryToken,
+    p_slip_url: slipObjectPath,
     p_trans_ref: transRef || null,
   });
 
   if (error) {
     console.error('Error submitting deposit slip:', error);
     throw new Error(error.message || 'Failed to submit deposit slip');
+  }
+  if ((data as { ok?: boolean; error?: string } | null)?.ok === false) {
+    throw new Error((data as { error?: string }).error || 'Invalid booking recovery token');
   }
 
   return data;
@@ -213,37 +217,34 @@ const defaultUploadDepositSlipMessages: UploadDepositSlipMessages = {
 
 export async function uploadDepositSlip(
   bookingId: string,
+  recoveryToken: string,
   file: File,
   messages: UploadDepositSlipMessages = defaultUploadDepositSlipMessages,
 ): Promise<string> {
-  const allowedTypes: Record<string, string> = {
-    'image/jpeg': 'jpg',
-    'image/png': 'png',
-    'image/webp': 'webp',
-  };
-  const extension = allowedTypes[file.type];
-
-  if (!extension) {
+  if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
     throw new Error(messages.unsupportedType);
   }
   if (file.size > 5 * 1024 * 1024) {
     throw new Error(messages.tooLarge);
   }
 
-  const objectPath = `${bookingId}/${crypto.randomUUID()}.${extension}`;
+  const intentResponse = await fetch('/api/deposit-slips/upload-intent', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ bookingId, recoveryToken, contentType: file.type, size: file.size }),
+  });
+  const intent = await intentResponse.json().catch(() => null) as { objectPath?: string; token?: string; error?: string } | null;
+  if (!intentResponse.ok || !intent?.objectPath || !intent.token) {
+    throw new Error(intent?.error || messages.urlFailed);
+  }
   const { error } = await supabase.storage
     .from('deposit-slips')
-    .upload(objectPath, file, { contentType: file.type, upsert: false });
+    .uploadToSignedUrl(intent.objectPath, intent.token, file, { contentType: file.type });
 
   if (error) {
     console.error('Error uploading deposit slip:', error);
     throw new Error(error.message || 'Failed to upload deposit slip');
   }
 
-  const { data } = supabase.storage.from('deposit-slips').getPublicUrl(objectPath);
-  if (!data.publicUrl) {
-    throw new Error(messages.urlFailed);
-  }
-
-  return data.publicUrl;
+  return intent.objectPath;
 }

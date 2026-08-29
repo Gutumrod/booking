@@ -4,6 +4,8 @@
 
 Disposition values are written literally as `V1 REQUIRED`, `V1 OPTIONAL`, `POST-V1`, or `RETIRED`. Baseline evidence state is separate from disposition; a `V1 REQUIRED` row may still be a BK-A implementation gap.
 
+BK-A implementation evidence is consolidated at `docs/audit/BK-A-IMPLEMENTATION-EVIDENCE-2026-08-29.md`. Static/unit/build evidence is current; database-backed authority evidence remains pending a clean local replay and pgTAP run.
+
 | Feature | Disposition | Role | Requirement | Entitlement | Authority/API | UX / negative states | Analytics | Release evidence | Marketing claim |
 |---|---|---|---|---|---|---|---|---|---|
 | Signup | V1 REQUIRED | Owner | FR-AUTH-001 | all | Supabase Auth | duplicate/invalid/email failure | signup_started/completed | auth E2E | signup available |

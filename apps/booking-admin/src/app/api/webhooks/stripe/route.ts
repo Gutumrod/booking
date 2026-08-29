@@ -37,9 +37,6 @@ function mapPriceIdToPlan(priceId: string | null | undefined): string | null {
   if (!priceId) return null;
   if (priceId === process.env.STRIPE_PRICE_BASIC) return 'basic_490';
   if (priceId === process.env.STRIPE_PRICE_PRO) return 'pro_990';
-  // Fallback heuristic: if env vars aren't set yet, guess from common patterns.
-  if (priceId.includes('basic') || priceId.includes('490')) return 'basic_490';
-  if (priceId.includes('pro') || priceId.includes('990')) return 'pro_990';
   return null;
 }
 
@@ -147,38 +144,23 @@ async function isDuplicateEvent(
 ): Promise<boolean> {
   const supabaseAdmin = getSupabaseAdmin();
 
-  // Use upsert with ignoreDuplicates to generate the exact SQL pattern from
-  // design doc section 4.3.2:
-  //   INSERT INTO ... ON CONFLICT (id) DO NOTHING RETURNING id
-  // If a row is returned, this is a new event. If no row is returned, the
-  // event is a duplicate and processing should be skipped.
-  const { data, error } = await supabaseAdmin
-    .from('stripe_webhook_events')
-    .upsert(
-      {
-        id: eventId,
-        type: eventType,
-        created_at: new Date(eventCreated * 1000).toISOString(),
-      },
-      { onConflict: 'id', ignoreDuplicates: true },
-    )
-    .select('id');
+  const { data, error } = await supabaseAdmin.rpc('claim_stripe_webhook_event', {
+    p_id: eventId,
+    p_type: eventType,
+    p_created_at: new Date(eventCreated * 1000).toISOString(),
+  });
 
   if (error) {
-    // A non-duplicate error is a real DB problem; log it and treat as
-    // non-duplicate so processing continues (better to attempt the write
-    // and fail-log than to drop a legitimate event silently).
     console.error('stripe_webhook_events insert failed', {
       eventId,
       eventType,
       error: error.message,
       code: error.code,
     });
-    return false;
+    throw new Error(`Stripe event journal failed: ${error.message}`);
   }
 
-  // No row returned means ON CONFLICT DO NOTHING fired — duplicate event.
-  return !data || data.length === 0;
+  return data !== true;
 }
 
 // --- RPC helper for atomic state sync ---------------------------------------
@@ -210,7 +192,7 @@ async function syncSubscriptionState(params: SyncStateParams): Promise<{ applied
     p_cancel_at_period_end: params.cancelAtPeriodEnd,
   };
 
-  const { data, error } = await supabaseAdmin.rpc('sync_subscription_state', rpcArgs);
+  const { data, error } = await supabaseAdmin.rpc('sync_subscription_state_bk_a', rpcArgs);
 
   if (error) {
     throw new Error(`sync_subscription_state RPC failed: ${error.message}`);
@@ -281,16 +263,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ received: true, duplicate: true });
     }
   } catch (err) {
-    // If the idempotency insert itself fails (non-duplicate error), log it
-    // but still return 200 to Stripe — we don't want a retry storm on a
-    // DB infrastructure issue. The event will be retried by Stripe and may
-    // be processed on the next attempt.
     console.error('Idempotency guard failed', {
       eventId: event.id,
       eventType: event.type,
       error: err instanceof Error ? err.message : String(err),
     });
-    return NextResponse.json({ received: true, error: 'idempotency_guard_failed' });
+    return NextResponse.json({ error: 'idempotency_guard_failed' }, { status: 500 });
   }
 
   // 4. Dispatch to the appropriate event handler. Each handler calls the
@@ -325,7 +303,7 @@ export async function POST(req: NextRequest) {
         }
 
         await syncSubscriptionState({
-          eventType: event.type,
+          eventType: currentSub ? 'customer.subscription.updated' : event.type,
           eventCreated: event.created,
           shopId: payload.shopId,
           stripeCustomerId: payload.stripeCustomerId,
@@ -340,10 +318,11 @@ export async function POST(req: NextRequest) {
 
       case 'customer.subscription.updated': {
         const sub = event.data.object as Stripe.Subscription;
-        const payload = extractSubscription(sub);
+        const currentSub = await stripeClient.subscriptions.retrieve(sub.id);
+        const payload = extractSubscription(currentSub);
 
         await syncSubscriptionState({
-          eventType: event.type,
+          eventType: currentSub ? 'customer.subscription.updated' : event.type,
           eventCreated: event.created,
           shopId: null,
           stripeCustomerId: null,
@@ -381,7 +360,10 @@ export async function POST(req: NextRequest) {
         // For invoice.paid, use the invoice's period_end as the current
         // billing period end. This is the most reliable source — it comes
         // directly from the invoice object without needing an extra API call.
-        const currentPeriodEnd = payload.invoicePeriodEnd;
+        const currentSub = payload.stripeSubscriptionId
+          ? await stripeClient.subscriptions.retrieve(payload.stripeSubscriptionId)
+          : null;
+        const currentPeriodEnd = currentSub ? getSubscriptionPeriodEnd(currentSub) : payload.invoicePeriodEnd;
 
         await syncSubscriptionState({
           eventType: event.type,
@@ -389,8 +371,8 @@ export async function POST(req: NextRequest) {
           shopId: null,
           stripeCustomerId: null,
           stripeSubscriptionId: payload.stripeSubscriptionId,
-          plan: null,
-          status: 'active',
+          plan: currentSub ? extractSubscription(currentSub).plan : null,
+          status: currentSub?.status ?? 'active',
           currentPeriodEnd,
           cancelAtPeriodEnd: null,
         });
@@ -401,16 +383,19 @@ export async function POST(req: NextRequest) {
         const invoice = event.data.object as Stripe.Invoice;
         const payload = extractInvoice(invoice);
 
+        const currentSub = payload.stripeSubscriptionId
+          ? await stripeClient.subscriptions.retrieve(payload.stripeSubscriptionId)
+          : null;
         await syncSubscriptionState({
           eventType: event.type,
           eventCreated: event.created,
           shopId: null,
           stripeCustomerId: null,
           stripeSubscriptionId: payload.stripeSubscriptionId,
-          plan: null,
-          status: 'past_due',
-          currentPeriodEnd: null,
-          cancelAtPeriodEnd: null,
+          plan: currentSub ? extractSubscription(currentSub).plan : null,
+          status: currentSub?.status ?? 'past_due',
+          currentPeriodEnd: currentSub ? getSubscriptionPeriodEnd(currentSub) : null,
+          cancelAtPeriodEnd: currentSub ? isCancelScheduled(currentSub) : null,
         });
         break;
       }
@@ -420,19 +405,24 @@ export async function POST(req: NextRequest) {
         break;
     }
   } catch (err) {
-    // 7. Error handling: if an internal DB write fails partway through, log
-    //    the error server-side but still return HTTP 200 to Stripe. Stripe
-    //    will retry-storm a webhook that keeps returning non-2xx, which is
-    //    worse than a logged failure. The ONLY case that returns non-200 is
-    //    signature verification failure (handled above, returns 400).
     console.error('Stripe webhook event processing failed', {
       eventId: event.id,
       eventType: event.type,
       error: err instanceof Error ? err.message : String(err),
       stack: err instanceof Error ? err.stack : undefined,
     });
-    return NextResponse.json({ received: true, error: 'internal_processing_error' });
+    const admin = getSupabaseAdmin();
+    const { error: releaseError } = await admin.from('stripe_webhook_events')
+      .update({ processing_status: 'failed', last_error: err instanceof Error ? err.message.slice(0, 500) : 'processing failed' })
+      .eq('id', event.id).eq('processing_status', 'processing');
+    if (releaseError) console.error('Failed to mark Stripe event retryable', { eventId: event.id, error: releaseError.message });
+    return NextResponse.json({ error: 'internal_processing_error' }, { status: 500 });
   }
+
+  const { error: completionError } = await getSupabaseAdmin().from('stripe_webhook_events')
+    .update({ processing_status: 'processed', processed_at: new Date().toISOString(), last_error: null })
+    .eq('id', event.id).eq('processing_status', 'processing');
+  if (completionError) return NextResponse.json({ error: 'event_completion_failed' }, { status: 500 });
 
   return NextResponse.json({ received: true });
 }

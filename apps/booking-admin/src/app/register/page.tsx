@@ -51,7 +51,6 @@ function RegisterFormContent() {
       ? planParam
       : 'free_trial'
   );
-  const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
 
   // Step 3: PromptPay Setup
   const [promptpayNumber, setPromptpayNumber] = useState('');
@@ -412,20 +411,7 @@ function RegisterFormContent() {
                       {t('stepPlanTitle')}
                     </h2>
 
-                    {/* Monthly / Yearly Switch */}
-                    <div className="flex items-center gap-2 text-xs">
-                      <span className={`text-[11px] font-semibold ${billingCycle === 'monthly' ? 'text-white' : 'text-slate-500'}`}>{t('monthly')}</span>
-                      <button
-                        type="button"
-                        onClick={() => setBillingCycle(billingCycle === 'monthly' ? 'yearly' : 'monthly')}
-                        className="w-10 h-5 bg-slate-800 rounded-full p-0.5 border border-slate-700 relative"
-                      >
-                        <div className={`w-3.5 h-3.5 bg-emerald-500 rounded-full transition-all ${billingCycle === 'yearly' ? 'translate-x-5' : 'translate-x-0'}`} />
-                      </button>
-                      <span className={`text-[11px] font-semibold ${billingCycle === 'yearly' ? 'text-amber-400 font-bold' : 'text-slate-500'}`}>
-                        {t('yearly')} <span className="bg-amber-500/20 text-amber-300 text-[10px] px-2 py-0.5 rounded border border-amber-500/30">{t('save2Months')}</span>
-                      </span>
-                    </div>
+                    <span className="text-[11px] font-semibold text-amber-300">{t('pilotReferenceNotice')}</span>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -465,7 +451,7 @@ function RegisterFormContent() {
                         {selectedPlan === 'basic_490' && <CheckCircle2 className="w-4 h-4 text-emerald-400" />}
                       </div>
                       <p className="text-xl font-extrabold text-white font-mono">
-                        {billingCycle === 'monthly' ? '฿490' : '฿4,900'} <span className="text-[10px] font-normal text-slate-400">{billingCycle === 'monthly' ? t('perMonth') : t('perYear')}</span>
+                        ฿490 <span className="text-[10px] font-normal text-slate-400">{t('perMonth')}</span>
                       </p>
                       <p className="text-[11px] text-slate-400">{t('planBasicDesc')}</p>
                       <ul className="text-[10px] space-y-1.5 text-slate-300 border-t border-slate-800/80 pt-2">
@@ -492,13 +478,13 @@ function RegisterFormContent() {
                         {selectedPlan === 'pro_990' && <CheckCircle2 className="w-4 h-4 text-emerald-400" />}
                       </div>
                       <p className="text-xl font-extrabold text-emerald-400 font-mono">
-                        {billingCycle === 'monthly' ? '฿990' : '฿9,900'} <span className="text-[10px] font-normal text-slate-400">{billingCycle === 'monthly' ? t('perMonth') : t('perYear')}</span>
+                        ฿990 <span className="text-[10px] font-normal text-slate-400">{t('perMonth')}</span>
                       </p>
                       <p className="text-[11px] text-slate-400">{t('planProDesc')}</p>
                       <ul className="text-[10px] space-y-1.5 text-slate-300 border-t border-slate-800/80 pt-2">
-                        <li>✓ รับจองสูงสุด 500 คิว/เดือน</li>
-                        <li>✓ เพิ่มพนักงานสูงสุด 10 คน</li>
-                        <li>✓ รองรับ Custom LINE Token</li>
+                        <li>{t('planProQ1')}</li>
+                        <li>{t('planProQ2')}</li>
+                        <li>{t('planProQ3')}</li>
                       </ul>
                     </div>
                   </div>
@@ -515,7 +501,7 @@ function RegisterFormContent() {
 
                   <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-3.5 text-xs text-slate-300 space-y-1">
                     <p className="font-bold text-emerald-400 flex items-center gap-1.5">
-                      <ShieldCheck className="w-4 h-4 text-emerald-400" /> เงินมัดจำเข้าบัญชีร้านค้าโดยตรง 100%
+                      <ShieldCheck className="w-4 h-4 text-emerald-400" /> {t('depositFlowTitle')}
                     </p>
                     <p className="text-[11px] text-slate-400">
                       ระบบจะนำเลขพร้อมเพย์นี้ไปสร้างเป็น Dynamic QR Code ให้ลูกค้าสแกนโอนเงินมัดจำ เงินเข้าบัญชีท่านทันทีโดยไม่ผ่านตัวกลาง

@@ -1,18 +1,24 @@
 'use client';
 
 import React, { useCallback, useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
 import {
   approveBookingDeposit,
   cancelBooking,
   createShopHoliday,
+  createSignedDepositSlipUrl,
   createService,
   createStaff,
   deleteShopHoliday,
   fetchAdminDashboardData,
+  linkStaffUser,
+  exportCoreBusinessData,
   rejectBookingDeposit,
+  requestAccountClosure,
   saveStaffWeeklySchedule,
   setServiceActive,
+  setBookingOutcome,
   setStaffActive,
   startBillingCheckout,
   startBillingPortal,
@@ -108,6 +114,7 @@ export default function AdminDashboard() {
   const [selectedScheduleDays, setSelectedScheduleDays] = useState<Record<string, number>>({});
   const [services, setServices] = useState<ServiceItem[]>([]);
   const [selectedSlipBooking, setSelectedSlipBooking] = useState<Booking | null>(null);
+  const [signedSlipUrl, setSignedSlipUrl] = useState<string | null>(null);
   const [cancelBookingTarget, setCancelBookingTarget] = useState<Booking | null>(null);
   const [cancelReason, setCancelReason] = useState('');
   const [isBookingsLoading, setIsBookingsLoading] = useState(true);
@@ -169,6 +176,8 @@ export default function AdminDashboard() {
     return true;
   });
 
+  // Stable callback is required by the initial-load effect below.
+  // eslint-disable-next-line react-hooks/preserve-manual-memoization
   const loadDashboardBookings = useCallback(async (showLoading = true) => {
     if (showLoading) setIsBookingsLoading(true);
     setBookingError('');
@@ -284,6 +293,61 @@ export default function AdminDashboard() {
     }
   };
 
+  const handleBookingOutcome = async (bookingId: string, outcome: 'completed' | 'no_show') => {
+    if (shopRole === 'staff') return;
+    setMutatingBookingId(bookingId);
+    setBookingError('');
+    try {
+      await setBookingOutcome(bookingId, outcome);
+      await loadDashboardBookings(false);
+    } catch (error) {
+      setBookingError(error instanceof Error ? error.message : t('outcomeFailed'));
+    } finally {
+      setMutatingBookingId(null);
+    }
+  };
+
+  const handleDataExport = async () => {
+    if (!shopId || shopRole !== 'owner') return;
+    setMutatingResourceId('data-export');
+    setManagementError('');
+    try {
+      const data = await exportCoreBusinessData(shopId);
+      const rows: string[][] = [['dataset', 'record_json']];
+      for (const [dataset, value] of Object.entries(data)) {
+        const records = Array.isArray(value) ? value : [value];
+        for (const record of records) rows.push([dataset, JSON.stringify(record ?? {})]);
+      }
+      const csv = rows.map((row) => row.map((cell) => `"${cell.replaceAll('"', '""')}"`).join(',')).join('\r\n');
+      const url = URL.createObjectURL(new Blob(['\uFEFF', csv], { type: 'text/csv;charset=utf-8' }));
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = `booking-data-${new Date().toISOString().slice(0, 10)}.csv`;
+      anchor.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      setManagementError(error instanceof Error ? error.message : t('dataExportFailed'));
+    } finally {
+      setMutatingResourceId(null);
+    }
+  };
+
+  const handleAccountClosure = async () => {
+    if (!shopId || shopRole !== 'owner') return;
+    const reason = window.prompt(t('closureReasonPrompt'))?.trim();
+    if (!reason) return;
+    setMutatingResourceId('account-closure');
+    setManagementError('');
+    try {
+      await requestAccountClosure(shopId, reason);
+      window.alert(t('closureRequested'));
+    } catch (error) {
+      setManagementError(error instanceof Error ? error.message : t('closureRequestFailed'));
+    } finally {
+      setMutatingResourceId(null);
+    }
+  };
+
   const handleUpgrade = async (plan: 'basic_490' | 'pro_990') => {
     if (shopRole !== 'owner') return;
 
@@ -370,6 +434,22 @@ export default function AdminDashboard() {
       await loadDashboardBookings(false);
     } catch (error) {
       setManagementError(error instanceof Error ? error.message : t('toggleStaffFailed'));
+    } finally {
+      setMutatingResourceId(null);
+    }
+  };
+
+  const handleLinkStaffUser = async (staffMember: StaffMember) => {
+    if (shopRole !== 'owner') return;
+    const email = window.prompt(t('staffEmailPrompt'))?.trim();
+    if (!email) return;
+    setMutatingResourceId(`link-${staffMember.id}`);
+    setManagementError('');
+    try {
+      await linkStaffUser(staffMember.id, email);
+      window.alert(t('staffLinked'));
+    } catch (error) {
+      setManagementError(error instanceof Error ? error.message : t('staffLinkFailed'));
     } finally {
       setMutatingResourceId(null);
     }
@@ -520,42 +600,42 @@ export default function AdminDashboard() {
               >
                 {t('tabAllBookings')}
               </button>
-              <button
+              {shopRole !== 'staff' && <button
                 onClick={() => setActiveTab('schedules')}
                 className={`px-3 py-1.5 rounded-lg font-medium transition-all ${activeTab === 'schedules' ? 'bg-emerald-500 text-slate-950 font-bold' : 'text-slate-400 hover:text-white'}`}
               >
                 {t('tabSchedules')}
-              </button>
-              <button
+              </button>}
+              {shopRole !== 'staff' && <button
                 onClick={() => setActiveTab('staff')}
                 className={`px-3 py-1.5 rounded-lg font-medium transition-all ${activeTab === 'staff' ? 'bg-emerald-500 text-slate-950 font-bold' : 'text-slate-400 hover:text-white'}`}
               >
                 {t('tabStaff')}
-              </button>
-              <button
+              </button>}
+              {shopRole !== 'staff' && <button
                 onClick={() => setActiveTab('services')}
                 className={`px-3 py-1.5 rounded-lg font-medium transition-all ${activeTab === 'services' ? 'bg-emerald-500 text-slate-950 font-bold' : 'text-slate-400 hover:text-white'}`}
               >
                 {t('tabServices')}
-              </button>
-              <button
+              </button>}
+              {shopRole !== 'staff' && <button
                 onClick={() => setActiveTab('settings')}
                 className={`px-3 py-1.5 rounded-lg font-medium transition-all ${activeTab === 'settings' ? 'bg-emerald-500 text-slate-950 font-bold' : 'text-slate-400 hover:text-white'}`}
               >
                 {t('tabSettings')}
-              </button>
-              <button
+              </button>}
+              {shopRole === 'owner' && <button
                 onClick={() => setActiveTab('billing')}
                 className={`px-3 py-1.5 rounded-lg font-medium transition-all ${activeTab === 'billing' ? 'bg-amber-400 text-slate-950 font-bold' : 'text-amber-400 hover:text-amber-300'}`}
               >
                 {t('tabBilling')}
-              </button>
-              <a
+              </button>}
+              {shopRole !== 'staff' && <Link
                 href="/dashboard/tickets"
                 className="px-3 py-1.5 rounded-lg font-medium transition-all text-slate-400 hover:text-white"
               >
                 {t('tabTickets')}
-              </a>
+              </Link>}
             </nav>
             <LanguageToggle />
           </div>
@@ -734,7 +814,17 @@ export default function AdminDashboard() {
                         <div className="flex items-center justify-end gap-2 flex-wrap">
                           {b.status === 'pending_review' && (
                             <button
-                              onClick={() => setSelectedSlipBooking(b)}
+                              onClick={async () => {
+                                setSelectedSlipBooking(b);
+                                setSignedSlipUrl(null);
+                                if (b.slipObjectPath) {
+                                  try {
+                                    setSignedSlipUrl(await createSignedDepositSlipUrl(b.slipObjectPath));
+                                  } catch (error) {
+                                    setBookingError(error instanceof Error ? error.message : t('slipNoUrl'));
+                                  }
+                                }
+                              }}
                               disabled={mutatingBookingId === b.id}
                               className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 px-3 py-1.5 rounded-lg font-bold text-xs flex items-center gap-1 shadow-md"
                             >
@@ -755,6 +845,20 @@ export default function AdminDashboard() {
                               <X className="w-3.5 h-3.5" />
                               {t('cancelQueue')}
                             </button>
+                          )}
+                          {b.status === 'confirmed' && shopRole !== 'staff' && (
+                            <>
+                              <button type="button" onClick={() => handleBookingOutcome(b.id, 'completed')}
+                                disabled={mutatingBookingId === b.id}
+                                className="bg-blue-500/10 hover:bg-blue-500/20 text-blue-300 border border-blue-500/30 px-3 py-1.5 rounded-lg font-semibold text-xs">
+                                {t('markCompleted')}
+                              </button>
+                              <button type="button" onClick={() => handleBookingOutcome(b.id, 'no_show')}
+                                disabled={mutatingBookingId === b.id}
+                                className="bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 border border-purple-500/30 px-3 py-1.5 rounded-lg font-semibold text-xs">
+                                {t('markNoShow')}
+                              </button>
+                            </>
                           )}
                           {b.status === 'cancelled' && (
                             <span className="text-slate-500 text-xs italic">{t('cancelledNote')}</span>
@@ -1023,6 +1127,13 @@ export default function AdminDashboard() {
                     <p className="text-slate-400 text-[11px]">{st.role} {t('contactPrefix')}{st.phone}</p>
                   </div>
                   <div className="flex items-center gap-3">
+                    {shopRole === 'owner' && (
+                      <button type="button" onClick={() => handleLinkStaffUser(st)}
+                        disabled={mutatingResourceId === `link-${st.id}`}
+                        className="px-3 py-1 rounded-lg font-semibold text-[11px] border border-sky-500/30 text-sky-300 disabled:opacity-50">
+                        {t('linkStaffLogin')}
+                      </button>
+                    )}
                     <button
                       onClick={() => void toggleStaffActive(st)}
                       disabled={shopRole !== 'owner' || mutatingResourceId === st.id}
@@ -1388,6 +1499,22 @@ export default function AdminDashboard() {
                 </div>
               </div>
             </div>
+            {shopRole === 'owner' && (
+              <section className="border-t border-slate-800 pt-5 space-y-3">
+                <h3 className="font-bold text-sm text-white">{t('dataRightsTitle')}</h3>
+                <p className="text-xs text-slate-400">{t('dataRightsBody')}</p>
+                <div className="flex flex-wrap gap-3">
+                  <button type="button" onClick={handleDataExport} disabled={mutatingResourceId === 'data-export'}
+                    className="border border-emerald-500/40 text-emerald-300 px-4 py-2 rounded-xl text-xs font-bold disabled:opacity-50">
+                    {t('exportCsv')}
+                  </button>
+                  <button type="button" onClick={handleAccountClosure} disabled={mutatingResourceId === 'account-closure'}
+                    className="border border-rose-500/40 text-rose-300 px-4 py-2 rounded-xl text-xs font-bold disabled:opacity-50">
+                    {t('requestClosure')}
+                  </button>
+                </div>
+              </section>
+            )}
           </form>
         )}
 
@@ -1562,7 +1689,7 @@ export default function AdminDashboard() {
             <div className="flex justify-between items-center border-b border-slate-800 pb-3">
               <h3 className="text-base font-bold text-white">{t('slipTitle', { code: selectedSlipBooking.bookingCode })}</h3>
               <button
-                onClick={() => setSelectedSlipBooking(null)}
+                onClick={() => { setSelectedSlipBooking(null); setSignedSlipUrl(null); }}
                 className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-all"
                 title={t('slipCloseTitle')}
               >
@@ -1571,8 +1698,8 @@ export default function AdminDashboard() {
             </div>
             
             <div className="bg-slate-950 p-2 rounded-xl border border-slate-800 text-center relative">
-              {selectedSlipBooking.slipUrl ? (
-                <img src={selectedSlipBooking.slipUrl} alt="Deposit Slip" className="max-h-64 object-contain mx-auto rounded-lg" />
+              {signedSlipUrl ? (
+                <img src={signedSlipUrl} alt="Deposit Slip" className="max-h-64 object-contain mx-auto rounded-lg" />
               ) : (
                 <p className="py-10 text-xs text-rose-300">{t('slipNoUrl')}</p>
               )}
@@ -1607,7 +1734,7 @@ export default function AdminDashboard() {
 
               <button
                 type="button"
-                onClick={() => setSelectedSlipBooking(null)}
+                onClick={() => { setSelectedSlipBooking(null); setSignedSlipUrl(null); }}
                 className="w-full bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 font-semibold py-2 rounded-xl text-xs transition-all"
               >
                 {t('closeNoChoice')}

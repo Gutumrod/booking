@@ -151,6 +151,8 @@ export default function TicketsHistoryPage() {
   }, [shopId, searchQuery, selectedStatus, selectedType, receivedFrom, receivedTo, overdueOnly, t]);
 
   useEffect(() => {
+    // Initial synchronization with the remote ticket store.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadTickets();
   }, [loadTickets]);
 

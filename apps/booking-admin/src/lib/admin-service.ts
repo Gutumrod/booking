@@ -30,7 +30,7 @@ export interface DashboardBooking {
   depositPrice: number;
   status: BookingStatus;
   depositStatus: DepositStatus;
-  slipUrl?: string;
+  slipObjectPath?: string;
 }
 
 export interface DashboardShop {
@@ -329,7 +329,7 @@ export async function fetchAdminDashboardData(): Promise<AdminDashboardData> {
       depositPrice: toAmount(booking.deposit_amount),
       status: booking.status,
       depositStatus: booking.deposit_status,
-      slipUrl: booking.slip_url ?? undefined,
+      slipObjectPath: booking.slip_url ?? undefined,
     } satisfies DashboardBooking;
   });
 
@@ -517,6 +517,11 @@ export async function setStaffActive(staffId: string, isActive: boolean): Promis
   if (error) throw new Error(error.message);
 }
 
+export async function linkStaffUser(staffId: string, email: string): Promise<void> {
+  const { error } = await supabase.rpc('link_staff_user', { p_staff_id: staffId, p_user_email: email });
+  if (error) throw new Error(error.message);
+}
+
 export async function approveBookingDeposit(bookingId: string): Promise<void> {
   const { error } = await supabase.rpc('approve_booking_deposit', {
     p_booking_id: bookingId,
@@ -534,6 +539,16 @@ export async function rejectBookingDeposit(bookingId: string, reason: string): P
   if (error) throw new Error(error.message);
 }
 
+export async function createSignedDepositSlipUrl(objectPath: string): Promise<string> {
+  const { data, error } = await supabase.storage
+    .from('deposit-slips')
+    .createSignedUrl(objectPath, 300);
+  if (error || !data?.signedUrl) {
+    throw new Error(error?.message || 'สร้างลิงก์ดูสลิปชั่วคราวไม่สำเร็จ');
+  }
+  return data.signedUrl;
+}
+
 export async function cancelBooking(bookingId: string, reason: string): Promise<void> {
   const { error } = await supabase.rpc('cancel_booking', {
     p_booking_id: bookingId,
@@ -541,6 +556,33 @@ export async function cancelBooking(bookingId: string, reason: string): Promise<
   });
 
   if (error) throw new Error(error.message);
+}
+
+export async function setBookingOutcome(
+  bookingId: string,
+  outcome: 'completed' | 'no_show',
+): Promise<void> {
+  const { error } = await supabase.rpc('set_booking_outcome', {
+    p_booking_id: bookingId,
+    p_outcome: outcome,
+  });
+
+  if (error) throw new Error(error.message);
+}
+
+export async function exportCoreBusinessData(shopId: string): Promise<Record<string, unknown>> {
+  const { data, error } = await supabase.rpc('export_core_business_data', { p_shop_id: shopId });
+  if (error) throw new Error(error.message);
+  return (data ?? {}) as Record<string, unknown>;
+}
+
+export async function requestAccountClosure(shopId: string, reason: string): Promise<string> {
+  const { data, error } = await supabase.rpc('request_account_closure', {
+    p_shop_id: shopId,
+    p_reason: reason,
+  });
+  if (error) throw new Error(error.message);
+  return String(data);
 }
 
 export async function startBillingCheckout(plan: 'basic_490' | 'pro_990'): Promise<string> {

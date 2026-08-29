@@ -2,15 +2,16 @@ import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { getSupabaseAdmin } from '../../../../lib/supabase-admin';
 import { createBookingBoundFlexCard } from '../../../../lib/line-flex-templates';
+import { resolveLineChannelConfig, type ResolvedLineChannelConfig } from '../../../../lib/line-channel-config';
 
 const LINE_CHANNEL_SECRET = process.env.LINE_CHANNEL_SECRET || '';
 const LINE_CHANNEL_ACCESS_TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN || '';
 
-function verifySignature(body: string, signature: string | null): boolean {
-  if (!LINE_CHANNEL_SECRET || !signature) return false;
+function verifySignature(body: string, signature: string | null, channelSecret: string): boolean {
+  if (!channelSecret || !signature) return false;
 
   const expected = Buffer.from(
-    crypto.createHmac('sha256', LINE_CHANNEL_SECRET).update(body).digest('base64'),
+    crypto.createHmac('sha256', channelSecret).update(body).digest('base64'),
   );
   const received = Buffer.from(signature);
 
@@ -79,12 +80,12 @@ async function writeNotificationFailure(
   }
 }
 
-export async function POST(req: NextRequest) {
+export async function handleLineWebhook(req: NextRequest, config: ResolvedLineChannelConfig, expectedShopId?: string) {
   try {
     const rawBody = await req.text();
     const signature = req.headers.get('x-line-signature');
 
-    if (!verifySignature(rawBody, signature)) {
+    if (!verifySignature(rawBody, signature, config.channelSecret)) {
       return NextResponse.json({ error: 'Invalid LINE signature' }, { status: 401 });
     }
 
@@ -138,6 +139,16 @@ export async function POST(req: NextRequest) {
             if (error || !booking) {
               throw new Error(error?.message || 'Booking not found');
             }
+            if (expectedShopId && booking.shop_id !== expectedShopId) {
+              throw new Error('Booking does not belong to this merchant LINE channel');
+            }
+            const { data: subscription, error: subscriptionError } = await supabaseAdmin
+              .from('subscriptions').select('plan').eq('shop_id', booking.shop_id).maybeSingle();
+            if (subscriptionError) throw new Error(`Subscription lookup failed: ${subscriptionError.message}`);
+            const paidPlan = subscription?.plan === 'basic_490' || subscription?.plan === 'pro_990';
+            if ((!expectedShopId && paidPlan) || (expectedShopId && !paidPlan)) {
+              throw new Error('Booking was presented to the wrong LINE channel mode');
+            }
 
             bookingForFailureLog = { id: booking.id, shop_id: booking.shop_id };
 
@@ -185,7 +196,7 @@ export async function POST(req: NextRequest) {
               totalPrice: booking.total_price || 0,
             });
 
-            if (!LINE_CHANNEL_ACCESS_TOKEN || !replyToken) {
+            if (!config.accessToken || !replyToken) {
               throw new Error('LINE reply credentials are not configured');
             }
 
@@ -211,7 +222,7 @@ export async function POST(req: NextRequest) {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${LINE_CHANNEL_ACCESS_TOKEN}`,
+                'Authorization': `Bearer ${config.accessToken}`,
               },
               body: JSON.stringify({
                 replyToken,
@@ -282,5 +293,19 @@ export async function POST(req: NextRequest) {
       success: false,
       error: 'Webhook processing failed',
     });
+  }
+}
+
+export async function POST(req: NextRequest) {
+  try {
+    const config = resolveLineChannelConfig({
+      mode: 'trial',
+      centralSecret: LINE_CHANNEL_SECRET,
+      centralAccessToken: LINE_CHANNEL_ACCESS_TOKEN,
+    });
+    return handleLineWebhook(req, config);
+  } catch (error) {
+    console.error('Central LINE configuration unavailable', { error: error instanceof Error ? error.message : String(error) });
+    return NextResponse.json({ error: 'LINE channel is not configured' }, { status: 503 });
   }
 }

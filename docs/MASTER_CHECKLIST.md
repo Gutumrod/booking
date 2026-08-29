@@ -19,6 +19,7 @@
 - [x] owner authorizes commit/push
 
 ## BK-A implementation blockers from approved V1 contract
+Implementation snapshot (2026-08-29): code/static/build work is recorded in `docs/audit/BK-A-IMPLEMENTATION-EVIDENCE-2026-08-29.md`. Items below remain unchecked until the blocked clean DB replay, pgTAP, tenancy, and provider-backed gates are actually proven.
 - [ ] private deposit-slip storage/read path
 - [ ] auth-user→staff mapping and staff self-scope
 - [ ] annual UI/copy removed; monthly billing truth reconciled

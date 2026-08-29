@@ -103,6 +103,8 @@ export default function NewTicketIntakePage() {
   // When phone changes and is valid, search for duplicate customer tickets
   useEffect(() => {
     if (!shopId || !isValidPhone(customerPhone)) {
+      // Reset stale lookup results when the current key is invalid.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setPhoneHistoryTickets([]);
       return;
     }

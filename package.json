@@ -6,6 +6,7 @@
     "apps/booking-admin"
   ],
   "scripts": {
+    "test": "node --no-warnings --test --experimental-test-isolation=none tests/*.test.ts",
     "sync-env": "node scripts/sync-env.js",
     "predev:shop": "npm run sync-env",
     "dev:shop": "npm --workspace apps/booking-consumer run dev",

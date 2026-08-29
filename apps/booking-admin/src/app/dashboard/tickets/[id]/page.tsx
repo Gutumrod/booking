@@ -180,6 +180,8 @@ export default function TicketDetailPage() {
   }, [shopId, ticketId, t]);
 
   useEffect(() => {
+    // Initial synchronization with the remote ticket store.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadTicketData();
   }, [loadTicketData]);
 

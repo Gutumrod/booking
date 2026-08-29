@@ -1,27 +1,15 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 
-export async function POST(req: NextRequest) {
-  try {
-    const body = await req.json();
-    const signature = req.headers.get('x-line-signature');
-
-    if (!signature && process.env.NODE_ENV === 'production') {
-      return NextResponse.json({ error: 'Missing LINE signature' }, { status: 401 });
-    }
-
-    const events = body.events || [];
-    for (const event of events) {
-      if (event.type === 'message') {
-        console.log('[Admin LINE Webhook Event]:', event.message);
-      }
-    }
-
-    return NextResponse.json({ success: true, message: 'Admin LINE Webhook Processed' }, { status: 200 });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
-  }
+// LINE events belong to the consumer app, which verifies the raw body against
+// the correct central or merchant channel secret. This retired endpoint must
+// not remain as a weaker alternate ingress.
+export async function POST() {
+  return NextResponse.json(
+    { error: 'Configure LINE against the consumer webhook endpoint.' },
+    { status: 410 },
+  );
 }
 
 export async function GET() {
-  return NextResponse.json({ status: 'active', service: 'Store Admin LINE Webhook Endpoint' });
+  return NextResponse.json({ status: 'retired' }, { status: 410 });
 }
