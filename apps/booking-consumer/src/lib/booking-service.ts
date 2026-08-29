@@ -90,7 +90,7 @@ export async function getShopBySlug(slug: string): Promise<Shop | null> {
   // trial_ends_at, owner_name, etc.
   const { data, error } = await supabase
     .from('shop_public_profile')
-    .select('*')
+    .select('id, name, slug, phone, address, line_oa_id, promptpay_number, promptpay_name, require_deposit, default_deposit_amount, is_accepting_online_bookings')
     .eq('slug', slug)
     .single();
 
