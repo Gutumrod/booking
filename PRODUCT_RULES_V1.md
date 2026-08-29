@@ -1,7 +1,10 @@
+> [!WARNING]
+> **HISTORICAL / NON-AUTHORITATIVE AFTER BK-0 (2026-08-28).** This file is retained as implementation/business evidence only. Current product truth is governed by docs/DOCUMENTATION_INDEX.md, docs/PRODUCT_DECISIONS.md, and numbered docs/00_... through docs/10_.... Do not use old pricing, entitlement, LINE, storage, deployment, role, or marketing claims here as current requirements.
+
 # 📋 PRODUCT RULES V1 (OFFICIAL SPECIFICATION)
 
-> **สถานะ:** อนุมัติแล้ว (Approved by Khun Free - CEO)  
-> **ขอบเขต:** กติกาธุรกิจที่ schema, RPC และ API ทั้งหมดจะอ้างอิง  
+> **สถานะ:** อนุมัติแล้ว (Approved by Khun Free - CEO)
+> **ขอบเขต:** กติกาธุรกิจที่ schema, RPC และ API ทั้งหมดจะอ้างอิง
 > **วันที่มีผล:** 2026-08-06
 
 ---

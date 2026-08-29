@@ -1,8 +1,11 @@
+> [!WARNING]
+> **HISTORICAL / NON-AUTHORITATIVE AFTER BK-0 (2026-08-28).** This file is retained as implementation/business evidence only. Current product truth is governed by docs/DOCUMENTATION_INDEX.md, docs/PRODUCT_DECISIONS.md, and numbered docs/00_... through docs/10_.... Do not use old pricing, entitlement, LINE, storage, deployment, role, or marketing claims here as current requirements.
+
 # 🏆 OFFICIAL BUSINESS MODEL & SYSTEM ARCHITECTURE MASTER SPECIFICATION
 ## "Local Service Booking & LINE Automation SaaS"
 
-> **อนุมัติและบังคับใช้โดย:** คุณฟรี (CEO)  
-> **วันที่มีผล:** 2026-08-05  
+> **อนุมัติและบังคับใช้โดย:** คุณฟรี (CEO)
+> **วันที่มีผล:** 2026-08-05
 > **สถานะ:** 100% Complete & Approved (ผ่านกระบวนการสัมภาษณ์เจาะลึก `/grill-me`)
 
 ---

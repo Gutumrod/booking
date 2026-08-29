@@ -1,3 +1,6 @@
+> [!NOTE]
+> **BK-0 AUTHORITY NOTICE (2026-08-28):** Historical/implementation evidence only. Current product and production contract is governed by docs/DOCUMENTATION_INDEX.md and the numbered BK-0 SSOT. Preserve this file for evidence; do not treat older architecture, pricing, deployment or completion wording as current authority.
+
 # Phase 0 Baseline Snapshot — `local_service` on Project B (2026-08-20)
 
 Recorded per `docs/platform/SHARED_SAAS_RUNTIME_PROJECT_B_PLAN.md` Phase 0 exit evidence

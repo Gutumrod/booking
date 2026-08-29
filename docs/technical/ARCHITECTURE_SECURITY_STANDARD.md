@@ -1,8 +1,11 @@
+> [!NOTE]
+> **BK-0 AUTHORITY NOTICE (2026-08-28):** Historical/implementation evidence only. Current product and production contract is governed by docs/DOCUMENTATION_INDEX.md and the numbered BK-0 SSOT. Preserve this file for evidence; do not treat older architecture, pricing, deployment or completion wording as current authority.
+
 # 🛡️ ARCHITECTURE & SECURITY STANDARD SPECIFICATION
 ## "Local Service Booking & LINE Automation SaaS"
 
-> **อนุมัติและบังคับใช้โดย:** คุณฟรี (CEO)  
-> **วันที่มีผล:** 2026-08-06  
+> **อนุมัติและบังคับใช้โดย:** คุณฟรี (CEO)
+> **วันที่มีผล:** 2026-08-06
 > **Supabase Live Project URL:** `https://gyleqrjdzwwlqierdwcy.supabase.co`
 
 ---
@@ -19,13 +22,13 @@
 ---
 
 ## 🔒 2. SECURITY & SECRETS GOVERNANCE
-1. **No Plain-Text Token Inputs in Client DOM:**  
+1. **No Plain-Text Token Inputs in Client DOM:**
    `Channel Access Token` และ `Channel Secret` ของระบบส่ง LINE ต้องถูกจัดเก็บเป็น Environment Variables หรือ Supabase Secrets บน Server-side เท่านั้น **ห้ามเปิดช่อง Input ใน React Component Client-side เด็ดขาด**
-2. **Zero-Friction Central LINE Bot Security:**  
+2. **Zero-Friction Central LINE Bot Security:**
    ร้านค้าใช้งานระบบโดยไม่ต้องกรอก LINE Token ใดๆ ระบบดึง `shop_id` จาก JWT/Session และส่งผ่าน Central LINE API บน Server-side อย่างปลอดภัย
-3. **Multi-Tenant Row Level Security (RLS):**  
+3. **Multi-Tenant Row Level Security (RLS):**
    ทุกคำสั่ง Database Query ต้องอิงตาม `shop_id` เสมอ มั่นใจว่าร้านค้า A ไม่สามารถอ่านหรือแก้ไขข้อมูลคิวงานของร้านค้า B ได้ 100%
-4. **Anti-Slip Duplication & Private Storage:**  
+4. **Anti-Slip Duplication & Private Storage:**
    รูปสลิปมัดจำเก็บใน Private Bucket เท่านั้น เข้าถึงผ่าน Signed URL อายุ 5 นาที และมี Unique Index บน `bookings.trans_ref` ป้องกันสลิปซ้ำทั้งระบบ
 
 ---

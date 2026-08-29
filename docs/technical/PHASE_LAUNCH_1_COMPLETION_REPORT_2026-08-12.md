@@ -1,6 +1,9 @@
+> [!NOTE]
+> **BK-0 AUTHORITY NOTICE (2026-08-28):** Historical/implementation evidence only. Current product and production contract is governed by docs/DOCUMENTATION_INDEX.md and the numbered BK-0 SSOT. Preserve this file for evidence; do not treat older architecture, pricing, deployment or completion wording as current authority.
+
 # Phase Launch-1 — implementation and verification status
 
-**Date:** 2026-08-12 (source), **2026-08-13 live-gate update**  
+**Date:** 2026-08-12 (source), **2026-08-13 live-gate update**
 **Verdict:** **Live-verified and launchable**, pending only the production-only step (item 8: production Stripe Prices + webhook endpoint, which needs a real domain and is out of scope until then). Migration reconciled and applied to the live project; the booking-acceptance gate, the anonymous public-profile boundary, and the Billing tab UI/Checkout redirect were all verified against the live database and a real login. See "2026-08-13 live-gate results" below.
 
 ## Delivered source changes

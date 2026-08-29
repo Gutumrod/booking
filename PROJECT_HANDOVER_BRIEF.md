@@ -1,11 +1,14 @@
+> [!WARNING]
+> **HISTORICAL / NON-AUTHORITATIVE AFTER BK-0 (2026-08-28).** This file is retained as implementation/business evidence only. Current product truth is governed by docs/DOCUMENTATION_INDEX.md, docs/PRODUCT_DECISIONS.md, and numbered docs/00_... through docs/10_.... Do not use old pricing, entitlement, LINE, storage, deployment, role, or marketing claims here as current requirements.
+
 # 🚀 Project Executive Brief & Session Handoff
 
-> **โปรเจกต์:** Local Service Booking & LINE Automation SaaS  
-> **ผู้พัฒนาหลัก:** คุณฟรี (CEO) & Antigravity AI Pair Programmer  
+> **โปรเจกต์:** Local Service Booking & LINE Automation SaaS
+> **ผู้พัฒนาหลัก:** คุณฟรี (CEO) & Antigravity AI Pair Programmer
 > **สถานะปัจจุบัน:** **Phase A-D + E1-E3.3 ผ่าน live verification แล้ว**; E4.1-E4.8 ผ่าน live verification ครบแล้ว (2026-08-13, รวม billing tab UI + Stripe Checkout redirect ที่เจ้าของโปรเจกต์ล็อกอินเช็คเอง) — เหลือแค่ **E4.9 ส่วน production Stripe config** (Price ID จริง + webhook endpoint จริง) ที่ต้องรอมีโดเมนจริงก่อน — ดู [`docs/technical/PHASE_LAUNCH_1_COMPLETION_REPORT_2026-08-12.md`](docs/technical/PHASE_LAUNCH_1_COMPLETION_REPORT_2026-08-12.md) หัวข้อ "2026-08-13 live-gate results" และ [`docs/technical/BRIEF_PHASE_E4_STRIPE_BILLING.md`](docs/technical/BRIEF_PHASE_E4_STRIPE_BILLING.md)
-> **หมายเหตุ E3.3:** ทำเองคนเดียวโดยไม่มี Codex รีวิว (ผู้ใช้อนุมัติล่วงหน้าคืน 2026-08-08 — ดู vault handoff) เจอบั๊กจริง 2 จุดระหว่าง live verification ของตัวเอง (view `security_invoker` ทำให้ anon อ่านไม่ได้, และ dashboard initial load ไม่โหลด phone/PromptPay/LINE field) แก้และ verify ซ้ำก่อนปิด checkpoint ทั้งคู่  
+> **หมายเหตุ E3.3:** ทำเองคนเดียวโดยไม่มี Codex รีวิว (ผู้ใช้อนุมัติล่วงหน้าคืน 2026-08-08 — ดู vault handoff) เจอบั๊กจริง 2 จุดระหว่าง live verification ของตัวเอง (view `security_invoker` ทำให้ anon อ่านไม่ได้, และ dashboard initial load ไม่โหลด phone/PromptPay/LINE field) แก้และ verify ซ้ำก่อนปิด checkpoint ทั้งคู่
 > **หมายเหตุ E4.3-E4.4 (2026-08-11):** implementation แรกทำโดย Qwen Code (dispatch ผ่าน agent-relay-dispatch skill), Claude ตรวจ+verify live ต่อ เจอบั๊กจริง (`sync_subscription_state` RPC — `RETURNS TABLE(..., shop_id UUID)` ชนกับคอลัมน์ `subscriptions.shop_id` จน ambiguous ตอนรันจริง แม้ build/CREATE FUNCTION ผ่านสะอาด) แก้แล้ว verify ซ้ำครบ ดู [`QWEN_E4_3_E4_4_HANDOFF.md`](docs/technical/QWEN_E4_3_E4_4_HANDOFF.md) และ vault log ล่าสุด
-> **Supabase Live Project:** `https://gyleqrjdzwwlqierdwcy.supabase.co` (`local_service` schema)  
+> **Supabase Live Project:** `https://gyleqrjdzwwlqierdwcy.supabase.co` (`local_service` schema)
 > **GitHub Repository:** [`https://github.com/Gutumrod/local-service-booking-saas`](https://github.com/Gutumrod/local-service-booking-saas)
 
 ---

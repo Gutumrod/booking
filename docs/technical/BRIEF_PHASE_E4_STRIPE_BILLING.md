@@ -1,3 +1,6 @@
+> [!NOTE]
+> **BK-0 AUTHORITY NOTICE (2026-08-28):** Historical/implementation evidence only. Current product and production contract is governed by docs/DOCUMENTATION_INDEX.md and the numbered BK-0 SSOT. Preserve this file for evidence; do not treat older architecture, pricing, deployment or completion wording as current authority.
+
 # Brief: Phase E4 — Stripe Billing (Checkout + Webhook + Portal)
 
 Source: consolidated from [`STRIPE_SUBSCRIPTION_STATE_MACHINE.md`](STRIPE_SUBSCRIPTION_STATE_MACHINE.md) (state machine, webhook payloads, sync strategy already designed there — this brief sequences the *build* work only) + [`PROJECT_HANDOVER_BRIEF.md`](../../PROJECT_HANDOVER_BRIEF.md) status as of 2026-08-10.

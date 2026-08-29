@@ -1,7 +1,10 @@
+> [!WARNING]
+> **HISTORICAL / NON-AUTHORITATIVE AFTER BK-0 (2026-08-28).** This file is retained as implementation/business evidence only. Current product truth is governed by docs/DOCUMENTATION_INDEX.md, docs/PRODUCT_DECISIONS.md, and numbered docs/00_... through docs/10_.... Do not use old pricing, entitlement, LINE, storage, deployment, role, or marketing claims here as current requirements.
+
 # 💰 OFFICIAL PRICING & SUBSCRIPTION SPECIFICATION
 ## "Local Service Booking & LINE Automation SaaS"
 
-> **อนุมัติและบังคับใช้โดย:** คุณฟรี (CEO)  
+> **อนุมัติและบังคับใช้โดย:** คุณฟรี (CEO)
 > **วันที่มีผล:** 2026-08-05 (ผ่านกระบวนการสัมภาษณ์เจาะลึก `/grill-me`)
 
 ---
@@ -68,7 +71,7 @@
 ## 💳 6. กฎเหล็กสถาปัตยกรรมระบบชำระเงิน (Stripe Single Provider Rule)
 
 > [!IMPORTANT]
-> **กฎเหล็กเพื่อป้องกันความซับซ้อนและการรวนของระบบ:**  
+> **กฎเหล็กเพื่อป้องกันความซับซ้อนและการรวนของระบบ:**
 > **ใช้ Stripe เป็น Payment Gateway ตัวหลักตัวเดียวในการจัดการ Subscription และ Billing!**
 
 1. **PromptPay QR:** สำหรับร้านที่ไม่ต้องการผูกบัตร สแกนจ่ายรายรอบบิลจากหน้า Dashboard

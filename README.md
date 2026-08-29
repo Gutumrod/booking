@@ -1,93 +1,53 @@
-# 🚀 Local Service Booking & LINE Automation SaaS
+# BK01 — Booking by WSTERA
 
-> **Official GitHub Repository:** [https://github.com/Gutumrod/local-service-booking-saas](https://github.com/Gutumrod/local-service-booking-saas)  
-> **Live Supabase Project URL:** `https://gyleqrjdzwwlqierdwcy.supabase.co`  
-> **Master Product Specification (SSOT):** [`PRODUCT_RULES_V1.md`](file:///D:/AI-Workspace/projects/local-service-booking-saas/PRODUCT_RULES_V1.md)  
-> **Phase 1 Backend Integration Brief:** [`docs/technical/BRIEF_PHASE1_AGY.md`](file:///D:/AI-Workspace/projects/local-service-booking-saas/docs/technical/BRIEF_PHASE1_AGY.md)  
-> **Official Business Model:** [`docs/business/OFFICIAL_BUSINESS_MODEL.md`](file:///D:/AI-Workspace/projects/local-service-booking-saas/docs/business/OFFICIAL_BUSINESS_MODEL.md)
+Thailand-first appointment operations SaaS for single-location salons, barbers, beauty and nail businesses with roughly 1–10 providers.
 
-Multi-tenant Booking, Deposit & LINE Automation SaaS designed for Local Service Businesses (Barbershops, Salons, Clinics, Spas, Auto Detailing, etc.) built for solopreneur speed, zero-friction onboarding, and 100% self-service subscription monetization.
+**Repository:** `Gutumrod/booking`
+**BK-0 baseline:** `main @ e99615d`
+**Canonical technical host target:** `bk01.wstera.com`
+**Current documentation authority:** [`docs/DOCUMENTATION_INDEX.md`](docs/DOCUMENTATION_INDEX.md)
 
----
+## Current status
+BK-0 is rebuilding and locking the production/product documentation contract before BK-A implementation remediation. The existing codebase already contains substantial booking, auth, Stripe, LINE, ticket and platform-admin functionality, but **current implementation is not equivalent to the target V1 contract**.
 
-## 🟡 Status: Phase A-D + E1-E3.3 complete; Launch-1 billing implementation staged, live verification pending (2026-08-12)
+Do not infer launch readiness from historical phase reports or prior “complete/official” labels. See:
+- [`docs/audit/CURRENT_TRUTH_AND_CONTRADICTIONS.md`](docs/audit/CURRENT_TRUTH_AND_CONTRADICTIONS.md)
+- [`docs/PRODUCT_DECISIONS.md`](docs/PRODUCT_DECISIONS.md)
+- [`docs/MASTER_CHECKLIST.md`](docs/MASTER_CHECKLIST.md)
 
-- ✅ **Supabase PostgreSQL Database Engine (`local_service` schema):** All migrations under `supabase/migrations/` applied and verified against the live project `gyleqrjdzwwlqierdwcy`. Atomic slot lock RPC `create_booking_hold` with 15-minute countdown, non-confusing booking code generator (`BK-XXXXXX`), 2-axis status audit triggers, and a real Postgres exclusion constraint (`prevent_overlapping_staff_bookings`) verified under concurrent load — see [`docs/technical/PHASE_A_COMPLETION_REPORT_2026-08-07.md`](docs/technical/PHASE_A_COMPLETION_REPORT_2026-08-07.md).
-- ✅ **LINE OA Webhook Gateway (`/api/line/webhook`):** Uses a server-only `SUPABASE_SERVICE_ROLE_KEY` admin client (Phase B) instead of the anon key RLS used to block silently. HMAC-SHA256 signature verification with `crypto.timingSafeEqual`, parses `ผูกคิว {booking_code}-{link_token}` commands, binds `line_users`, replies with LINE Flex Cards, and reports real per-event failures instead of a blanket `success:true`.
-- ✅ **Single Shared Environment Configuration (`.env.local`):** Master configuration at workspace root (`.env.local`) hardlinked to both `apps/booking-consumer` and `apps/booking-admin`.
-- ✅ **Consumer booking flow (`/book/[slug]`):** Connected to live Supabase backend and manually verified end-to-end (hold → deposit slip upload to Storage → status transitions), with fail-closed staff scheduling and a proper no-deposit success path (Phase C).
-- 🟡 **Shop owner dashboard (`/dashboard`) — all 6 tabs are connected in source.** Billing now reads the owner-visible `subscriptions` record and sends checkout/portal actions to Stripe; its Launch-1 migration and live Stripe/browser verification are still pending. The other tabs load and mutate tenant-scoped data through role-checked RPCs (owner/admin/staff enforced per `PRODUCT_RULES_V1.md` §7).
-- ✅ **`shops` table column-exposure fix (Phase E3.3):** the table previously let any unauthenticated caller `select=*` and read `subscription_status`, `trial_ends_at`, `owner_name`, and other internal columns for any shop whose public slug they knew. Fixed with a column-limited `shop_public_profile` view for anon reads and an owner-only `update_shop_settings` RPC for writes — see [`docs/technical/PHASE_E3_3_COMPLETION_REPORT_2026-08-08.md`](docs/technical/PHASE_E3_3_COMPLETION_REPORT_2026-08-08.md).
+## Product contract
+The numbered SSOT is:
+1. [`docs/00_PRODUCT_VISION.md`](docs/00_PRODUCT_VISION.md)
+2. [`docs/01_PRD.md`](docs/01_PRD.md)
+3. [`docs/02_SYSTEM_ARCHITECTURE.md`](docs/02_SYSTEM_ARCHITECTURE.md)
+4. [`docs/03_DATA_SECURITY_TENANCY.md`](docs/03_DATA_SECURITY_TENANCY.md)
+5. [`docs/04_PRICING_ENTITLEMENTS.md`](docs/04_PRICING_ENTITLEMENTS.md)
+6. [`docs/05_BOOKING_DOMAIN_RULES.md`](docs/05_BOOKING_DOMAIN_RULES.md)
+7. [`docs/06_UX_USER_FLOWS.md`](docs/06_UX_USER_FLOWS.md)
+8. [`docs/07_ANALYTICS_KPI_SPEC.md`](docs/07_ANALYTICS_KPI_SPEC.md)
+9. [`docs/08_EXTERNAL_DEPENDENCIES.md`](docs/08_EXTERNAL_DEPENDENCIES.md)
+10. [`docs/09_TEST_RELEASE_GATES.md`](docs/09_TEST_RELEASE_GATES.md)
+11. [`docs/10_DEVELOPMENT_ROADMAP.md`](docs/10_DEVELOPMENT_ROADMAP.md)
+## Approved V1 direction
+- primary ICP: single-location hair/barber/beauty/nail;
+- customer books by mobile web link; no app install required;
+- collision-safe provider scheduling and fail-closed availability;
+- merchant PromptPay deposit flow with private slip storage target;
+- merchant-owned LINE OA for paid production; central WSTERA OA for trial/onboarding;
+- customer self-reschedule/cancel, reminders and explicit no-show are V1 Required;
+- Pro automatic slip verification is required before Pro public sale;
+- public V1 billing is monthly only;
+- legacy 100/500 paid booking quota walls are retired from target packaging;
+- final Basic/Pro public prices are not yet locked; ฿490/฿990 remain pilot reference prices pending BK-A/pilot commercial evidence.
 
----
+## Applications
+- `apps/booking-consumer` — public customer booking + consumer LINE integration surface.
+- `apps/booking-admin` — merchant auth/dashboard, billing, tickets and platform-admin.
+- `supabase/migrations` — authoritative migration history for `local_service` schema.
 
-## 📚 Master Documentation & Specifications
+Current deployment target uses OpenNext Cloudflare Workers, not the historical Cloudflare Pages strategy.
 
-1. 📋 **[`PRODUCT_RULES_V1.md`](PRODUCT_RULES_V1.md):** กติกาธุรกิจ 10 ข้อหลัก (Single Source of Truth) ที่ระบบและ Database Schema อ้างอิง
-2. 📄 **[`docs/technical/BRIEF_PHASE1_AGY.md`](docs/technical/BRIEF_PHASE1_AGY.md):** บรีฟงาน Phase 1 พร้อมตารางสรุปจุดเปลี่ยนสถาปัตยกรรม (Architectural Reversals & Pivots)
-3. 🛠️ **[`docs/technical/BRIEF_PHASE2_HARDENING_A_TO_E.md`](docs/technical/BRIEF_PHASE2_HARDENING_A_TO_E.md):** แผนงาน Phase A-E (data integrity/authorization hardening → LINE webhook fix → frontend fixes → docs → admin dashboard wiring) พร้อม Definition of Done แต่ละเฟส
-4. ✅ **[`docs/technical/PHASE_A_COMPLETION_REPORT_2026-08-07.md`](docs/technical/PHASE_A_COMPLETION_REPORT_2026-08-07.md):** รายงานผลการ apply + verify Phase A จริงบน live database
-5. 🏆 **[`docs/business/OFFICIAL_BUSINESS_MODEL.md`](docs/business/OFFICIAL_BUSINESS_MODEL.md):** เอกสารแผนธุรกิจและสถาปัตยกรรมระบบฉบับสมบูรณ์ 100%
-6. 💰 **[`docs/business/PRICING_SPEC.md`](docs/business/PRICING_SPEC.md):** ข้อกำหนดราคา สิทธิแพ็กเกจ (5/5/10 ช่าง) และแพ็กเกจเติมคิวเสริม
-7. 🗺️ **[`docs/archive/ROADMAP_V2_V4.md`](docs/archive/ROADMAP_V2_V4.md):** แผนที่การดำเนินงานโครงการ V2 - V4
-8. 🛡️ **[`docs/technical/ARCHITECTURE_SECURITY_STANDARD.md`](docs/technical/ARCHITECTURE_SECURITY_STANDARD.md):** มาตรฐานสถาปัตยกรรมและความปลอดภัย (Supabase Live Project `https://gyleqrjdzwwlqierdwcy.supabase.co`)
+## Development rule
+Before implementing or reviewing a feature, start from `docs/DOCUMENTATION_INDEX.md` and its authority order. Historical `PRODUCT_RULES_V1.md`, `PROJECT_HANDOVER_BRIEF.md`, old business/pricing docs and phase completion reports remain evidence only.
 
----
-
-## 🌟 Key Features
-
-- **Zero-Friction Central LINE OA Automation:** Central system bot notifies customers and shop owners automatically without requiring shop owners to set up LINE Developers accounts.
-- **Service & Staff Management:** Flexible service items, pricing, duration, staff schedules, lunch breaks, and shop operating hours (09:00 - 20:00).
-- **PromptPay QR Deposit:** Server-generated PromptPay QR codes with unique transaction reference checks to eliminate No-Shows.
-- **Automated LINE Reminders (Pro Tier):** Automated reminders sent 24h & 1h before appointment to reduce no-shows.
-- **Self-Service Subscription Model:** 14-day Free Trial -> Basic 490 THB/mo -> Pro 990 THB/mo managed via Stripe Single Provider Standard.
-
----
-
-## 🛠️ Architecture
-
-- **Consumer Web App (`apps/booking-consumer`):** Mobile-first customer booking portal (`/book/[slug]`) + LINE messaging auto-link binding + LINE Webhook Gateway (`/api/line/webhook`).
-- **Store Owner Dashboard (`apps/booking-admin`):** Admin panel (`/dashboard`) for managing bookings, staff schedules, deposit verification, and billing.
-- **Platform Super Admin Panel (`apps/booking-admin/src/app/platform-admin`):** CEO Control Center (`/platform-admin`) for managing tenant shops, MRR analytics, subscription overrides, shop cancellation controls, and Central LINE OA traffic monitoring.
-- **Database & Auth (`supabase/`):** Multi-tenant PostgreSQL database (`https://gyleqrjdzwwlqierdwcy.supabase.co`) with Row-Level Security (RLS), Postgres Range Exclusion Constraints, and custom RPCs.
-
----
-
-## 🚀 Getting Started
-
-```bash
-# Clone repository
-git clone https://github.com/Gutumrod/local-service-booking-saas.git
-cd local-service-booking-saas
-
-# Install dependencies
-npm install
-
-# Run consumer booking app (Port 3000)
-npm run dev:shop
-
-# Run shop admin dashboard (Port 3001)
-npm run dev:admin
-```
-
-### ⚠️ Required manual step on any fresh Supabase project
-
-After applying all migrations in `supabase/migrations/` to a new/fresh Supabase project, you **must** manually add `local_service` to **Exposed schemas**: Supabase Dashboard → Project Settings → API → Data API → Exposed schemas. This cannot be done via SQL, the Management API, or any known Supabase CLI/MCP tool — it is Dashboard-UI-only. Skipping this step makes every table/RPC call return `406 PGRST106: Invalid schema` even though the schema and RLS grants are otherwise correct. This bit the team once already (2026-08-07) before being diagnosed.
-
-### Stripe billing configuration and production cutover
-
-Keep these names in the root `.env.local` only; their values are server-only secrets or server configuration and must never be added to `NEXT_PUBLIC_*`, React components, screenshots, or git:
-
-- `STRIPE_SECRET_KEY`
-- `STRIPE_WEBHOOK_SECRET`
-- `STRIPE_PRICE_BASIC`
-- `STRIPE_PRICE_PRO`
-
-Test mode and production use different keys, Price IDs, and webhook signing secrets. Verify the test-mode flow first. Before production, create the production Basic (฿490/month) and Pro (฿990/month) Prices, then set the matching production values.
-
-Register the production endpoint manually in Stripe Dashboard → Developers → Webhooks after the admin domain is final:
-
-1. Add `https://<admin-domain>/api/webhooks/stripe` as the endpoint URL.
-2. Select: `checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.paid`, and `invoice.payment_failed`.
-3. Put that endpoint's signing secret in `STRIPE_WEBHOOK_SECRET`, restart/redeploy the server, and send a Dashboard test event before accepting real payments.
-4. Apply pending Supabase migrations, including `20260811174537_launch_1_billing_truth_and_booking_gate.sql`, then complete the REST/browser checks in the Launch-1 completion report.
+BK-A begins only after BK-0 documentation review is complete. Public V1 launch requires the release gates, legal/privacy readiness, final pricing approval and owner authorization.

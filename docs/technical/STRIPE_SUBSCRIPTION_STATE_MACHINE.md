@@ -1,15 +1,18 @@
+> [!NOTE]
+> **BK-0 AUTHORITY NOTICE (2026-08-28):** Historical/implementation evidence only. Current product and production contract is governed by docs/DOCUMENTATION_INDEX.md and the numbered BK-0 SSOT. Preserve this file for evidence; do not treat older architecture, pricing, deployment or completion wording as current authority.
+
 # Stripe Subscription State Machine & Webhook Integration Design
 
-**Product:** Thai Local-Service Booking SaaS  
-**Stack:** Next.js 16 + Supabase (Schema: `local_service`)  
-**Billing Infrastructure:** Stripe Checkout + Customer Portal + Webhooks (Single Payment Provider Rule)  
-**Plans:** `free_trial`, `basic_490` (THB 490/mo), `pro_990` (THB 990/mo)  
+**Product:** Thai Local-Service Booking SaaS
+**Stack:** Next.js 16 + Supabase (Schema: `local_service`)
+**Billing Infrastructure:** Stripe Checkout + Customer Portal + Webhooks (Single Payment Provider Rule)
+**Plans:** `free_trial`, `basic_490` (THB 490/mo), `pro_990` (THB 990/mo)
 
 ---
 
 ## Executive Summary
 
-This design document defines the formal state machine, webhook event handling lifecycle, dual-source status synchronization strategy, business rules, and security pattern for subscription management in the `local_service` database schema. 
+This design document defines the formal state machine, webhook event handling lifecycle, dual-source status synchronization strategy, business rules, and security pattern for subscription management in the `local_service` database schema.
 
 ---
 
@@ -37,24 +40,24 @@ Stripe subscriptions move through seven distinct statuses as defined by the Stri
 stateDiagram-v2
     [*] --> trialing: Shop Sign-up / Free Trial Init
     [*] --> incomplete: Checkout Session Started (Payment Needed)
-    
+
     incomplete --> active: invoice.paid (Initial Payment Success)
     incomplete --> incomplete_expired: 23h Expiration Window Elapsed
-    
+
     trialing --> active: trial_end Reached & First Invoice Paid
     trialing --> canceled: Customer Cancels During Trial
-    
+
     active --> past_due: invoice.payment_failed (Retry Eligible)
     active --> active: customer.subscription.updated (cancel_at_period_end = true)
     active --> canceled: customer.subscription.deleted (Immediate or End of Period)
-    
+
     past_due --> active: invoice.paid (Smart Retry / Update Payment Method)
     past_due --> unpaid: Retries Exhausted (Stripe Settings: Mark Unpaid)
     past_due --> canceled: Retries Exhausted (Stripe Settings: Cancel)
-    
+
     unpaid --> active: customer.subscription.updated / Invoice Paid
     unpaid --> canceled: customer.subscription.deleted / Manual Cancellation
-    
+
     incomplete_expired --> [*]
     canceled --> [*]
 ```
@@ -146,7 +149,7 @@ The application must subscribe to five core Stripe webhook events. All database 
 - **DB Write (UPDATE on `local_service.subscriptions`):**
   ```sql
   UPDATE local_service.subscriptions
-  SET 
+  SET
     plan = :plan,
     status = :status,
     current_period_end = to_timestamp(:current_period_end),
@@ -162,7 +165,7 @@ The application must subscribe to five core Stripe webhook events. All database 
 - **DB Write (UPDATE on `local_service.subscriptions`):**
   ```sql
   UPDATE local_service.subscriptions
-  SET 
+  SET
     status = 'canceled',
     cancel_at_period_end = false,
     updated_at = NOW()
@@ -177,7 +180,7 @@ The application must subscribe to five core Stripe webhook events. All database 
 - **DB Write (UPDATE on `local_service.subscriptions`):**
   ```sql
   UPDATE local_service.subscriptions
-  SET 
+  SET
     status = 'active',
     current_period_end = to_timestamp(:current_period_end),
     updated_at = NOW()
@@ -192,7 +195,7 @@ The application must subscribe to five core Stripe webhook events. All database 
 - **DB Write (UPDATE on `local_service.subscriptions`):**
   ```sql
   UPDATE local_service.subscriptions
-  SET 
+  SET
     status = 'past_due',
     updated_at = NOW()
   WHERE stripe_subscription_id = :stripe_subscription_id;
@@ -276,7 +279,7 @@ When a shop owner clicks "Cancel Subscription" inside the Stripe Customer Portal
 1. Stripe updates the subscription object: `status` remains `'active'`, but `cancel_at_period_end` becomes `true`.
 2. Stripe sends a `customer.subscription.updated` webhook.
 3. **Database Action:** Update `local_service.subscriptions.cancel_at_period_end = true` and `status = 'active'`.
-4. **Business Effect:** 
+4. **Business Effect:**
    - **Do NOT disable bookings.** The shop has already paid for the current period ending at `current_period_end`.
    - `shops.subscription_status` remains `'active'`.
    - Public booking page continues to allow customer appointments.
