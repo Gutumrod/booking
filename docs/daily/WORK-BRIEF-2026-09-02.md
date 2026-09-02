@@ -1,8 +1,10 @@
-﻿# Daily Work Brief - 2026-09-02
+# Daily Work Brief - 2026-09-02
+
+> **SUPERSEDED 2026-09-03.** P0a-C1 subsequently passed. Preserve this as the historical 2026-09-02 hold brief; use WORK-BRIEF-2026-09-03.md for current activation state.
 
 **Product:** Booking by WSTERA (BK01)
 **Priority / scheduling:** QUEUED HEAVY TRACK - activate only after P0a-C1
-**Baseline:** $branch @ 4de0f55
+**Baseline:** `feature/bk-a-v1-contract-remediation @ 4de0f55`
 
 ## Current State
 BK-A V1 contract remediation remains open on feature/bk-a-v1-contract-remediation. Booking Stage 4 Option A migration-history reconciliation is complete and must not be repeated. CONT-03 still requires remediation and independent review; CONT-04 DB-backed gates remain environment-blocked. No production deploy or DB apply is verified.

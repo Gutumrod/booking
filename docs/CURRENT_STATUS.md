@@ -1,24 +1,24 @@
-﻿# Current Status - 2026-09-02
+# Current Status - 2026-09-03
 
 **Product:** Booking by WSTERA (BK01)
-**Repository branch:** $branch
-**HEAD before documentation pass:** $head
-**Purpose:** current-state overlay only. PRD/architecture contracts and historical evidence keep their own authority.
+**Repository branch:** `feature/bk-a-v1-contract-remediation`
+**Baseline before closeout:** `51771f6` (`origin` synchronized)
 
 ## Verified Current State
-BK-A V1 contract remediation remains open on feature/bk-a-v1-contract-remediation. Booking Stage 4 Option A migration-history reconciliation is complete and must not be repeated. CONT-03 still requires remediation and independent review; CONT-04 DB-backed gates remain environment-blocked. No production deploy or DB apply is verified.
+BK-A V1 contract remediation remains open. Booking Stage 4 Option A migration-history reconciliation is CLOSED at `836943a` and must not be repeated. CONT-03 still requires remediation plus independent review. CONT-04 DB-backed gates remain environment-blocked. No production deploy or DB apply is verified.
 
-## Blockers / Gates
-Portfolio P0a-C1 is not yet PASS. DB-backed acceptance additionally requires an approved PostgreSQL/Supabase runtime; do not install Docker under the active restriction.
+## Gate Update
+Portfolio P0a-C1 is now **PASS**. BK01 is no longer blocked by the portfolio foundation checkpoint and is eligible as the next heavy implementation track under the focus rule.
+
+DB-backed acceptance still requires an approved PostgreSQL/Supabase runtime. Do not install or use Docker on the active Windows host under the current restriction.
 
 ## Next Authorized / Prepared Action
-After P0a-C1 passes, resume BK-A as the heavy track: remediate legacy RPC authorization and paid LINE fail-closed behavior first, then stale-hold reschedule handling, regression tests, fresh CONT-03 review, and DB-backed gates in an approved runtime.
+Resume BK-A from the existing remediation brief: legacy RPC authorization and paid-LINE fail-closed behavior first, then stale-hold reschedule handling, regression tests and fresh CONT-03 review. Run DB-backed gates only in an approved runtime.
 
 ## Portfolio Scheduling
-**QUEUED HEAVY TRACK - activate only after P0a-C1**
+**NEXT ELIGIBLE HEAVY TRACK — P0a-C1 PASS**
 
-## Evidence Basis
-branch feature/bk-a-v1-contract-remediation @ 4de0f55; Stage 4 evidence at 836943a; 2026-08-31 daily log and current BK-A briefs.
-
-## Change Rule
-Update this file when branch/gate/runtime reality changes. Do not rewrite historical evidence to make an old result look current.
+## Evidence
+- Branch baseline `51771f6`.
+- Stage 4 closure `836943a`.
+- Parent P0a-C1 independent PASS: `docs/platform/REVIEW-P0a-C1-2026-09-03.md` in `saas-product-hub`.

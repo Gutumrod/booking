@@ -3,7 +3,7 @@
 **Status:** LOCKED — derived from BK-0 product truth
 **Rule:** Historical phases are evidence only; this roadmap governs future build order.
 
-**2026-09-02 reconciliation:** Booking Stage 4 Option A migration-history reconciliation is complete at 836943a and must not be repeated. BK-A remains open for CONT-03 remediation/independent review; DB-backed CONT-04 gates remain environment-blocked. Portfolio P0a-C1 must pass before BK01 resumes as the heavy implementation track.
+**2026-09-03 reconciliation:** Booking Stage 4 Option A migration-history reconciliation is complete at `836943a` and must not be repeated. Portfolio P0a-C1 is PASS, so BK01 is eligible to resume as the next heavy implementation track. BK-A remains open for CONT-03 remediation/independent review; DB-backed CONT-04 gates remain blocked until an approved PostgreSQL/Supabase runtime is available.
 
 ## BK-A — V1 Contract Remediation
 
