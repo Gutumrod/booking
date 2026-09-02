@@ -3,6 +3,8 @@
 **Status:** LOCKED — derived from BK-0 product truth
 **Rule:** Historical phases are evidence only; this roadmap governs future build order.
 
+**2026-09-02 reconciliation:** Booking Stage 4 Option A migration-history reconciliation is complete at 836943a and must not be repeated. BK-A remains open for CONT-03 remediation/independent review; DB-backed CONT-04 gates remain environment-blocked. Portfolio P0a-C1 must pass before BK01 resumes as the heavy implementation track.
+
 ## BK-A — V1 Contract Remediation
 
 **2026-08-29 status:** implementation candidate completed for all non-provider-decision items; unit/static, lint, and production builds pass. BK-A is not release-complete because local database replay/pgTAP and DB-backed G2–G9 acceptance are blocked by unavailable local PostgreSQL. BK-B remains closed. Evidence: `docs/audit/BK-A-IMPLEMENTATION-EVIDENCE-2026-08-29.md`.
