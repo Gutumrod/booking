@@ -3,7 +3,7 @@
 **Date:** 2026-08-29  
 **Branch:** `feature/bk-a-v1-contract-remediation`  
 **Implementation starting SHA:** `3aee2a5`  
-**Final local SHA:** pending final local commit
+**Final local SHA:** `908108c` (CONT-03 verification HEAD, working tree clean)
 
 ## Implemented scope
 
@@ -27,14 +27,32 @@ The migration was created but not applied to a live or remote project. No produc
 
 | Command | Result |
 |---|---|
-| `npm test` | PASS — 16/16 Node unit/static contract tests |
+| `npm test` | PASS — 19/19 Node unit/static contract tests (exit 0) |
 | `npm run lint` | PASS (exit 0) — no errors; 13 existing/non-blocking warnings remain |
-| `npm run build` | PASS — consumer and admin production builds |
-| `git diff --check` | PASS |
+| `npm run build` | PASS — consumer and admin production builds (Next.js 16.3.0) |
+| `git diff --check` | PASS (exit 0) |
 | `npx supabase test db` | BLOCKED — no local PostgreSQL at `127.0.0.1:54322` |
 | `npx supabase db lint --local` | BLOCKED — same unavailable local database |
 
 The first build failed because the merchant webhook used an incorrect relative import. It was changed to the configured `@/` alias; the next full build passed.
+
+## CONT-03 integrated verification (2026-09-03, HEAD `908108c`)
+
+Re-ran all non-DB gates on the real repo at HEAD `908108c` (working tree clean). Results:
+
+| Gate | Command | Exit | Expected | Actual |
+|---|---|---|---|---|
+| G1 unit/static | `npm test` | 0 | PASS | PASS — 19/19 tests |
+| G1 lint | `npm run lint` | 0 | PASS | PASS — 0 errors, 13 warnings |
+| G1 build | `npm run build` | 0 | PASS | PASS — consumer + admin production builds |
+| whitespace | `git diff --check` | 0 | PASS | PASS |
+| static absence | search `promptpay.io` in `apps/` | 0 hits | no runtime path | PASS — 0 hits in visible source |
+| static absence | search annual offer in `apps/` | only `annualCloseDefault` | no annual offer | PASS — only annual-closure label, no annual billing offer |
+| static absence | search legacy 100/500 paid claim in `apps/` | 0 hits | no legacy paid wall | PASS — 0 hits (matches were CSS color classes only) |
+| static absence | search unsupported absolute claim (`ปลอดภัย 100%`, guarantee, risk-free) in `apps/` | 0 hits | no absolute claim | PASS — 0 hits in visible source; consumer copy uses `ชำระมัดจำปลอดภัย` (secure deposit), a supported claim |
+| secret scan | `git diff 3aee2a5..HEAD -- apps/` for real secrets | 0 hits | no real secret | PASS — no `sk_`/`pk_live`/`whsec_`/private keys; `supabase/config.toml` uses `env(...)` substitution only; test fixtures use placeholder `shop-secret`/`shop-token` |
+
+DB-backed gates (G2, and DB-backed portions of G3–G9) remain **BLOCKED_ENVIRONMENT**: no local PostgreSQL at `127.0.0.1:54322`, no `psql`, no Docker (per brief, Docker must not be installed). No production/remote DB was opened. Migration syntax, clean replay, pgTAP, live RLS/tenancy denial, concurrent overlap, Stripe ordering, LINE provider delivery, reminder scheduler invocation, CSV database content, and platform-admin audit persistence therefore cannot be labelled PASS.
 
 ## Gates not proven
 

@@ -76,6 +76,8 @@ The public deposit-slip contract is nevertheless a P1 privacy/security mismatch 
 
 **BK-A implementation snapshot (2026-08-29):** the remediation migration, application paths, and static/unit coverage now exist. Build and lint pass, but database replay/RLS/pgTAP and real provider gates are blocked locally and are not accepted as PASS. See `BK-A-IMPLEMENTATION-EVIDENCE-2026-08-29.md`.
 
+**CONT-03 verification (2026-09-03, HEAD `908108c`):** static absence re-verified on the real repo — no `promptpay.io` runtime, no annual offer, no legacy 100/500 paid claim, and no unsupported absolute claim (including `ปลอดภัย 100%`) on current V1 surfaces. This closes the static-copy portion of CLAIM-001 and COMM-001 at the code level; DB-backed authority evidence remains pending. See `BK-A-IMPLEMENTATION-EVIDENCE-2026-08-29.md`.
+
 ## 6. Downstream implementation gate
 
 Market and competitor evidence was reviewed and the owner approved the full recommendation set on 2026-08-28. Numbered SSOT is now locked to that product contract. BK-A must remediate baseline implementation gaps before any public V1 release; commercial price lock, provider allowances, and legal/operations approvals occur at their explicitly documented downstream gates.

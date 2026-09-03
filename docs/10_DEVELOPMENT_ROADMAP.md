@@ -5,6 +5,8 @@
 
 **2026-09-03 reconciliation:** Booking Stage 4 Option A migration-history reconciliation is complete at `836943a` and must not be repeated. Portfolio P0a-C1 is PASS, so BK01 is eligible to resume as the next heavy implementation track. BK-A remains open for CONT-03 remediation/independent review; DB-backed CONT-04 gates remain blocked until an approved PostgreSQL/Supabase runtime is available.
 
+**2026-09-03 CONT-03 verification:** All non-DB gates re-verified at HEAD `908108c` (working tree clean): `npm test` 19/19 PASS, `npm run lint` PASS (0 errors/13 warnings), `npm run build` PASS (consumer+admin), `git diff --check` PASS, static absence checks PASS (no `promptpay.io`, no annual offer, no legacy 100/500 paid claim, no unsupported absolute claim), secret scan PASS (no real secrets in changed app files). DB-backed gates G2 and DB portions of G3–G9 remain BLOCKED_ENVIRONMENT (no local PostgreSQL, no Docker per brief).
+
 ## BK-A — V1 Contract Remediation
 
 **2026-08-29 status:** implementation candidate completed for all non-provider-decision items; unit/static, lint, and production builds pass. BK-A is not release-complete because local database replay/pgTAP and DB-backed G2–G9 acceptance are blocked by unavailable local PostgreSQL. BK-B remains closed. Evidence: `docs/audit/BK-A-IMPLEMENTATION-EVIDENCE-2026-08-29.md`.
