@@ -1,0 +1,64 @@
+# BK-SR-03 — Staging + External-System Rehearsal Evidence
+
+**Date:** 2026-09-06
+**Branch:** `feature/bk-a-v1-contract-remediation`
+**Baseline checkpoint:** `e65366f` (staging-isolation)
+**Portfolio mode:** BUILD-TO-SELL
+**Scope:** Verify the current staging-isolation implementation and prove BK-SR-03 on approved non-production runtime only. Closed gates BK-A/CONT-04 and BK-SR-02 were NOT reopened. Order implementation was NOT started.
+
+## 1. Branch / HEAD / divergence / git status
+
+- Branch: `feature/bk-a-v1-contract-remediation`
+- HEAD: `e65366f983f15922358c35aba83782f781d96cbe` (staging-isolation checkpoint)
+- Divergence vs origin: `0 left / 3 right` (3 local commits ahead, none behind; nothing pushed)
+- Pre-run working status: `docs/BUILD-TO-SELL-EXECUTION-2026-09-06.md` was already modified by the prior Claude session-release note. During BK-SR-03 evidence capture, this evidence file was created and therefore appears as untracked until the reconciliation commit.
+- No push, no merge, no production access performed.
+
+## 2. Exact changed paths (this run)
+
+- `docs/BUILD-TO-SELL-EXECUTION-2026-09-06.md` (pre-existing working change; within allowed path `docs/`)
+- `docs/audit/BK-SR-03-STAGING-REHEARSAL-EVIDENCE-2026-09-06.md` (new durable evidence created in this run; untracked until reconciliation commit)
+- No product/runtime source file was modified by the evidence-capture run. All working changes are within `allowed_paths`.
+
+## 3. Local release checks (frozen machine_checks) — ALL PASS
+
+| Check | Result |
+|---|---|
+| `npm test` | PASS — 20/20 tests, exit 0 (incl. "staging Workers are isolated and staging notifications are not scheduled") |
+| `npm run lint` | PASS — 0 errors (pre-existing warnings only), exit 0 |
+| `npm run build` | PASS — consumer + admin production builds, exit 0 |
+| `npm audit --omit=dev --audit-level=high` | PASS — 0 vulnerabilities, exit 0 |
+| diff-check / write-scope | PASS — only `docs/` changed, within allowed paths |
+
+The staging-isolation implementation at `e65366f` is independently verified: staging Workers (`wstera-admin-staging`, `wstera-consumer-staging`) are isolated from production names, staging crons are disabled, and the `sync-env.js` source-path guard keeps env files inside the repo.
+
+## 4. Cloudflare staging deploy / smoke / rollback — MISSING APPROVED PREREQUISITE
+
+Cloudflare staging deploy/smoke/rollback could NOT be executed because the approved non-production runtime access does not exist on this host:
+
+- `wrangler whoami` → **"You are not authenticated. Please run `wrangler login`."**
+- No `CLOUDFLARE_API_TOKEN` / `CF_API_TOKEN` environment variable.
+- No `~/.wrangler` or `~/.config/.wrangler` credentials/config present.
+- `.env.staging.local` is **MISSING** (only `.env.staging.example` with placeholder values exists), so even `npm run cf:dry-run:staging` cannot run.
+
+**Exact missing approved prerequisite:** an authenticated Cloudflare account (wrangler login / API token) with a non-production staging Worker environment (`wstera-admin-staging`, `wstera-consumer-staging`), plus a populated `.env.staging.local` with real non-production values. No production target was touched.
+
+## 5. LINE / payment V1 external rehearsal — MISSING APPROVED PREREQUISITE
+
+LINE and Stripe/payment V1 external behavior could NOT be rehearsed because no non-production/test credentials are configured:
+
+- `.env.staging.local` is MISSING; `.env.staging.example` contains only placeholders (`your-staging-line-oa`, `sk_test_replace-me`, `whsec_replace-me`, `your-non-production-project-ref.supabase.co`).
+- No real non-production LINE OA channel, Stripe test keys, or non-production Supabase project are configured.
+
+**Exact missing approved prerequisite:** a populated `.env.staging.local` with real non-production LINE channel secret/access token, Stripe test keys, and a non-production Supabase project ref. No production credentials were used or exposed.
+
+## 6. Secret-boundary / logging review (static, code-level)
+
+- LINE webhook (`apps/booking-consumer/src/app/api/line/webhook/route.ts`): HMAC-SHA256 signature verification via `crypto.timingSafeEqual`; rejects invalid signatures with 401 before processing. Logs only `eventIndex`, `bookingCode`, and error message — never tokens/secrets.
+- Notification dispatch (`apps/booking-consumer/src/app/api/notifications/dispatch/route.ts`): Bearer `NOTIFICATION_DISPATCH_SECRET` gate; LINE push uses `X-Line-Retry-Key` (idempotency) and records per-attempt failure/retry evidence via `complete_line_notification` RPC. Retry policy (`lib/notification-policy.ts`): exponential backoff `min(3600, 60 * 2^attempt)`, capped at 5 attempts, stops on cancelled booking.
+- Secrets are read from `process.env` only (server-side); no secret values are logged or written to client-readable surfaces. `.env.staging.example` contains only placeholders.
+- No production/KMO/Order/push/merge activity occurred.
+
+## 7. Remaining next action
+
+BK-SR-03 external rehearsal is blocked on approved non-production runtime access. Next action: obtain an authenticated Cloudflare staging account and a populated `.env.staging.local` (non-production LINE + Stripe test + non-production Supabase), then run `npm run cf:dry-run:staging` and the staging deploy/smoke/rollback rehearsal. Local implementation and all local release checks are verified PASS.

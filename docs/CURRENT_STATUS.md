@@ -2,7 +2,7 @@
 
 **Product:** Booking by WSTERA (BK01)
 **Repository branch:** `feature/bk-a-v1-contract-remediation`
-**Current release checkpoint:** `d2ee14f` — BK-SR-02 dependency remediation; exact clean-clone verification PASS; local checkpoint not pushed
+**Current release code checkpoint:** `e65366f` - BK-SR-03 staging-isolation implementation; local release checks PASS. Verify live Git divergence before any new mutation.
 **Portfolio mode:** BUILD-TO-SELL / active Booking V1 release track
 
 ## Verified Current State
@@ -25,11 +25,11 @@ Execution priority: `docs/BUILD-TO-SELL-EXECUTION-2026-09-06.md`.
 
 ## Next Authorized Action
 
-1. BK-SR-02 is CLOSED at exact release checkpoint `d2ee14f`: `qs@6.16.0`, production audit 0 vulnerabilities, test 19/19, lint 0 errors, both builds PASS, exact clean clone PASS.
-2. Start BK-SR-03 staging + external-system rehearsal using approved non-production runtime only.
-3. Preserve CONT-04 and BK-SR-02 as closed unless new evidence contradicts their recorded PASS.
-4. Respect the Owner Claude lock: no new `agent-claude` dispatch before 14:05 Asia/Bangkok; after that, availability must be checked first.
-5. Do not start Order implementation automatically.
+1. BK-SR-02 remains CLOSED at exact release checkpoint `d2ee14f`; do not reopen it without contradictory evidence.
+2. BK-SR-03 is ACTIVE at staging-isolation checkpoint `e65366f`; local tests/lint/build/audit and staging-boundary checks are PASS.
+3. Continue BK-SR-03 only on approved non-production runtime. Current blocker: Cloudflare staging authentication plus populated `.env.staging.local` containing isolated non-production Supabase, non-production LINE OA, and Stripe test credentials.
+4. The temporary Claude session lock is RELEASED as of 2026-09-06 14:08 Asia/Bangkok; preserve existing evidence and resume bounded work without restarting completed stages.
+5. Do not use `.env.local`, production/KMO credentials, or production targets as a staging shortcut. Do not start Order implementation automatically.
 
 ## Hard Stop for Order Implementation
 
@@ -40,5 +40,6 @@ Earliest exception requires BK-A + BK-B closed, Order contracts locked, Reuse Ga
 **BOOKING CORE BUILD TRACK:** AUTHORIZED / BUILD-TO-SELL
 **BK-A:** CLOSED / CONT04_PASS
 **BK-SR-02 / BK-B:** CLOSED / exact release checkpoint `d2ee14f`
+**BK-SR-03:** ACTIVE / BLOCKED_PENDING_APPROVED_RUNTIME at `e65366f`
 **ORDER PHASE 0 DOCS:** COMPLETE / LOCKED
 **ORDER IMPLEMENTATION:** NOT AUTHORIZED

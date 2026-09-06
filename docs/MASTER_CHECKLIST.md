@@ -61,6 +61,23 @@ The capability checklist above is preserved as the original BK-A implementation 
 - [x] exact clean-clone verification of `d2ee14f` PASS; clone status clean
 
 BK-SR-02 / BK-B is CLOSED. BK-SR-03 staging/external-system rehearsal is next; this does not waive provider, deployment, legal/privacy or commercial gates.
+
+## BK-SR-03 staging + external-system rehearsal - 2026-09-06
+- [x] staging Worker identities isolated at `e65366f`: `wstera-consumer-staging` / `wstera-admin-staging`
+- [x] staging consumer cron disabled; production Worker names not reused by staging service bindings
+- [x] `.env.staging.example` exists with placeholders only; `sync-env:staging` is bounded to `.env.staging.local`
+- [x] fresh local verification PASS: tests 20/20, lint 0 errors, consumer/admin builds PASS, production dependency audit 0 vulnerabilities
+- [x] static LINE signature/retry/idempotency and secret/logging boundaries reviewed
+- [ ] approved Cloudflare staging authentication available
+- [ ] populated `.env.staging.local` with isolated non-production Supabase, non-production LINE OA and Stripe test values
+- [ ] `npm run cf:dry-run:staging` PASS
+- [ ] staging consumer/admin deploy + post-deploy smoke PASS
+- [ ] LINE external signature/delivery/retry/failure rehearsal PASS
+- [ ] applicable Stripe V1 test-mode rehearsal PASS
+- [ ] rollback + smoke + redeploy + final smoke PASS
+- [ ] BK-SR-03 durable evidence finalized and independent closure review PASS
+
+**Current BK-SR-03 verdict:** `BLOCKED_PENDING_APPROVED_RUNTIME`. Missing provider/runtime access is a bounded prerequisite, not a product-code failure. Production/KMO credentials and `.env.local` are forbidden staging substitutes.
 ## BK-C/BK-D downstream commercial and public-launch gates
 - [ ] final Basic/Pro public prices approved by owner
 - [ ] final Pro auto-slip provider, included allowance, unit cost/top-up and failure policy approved
