@@ -3,15 +3,37 @@
   "main": "custom-worker.ts",
   "name": "wstera-consumer",
   "compatibility_date": "2026-08-23",
-  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "compatibility_flags": [
+    "nodejs_compat",
+    "global_fetch_strictly_public"
+  ],
   "assets": {
     "directory": ".open-next/assets",
     "binding": "ASSETS"
   },
   "triggers": {
-    "crons": ["*/5 * * * *"]
+    "crons": [
+      "*/5 * * * *"
+    ]
   },
   "services": [
-    { "binding": "WORKER_SELF_REFERENCE", "service": "wstera-consumer" }
-  ]
+    {
+      "binding": "WORKER_SELF_REFERENCE",
+      "service": "wstera-consumer"
+    }
+  ],
+  "env": {
+    "staging": {
+      "workers_dev": true,
+      "services": [
+        {
+          "binding": "WORKER_SELF_REFERENCE",
+          "service": "wstera-consumer-staging"
+        }
+      ],
+      "triggers": {
+        "crons": []
+      }
+    }
+  }
 }

@@ -1,25 +1,49 @@
-// ponytail: hardlinking .env.local across apps looked elegant but silently breaks
-// whenever any tool saves via write-temp+rename (NTFS hardlinks don't survive that,
-// and most editors do it). This runs before every dev/build so root stays the real
-// source of truth no matter what state the hardlinks are in -- upgrade to a watcher
-// only if editing .env.local *without* running dev/build afterward becomes common.
 const fs = require('fs');
 const path = require('path');
 
 const root = path.join(__dirname, '..');
-const source = path.join(root, '.env.local');
 const targets = [
   path.join(root, 'apps', 'booking-admin', '.env.local'),
   path.join(root, 'apps', 'booking-consumer', '.env.local'),
 ];
 
-if (!fs.existsSync(source)) {
-  console.error(`sync-env: ${source} not found, nothing to sync`);
+function fail(message) {
+  console.error(`sync-env: ${message}`);
   process.exit(1);
 }
 
-const content = fs.readFileSync(source);
-for (const target of targets) {
-  fs.writeFileSync(target, content);
-  console.log(`sync-env: synced -> ${path.relative(root, target)}`);
+const args = process.argv.slice(2);
+let sourceArg = '.env.local';
+for (let i = 0; i < args.length; i += 1) {
+  if (args[i] !== '--source') fail(`unknown argument: ${args[i]}`);
+  if (!args[i + 1]) fail('--source requires a repo-relative file path');
+  sourceArg = args[i + 1];
+  i += 1;
+}
+
+const source = path.resolve(root, sourceArg);
+const relativeSource = path.relative(root, source);
+if (relativeSource.startsWith('..') || path.isAbsolute(relativeSource)) {
+  fail('source file must stay inside the BK01 repository');
+}
+if (!fs.existsSync(source)) {
+  if (relativeSource === '.env.staging.local') {
+    fail('.env.staging.local not found; copy .env.staging.example and fill non-production values');
+  }
+  fail(`${relativeSource} not found`);
+}
+
+if (!fs.statSync(source).isFile()) fail(`${relativeSource} is not a file`);
+
+try {
+  const content = fs.readFileSync(source);
+  for (const target of targets) {
+    fs.writeFileSync(target, content);
+    console.log(
+      `sync-env: ${relativeSource} -> ${path.relative(root, target)}`,
+    );
+  }
+} catch (error) {
+  const detail = error instanceof Error ? error.message : String(error);
+  fail(`failed to sync ${relativeSource}: ${detail}`);
 }

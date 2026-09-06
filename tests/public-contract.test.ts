@@ -45,11 +45,21 @@ test('staff auth mapping is not client-readable', () => {
   assert.doesNotMatch(migration, /GRANT SELECT \([^)]*creation_idempotency_key[^)]*\) ON local_service\.staff TO (?:anon|authenticated)/i);
 });
 test('consumer Worker has an actual reminder schedule', () => {
-  const wrangler = read('apps/booking-consumer/wrangler.jsonc');
+  const config = JSON.parse(read('apps/booking-consumer/wrangler.jsonc'));
   const worker = read('apps/booking-consumer/custom-worker.ts');
-  assert.match(wrangler, /"main": "custom-worker\.ts"/);
-  assert.match(wrangler, /"crons": \["\*\/5 \* \* \* \*"\]/);
+  assert.equal(config.main, 'custom-worker.ts');
+  assert.deepEqual(config.triggers?.crons, ['*/5 * * * *']);
   assert.match(worker, /async scheduled/);
   assert.match(worker, /\/api\/notifications\/dispatch/);
   assert.match(worker, /NOTIFICATION_DISPATCH_SECRET/);
+});
+
+test('staging Workers are isolated and staging notifications are not scheduled', () => {
+  const consumer = JSON.parse(read('apps/booking-consumer/wrangler.jsonc'));
+  const admin = JSON.parse(read('apps/booking-admin/wrangler.jsonc'));
+  assert.equal(consumer.env?.staging?.services?.[0]?.service, 'wstera-consumer-staging');
+  assert.deepEqual(consumer.env?.staging?.triggers?.crons, []);
+  assert.equal(admin.env?.staging?.services?.[0]?.service, 'wstera-admin-staging');
+  assert.notEqual(consumer.env.staging.services[0].service, consumer.name);
+  assert.notEqual(admin.env.staging.services[0].service, admin.name);
 });

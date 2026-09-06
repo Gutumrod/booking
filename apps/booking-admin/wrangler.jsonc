@@ -3,12 +3,29 @@
   "main": ".open-next/worker.js",
   "name": "wstera-admin",
   "compatibility_date": "2026-08-23",
-  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "compatibility_flags": [
+    "nodejs_compat",
+    "global_fetch_strictly_public"
+  ],
   "assets": {
     "directory": ".open-next/assets",
     "binding": "ASSETS"
   },
   "services": [
-    { "binding": "WORKER_SELF_REFERENCE", "service": "wstera-admin" }
-  ]
+    {
+      "binding": "WORKER_SELF_REFERENCE",
+      "service": "wstera-admin"
+    }
+  ],
+  "env": {
+    "staging": {
+      "workers_dev": true,
+      "services": [
+        {
+          "binding": "WORKER_SELF_REFERENCE",
+          "service": "wstera-admin-staging"
+        }
+      ]
+    }
+  }
 }

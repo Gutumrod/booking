@@ -8,6 +8,9 @@
   "scripts": {
     "test": "node --no-warnings --test --experimental-test-isolation=none tests/*.test.ts",
     "sync-env": "node scripts/sync-env.js",
+    "sync-env:staging": "node scripts/sync-env.js --source .env.staging.local",
+    "build:staging": "npm run sync-env:staging && npm --workspace apps/booking-consumer run build && npm --workspace apps/booking-admin run build",
+    "cf:dry-run:staging": "npm run sync-env:staging && npm --workspace apps/booking-consumer exec -- opennextjs-cloudflare build && npm --workspace apps/booking-consumer exec -- wrangler deploy --dry-run --env staging && npm --workspace apps/booking-admin exec -- opennextjs-cloudflare build && npm --workspace apps/booking-admin exec -- wrangler deploy --dry-run --env staging",
     "predev:shop": "npm run sync-env",
     "dev:shop": "npm --workspace apps/booking-consumer run dev",
     "predev:admin": "npm run sync-env",
