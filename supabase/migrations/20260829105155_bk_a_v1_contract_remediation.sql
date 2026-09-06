@@ -269,10 +269,10 @@ BEGIN
     p_event_type,p_event_created,v_shop_id,p_stripe_customer_id,p_stripe_subscription_id,
     p_plan,p_status,p_current_period_end,p_cancel_at_period_end
   );
-  IF coalesce(v_result.out_applied,false) THEN
+  IF coalesce(v_result.applied,false) THEN
     UPDATE local_service.subscriptions SET last_stripe_event_created_at=v_event_ts WHERE shop_id=v_shop_id;
   END IF;
-  RETURN QUERY SELECT coalesce(v_result.out_applied,false),v_shop_id;
+  RETURN QUERY SELECT coalesce(v_result.applied,false),v_shop_id;
 END; $$;
 REVOKE ALL ON FUNCTION local_service.sync_subscription_state_bk_a(text,bigint,uuid,text,text,text,text,bigint,boolean) FROM PUBLIC,anon,authenticated;
 GRANT EXECUTE ON FUNCTION local_service.sync_subscription_state_bk_a(text,bigint,uuid,text,text,text,text,bigint,boolean) TO service_role;
@@ -441,7 +441,7 @@ RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,loc
 DECLARE v_shop_id uuid;
 BEGIN
     IF auth.uid() IS NOT NULL AND local_service.is_platform_admin() THEN
-        v_shop_id := CASE WHEN TG_TABLE_NAME = 'shops' THEN NEW.id ELSE NEW.shop_id END;
+        v_shop_id := CASE WHEN TG_TABLE_NAME = 'shops' THEN NEW.id ELSE nullif(to_jsonb(NEW)->>'shop_id','')::uuid END;
         INSERT INTO local_service.audit_events(
           shop_id,actor_user_id,actor_type,action,target_type,target_id,metadata
         ) VALUES (
@@ -475,7 +475,7 @@ LANGUAGE sql
 VOLATILE
 SET search_path = pg_catalog
 AS $$
-    SELECT upper(substr(encode(gen_random_bytes(8), 'hex'), 1, 10))
+    SELECT upper(substr(encode(extensions.gen_random_bytes(8), 'hex'), 1, 10))
 $$;
 
 CREATE OR REPLACE FUNCTION local_service.customer_cancel_booking(
@@ -487,15 +487,17 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = pg_catalog, local_service
 AS $$
-DECLARE v_booking local_service.bookings%rowtype; v_hours int;
+DECLARE v_booking local_service.bookings%rowtype; v_hours int; v_row record;
 BEGIN
     SELECT b, s.customer_cancel_before_hours
-      INTO v_booking, v_hours
+      INTO v_row
       FROM local_service.bookings b JOIN local_service.shops s ON s.id = b.shop_id
      WHERE b.id = p_booking_id FOR UPDATE;
     IF NOT FOUND OR NOT local_service.authorize_booking_recovery_attempt(p_booking_id,p_recovery_token) THEN
         RETURN json_build_object('ok',false,'error','Invalid or expired booking recovery token');
     END IF;
+    v_booking := v_row.b;
+    v_hours := v_row.customer_cancel_before_hours;
     IF v_hours IS NULL THEN RAISE EXCEPTION 'Customer cancellation policy is not configured'; END IF;
     IF v_booking.status NOT IN ('hold','pending_review','confirmed') THEN RAISE EXCEPTION 'Booking is not cancellable'; END IF;
     IF v_booking.start_timestamptz <= now() + make_interval(hours => v_hours) THEN RAISE EXCEPTION 'Cancellation policy window has closed'; END IF;
@@ -520,15 +522,17 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = pg_catalog, local_service
 AS $$
-DECLARE v_booking local_service.bookings%rowtype; v_hours int; v_start timestamptz; v_end timestamptz;
+DECLARE v_booking local_service.bookings%rowtype; v_hours int; v_start timestamptz; v_end timestamptz; v_row record;
 BEGIN
     SELECT b, s.customer_reschedule_before_hours
-      INTO v_booking, v_hours
+      INTO v_row
       FROM local_service.bookings b JOIN local_service.shops s ON s.id=b.shop_id
      WHERE b.id=p_booking_id FOR UPDATE;
     IF NOT FOUND OR NOT local_service.authorize_booking_recovery_attempt(p_booking_id,p_recovery_token) THEN
         RETURN json_build_object('ok',false,'error','Invalid or expired booking recovery token');
     END IF;
+    v_booking := v_row.b;
+    v_hours := v_row.customer_reschedule_before_hours;
     IF v_hours IS NULL THEN RAISE EXCEPTION 'Customer reschedule policy is not configured'; END IF;
     IF v_booking.status <> 'confirmed' THEN RAISE EXCEPTION 'Only confirmed bookings can be rescheduled'; END IF;
     IF v_booking.start_timestamptz <= now() + make_interval(hours => v_hours) THEN RAISE EXCEPTION 'Reschedule policy window has closed'; END IF;

@@ -118,8 +118,8 @@ DECLARE
     v_ticket_id UUID;
     v_norm_phone TEXT;
 BEGIN
-    IF NOT local_service.has_shop_role(p_shop_id, ARRAY['owner', 'admin', 'staff']::TEXT[]) THEN
-        RAISE EXCEPTION USING ERRCODE = '42501', MESSAGE = 'Shop member role required';
+    IF NOT local_service.has_shop_role(p_shop_id, ARRAY['owner', 'admin']::TEXT[]) THEN
+        RAISE EXCEPTION USING ERRCODE = '42501', MESSAGE = 'Owner or admin role required';
     END IF;
 
     IF p_idempotency_key IS NULL THEN
@@ -262,8 +262,8 @@ BEGIN
         RAISE EXCEPTION 'Ticket not found' USING ERRCODE = 'P0002';
     END IF;
 
-    IF NOT local_service.has_shop_role(v_ticket.shop_id, ARRAY['owner', 'admin', 'staff']::TEXT[]) THEN
-        RAISE EXCEPTION USING ERRCODE = '42501', MESSAGE = 'Shop member role required';
+    IF NOT local_service.has_shop_role(v_ticket.shop_id, ARRAY['owner', 'admin']::TEXT[]) THEN
+        RAISE EXCEPTION USING ERRCODE = '42501', MESSAGE = 'Owner or admin role required';
     END IF;
 
     IF p_new_status IS NULL OR p_new_status NOT IN (
@@ -353,8 +353,8 @@ BEGIN
         RAISE EXCEPTION 'Ticket not found' USING ERRCODE = 'P0002';
     END IF;
 
-    IF NOT local_service.has_shop_role(v_ticket.shop_id, ARRAY['owner', 'admin', 'staff']::TEXT[]) THEN
-        RAISE EXCEPTION USING ERRCODE = '42501', MESSAGE = 'Shop member role required';
+    IF NOT local_service.has_shop_role(v_ticket.shop_id, ARRAY['owner', 'admin']::TEXT[]) THEN
+        RAISE EXCEPTION USING ERRCODE = '42501', MESSAGE = 'Owner or admin role required';
     END IF;
 
     IF NULLIF(BTRIM(p_message), '') IS NULL THEN
@@ -490,8 +490,8 @@ BEGIN
         RAISE EXCEPTION 'Ticket not found' USING ERRCODE = 'P0002';
     END IF;
 
-    IF NOT local_service.has_shop_role(v_ticket.shop_id, ARRAY['owner', 'admin', 'staff']::TEXT[]) THEN
-        RAISE EXCEPTION USING ERRCODE = '42501', MESSAGE = 'Shop member role required';
+    IF NOT local_service.has_shop_role(v_ticket.shop_id, ARRAY['owner', 'admin']::TEXT[]) THEN
+        RAISE EXCEPTION USING ERRCODE = '42501', MESSAGE = 'Owner or admin role required';
     END IF;
 
     IF p_new_priority IS NULL OR p_new_priority NOT IN ('Low', 'Medium', 'High') THEN
@@ -548,8 +548,8 @@ BEGIN
         RAISE EXCEPTION 'Ticket not found' USING ERRCODE = 'P0002';
     END IF;
 
-    IF NOT local_service.has_shop_role(v_ticket.shop_id, ARRAY['owner', 'admin', 'staff']::TEXT[]) THEN
-        RAISE EXCEPTION USING ERRCODE = '42501', MESSAGE = 'Shop member role required';
+    IF NOT local_service.has_shop_role(v_ticket.shop_id, ARRAY['owner', 'admin']::TEXT[]) THEN
+        RAISE EXCEPTION USING ERRCODE = '42501', MESSAGE = 'Owner or admin role required';
     END IF;
 
     v_clean_assignee := NULLIF(BTRIM(p_new_assignee), '');
@@ -602,8 +602,8 @@ BEGIN
         RAISE EXCEPTION 'Ticket not found' USING ERRCODE = 'P0002';
     END IF;
 
-    IF NOT local_service.has_shop_role(v_ticket.shop_id, ARRAY['owner', 'admin', 'staff']::TEXT[]) THEN
-        RAISE EXCEPTION USING ERRCODE = '42501', MESSAGE = 'Shop member role required';
+    IF NOT local_service.has_shop_role(v_ticket.shop_id, ARRAY['owner', 'admin']::TEXT[]) THEN
+        RAISE EXCEPTION USING ERRCODE = '42501', MESSAGE = 'Owner or admin role required';
     END IF;
 
     IF NULLIF(BTRIM(p_resolution), '') IS NULL THEN

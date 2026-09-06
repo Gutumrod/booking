@@ -1,5 +1,5 @@
 begin;
-select plan(19);
+select plan(26);
 
 select ok(
   (select not public from storage.buckets where id = 'deposit-slips'),
@@ -16,13 +16,42 @@ select has_table('local_service', 'auto_slip_attempts', 'auto slip attempts are 
 select has_table('local_service', 'account_closure_requests', 'closure requests are durable');
 select has_table('local_service', 'audit_events', 'cross-cutting audit events are durable');
 select has_function('local_service', 'customer_cancel_booking', array['uuid','text','text'], 'customer cancellation RPC exists');
-select has_function('local_service', 'customer_reschedule_booking', array['uuid','text','date','time without time zone'], 'atomic customer reschedule RPC exists');
+select has_function('local_service', 'customer_reschedule_booking', array['uuid','text','date','time without time zone','text'], 'atomic customer reschedule RPC exists');
 select has_function('local_service', 'set_booking_outcome', array['uuid','text','text'], 'booking outcome RPC exists');
 select ok(not has_function_privilege('anon', 'local_service.set_booking_outcome(uuid,text,text)', 'EXECUTE'), 'anon cannot set merchant outcomes');
 select ok(not has_function_privilege('anon', 'local_service.export_core_business_data(uuid)', 'EXECUTE'), 'anon cannot export shop data');
 select ok(not has_function_privilege('anon', 'local_service.submit_deposit_slip(uuid,text,text)', 'EXECUTE'), 'legacy identifier-only slip submit is denied');
 select ok(has_function_privilege('anon', 'local_service.submit_deposit_slip(uuid,text,text,text)', 'EXECUTE'), 'capability-bound slip submit is available');
 select ok(not has_function_privilege('anon', 'local_service.authorize_booking_recovery_attempt(uuid,text)', 'EXECUTE'), 'recovery-attempt authority remains server-only');
+select ok(
+  (select position('v_result.applied' in pg_get_functiondef('local_service.sync_subscription_state_bk_a(text,bigint,uuid,text,text,text,text,bigint,boolean)'::regprocedure)) > 0
+   and position('v_result.out_applied' in pg_get_functiondef('local_service.sync_subscription_state_bk_a(text,bigint,uuid,text,text,text,text,bigint,boolean)'::regprocedure)) = 0),
+  'billing wrapper reads the legacy applied result field'
+);
 
+select ok(
+  position('staff' in pg_get_functiondef('local_service.create_ticket(uuid,uuid,uuid,text,text,text,text,text,text,text,text,text,text,timestamptz,timestamptz,timestamptz,uuid)'::regprocedure)) = 0,
+  'ticket creation RPC does not authorize staff'
+);
+select ok(
+  position('staff' in pg_get_functiondef('local_service.update_ticket_status(uuid,text,text)'::regprocedure)) = 0,
+  'ticket status mutation RPC does not authorize staff'
+);
+select ok(
+  position('staff' in pg_get_functiondef('local_service.add_ticket_timeline_entry(uuid,text,text,text)'::regprocedure)) = 0,
+  'ticket timeline mutation RPC does not authorize staff'
+);
+select ok(
+  position('staff' in pg_get_functiondef('local_service.update_ticket_priority(uuid,text,text)'::regprocedure)) = 0,
+  'ticket priority mutation RPC does not authorize staff'
+);
+select ok(
+  position('staff' in pg_get_functiondef('local_service.update_ticket_assignee(uuid,text,text)'::regprocedure)) = 0,
+  'ticket assignee mutation RPC does not authorize staff'
+);
+select ok(
+  position('staff' in pg_get_functiondef('local_service.save_ticket_resolution(uuid,text,text)'::regprocedure)) = 0,
+  'ticket resolution mutation RPC does not authorize staff'
+);
 select * from finish();
 rollback;
