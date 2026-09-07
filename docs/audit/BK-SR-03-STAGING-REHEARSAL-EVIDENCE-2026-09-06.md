@@ -62,3 +62,16 @@ LINE and Stripe/payment V1 external behavior could NOT be rehearsed because no n
 ## 7. Remaining next action
 
 BK-SR-03 external rehearsal is blocked on approved non-production runtime access. Next action: obtain an authenticated Cloudflare staging account and a populated `.env.staging.local` (non-production LINE + Stripe test + non-production Supabase), then run `npm run cf:dry-run:staging` and the staging deploy/smoke/rollback rehearsal. Local implementation and all local release checks are verified PASS.
+
+## 2026-09-07 follow-up ? approved shared lab target
+
+Owner explicitly approved `wstera-lab` (`ykxlqnshaaxmzzocpjlj`) as the shared non-production test runtime for BK01; `Shared SaaS Runtime` (`gyleqrjdzwwlqierdwcy`) is production-only after test/pilot/release gates pass.
+
+Verified without database mutation:
+- Wrangler OAuth authentication PASS.
+- BK01 local Supabase link was safely changed from `Shared SaaS Runtime` to `wstera-lab`; Git remained clean.
+- `supabase migration list --linked` shows local/remote BK01 migration history aligned `29/29`; no `db push` is required.
+- BK01 application objects are isolated under schema `local_service` (21 base tables).
+- Project-global surfaces are shared: 5 auth users, private bucket `deposit-slips`, global migration ledger, and 8 active generically named HTTP/net cron jobs. Cron ownership was not inferred and no cron job was modified.
+
+Guard: do not mutate unknown shared/global resources; preserve `local_service` isolation, namespace new shared resources by product where practical, and never use production/KMO credentials as staging substitutes. Remaining BK-SR-03 prerequisite is `.env.staging.local` population with `wstera-lab` API values plus non-production LINE OA and Stripe test credentials.

@@ -21,7 +21,7 @@ Record `CONT04_PASS` on current status/roadmap/checklists, link durable closure 
 ### BK-SR-02 — BK-B release/repository readiness — CLOSED at `d2ee14f`
 Run fresh CI/test/lint/build/diff/security checks on the current release candidate. Prove consumer/admin production builds, database/RLS negatives, concurrency, role denial, support/platform-admin boundaries, and clean-clone reproducibility.
 
-### BK-SR-03 - Staging + external-system rehearsal - ACTIVE / BLOCKED_PENDING_APPROVED_RUNTIME at `e65366f`
+### BK-SR-03 - Staging + external-system rehearsal - ACTIVE / BLOCKED_PENDING_STAGING_SECRETS at `e65366f`
 Use approved non-production runtime only. Staging isolation and local release verification are PASS. External deploy/smoke/rollback and LINE/Stripe rehearsal remain blocked until approved Cloudflare staging authentication and a populated `.env.staging.local` provide isolated non-production Supabase, non-production LINE OA, and Stripe test credentials. Never substitute `.env.local` or production/KMO credentials.
 ### BK-SR-04 — Pilot-ready onboarding and operations
 Create merchant onboarding checklist, configuration checklist, support/incident path, backup/restore proof, operator ownership, and pilot instrumentation for activation, booking integrity, no-show/cancel/reschedule, support burden, notification consumption, and WTP.
@@ -30,7 +30,7 @@ Create merchant onboarding checklist, configuration checklist, support/incident 
 After pilot evidence: approve final public Basic/Pro prices, auto-slip commercial terms, merchant LINE cost disclosure, cancellation/reschedule defaults, public claims, support promise, and launch checklist. Public Pro requires auto-slip evidence.
 
 ## Immediate next ticket
-**Continue BK-SR-03 staging + external-system rehearsal from `e65366f`.** Local/staging-isolation verification is complete and durable evidence is reconciled by the current checkpoint. After the reconciliation commit/push, authenticate/configure approved staging and execute dry-run -> deploy -> smoke -> external rehearsal -> rollback/redeploy. BK-SR-01 and BK-SR-02 remain CLOSED. Do not start Order implementation.
+**Continue BK-SR-03 staging + external-system rehearsal from `e65366f`.** Local/staging-isolation verification is complete and durable evidence is reconciled. Cloudflare OAuth is authenticated and Owner approved shared `wstera-lab` (`ykxlqnshaaxmzzocpjlj`) as the BK01 test runtime. Populate staging-only env values without touching shared/global resources, then execute dry-run -> deploy -> smoke -> external rehearsal -> rollback/redeploy. BK-SR-01 and BK-SR-02 remain CLOSED. Do not start Order implementation.
 
 ## Definition of done
 - One exact release commit has passing release/security/database evidence.

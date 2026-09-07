@@ -68,8 +68,9 @@ BK-SR-02 / BK-B is CLOSED. BK-SR-03 staging/external-system rehearsal is next; t
 - [x] `.env.staging.example` exists with placeholders only; `sync-env:staging` is bounded to `.env.staging.local`
 - [x] fresh local verification PASS: tests 20/20, lint 0 errors, consumer/admin builds PASS, production dependency audit 0 vulnerabilities
 - [x] static LINE signature/retry/idempotency and secret/logging boundaries reviewed
-- [ ] approved Cloudflare staging authentication available
-- [ ] populated `.env.staging.local` with isolated non-production Supabase, non-production LINE OA and Stripe test values
+- [x] approved Cloudflare staging authentication available; Wrangler OAuth verified on 2026-09-07
+- [x] Owner-approved shared test Supabase selected and linked: `wstera-lab` (`ykxlqnshaaxmzzocpjlj`); remote BK01 migration history matches local `29/29`
+- [ ] populated `.env.staging.local` with `wstera-lab` API values, non-production LINE OA and Stripe test values
 - [ ] `npm run cf:dry-run:staging` PASS
 - [ ] staging consumer/admin deploy + post-deploy smoke PASS
 - [ ] LINE external signature/delivery/retry/failure rehearsal PASS
@@ -77,7 +78,9 @@ BK-SR-02 / BK-B is CLOSED. BK-SR-03 staging/external-system rehearsal is next; t
 - [ ] rollback + smoke + redeploy + final smoke PASS
 - [ ] BK-SR-03 durable evidence finalized and independent closure review PASS
 
-**Current BK-SR-03 verdict:** `BLOCKED_PENDING_APPROVED_RUNTIME`. Missing provider/runtime access is a bounded prerequisite, not a product-code failure. Production/KMO credentials and `.env.local` are forbidden staging substitutes.
+**Current BK-SR-03 verdict:** `BLOCKED_PENDING_STAGING_SECRETS`. Cloudflare authentication and the Supabase test target are now approved. Remaining provider prerequisites are staging env population plus non-production LINE OA and Stripe test credentials. Production/KMO credentials and `.env.local` are forbidden staging substitutes.
+
+**Shared-Lab guard:** BK01 owns `local_service`; treat project-global `auth`, storage, cron and migration ledger as shared. Do not modify unknown cron jobs or another product's resources. `Shared SaaS Runtime` remains production-only until release gates pass.
 ## BK-C/BK-D downstream commercial and public-launch gates
 - [ ] final Basic/Pro public prices approved by owner
 - [ ] final Pro auto-slip provider, included allowance, unit cost/top-up and failure policy approved

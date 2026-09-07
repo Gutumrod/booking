@@ -27,9 +27,17 @@ Execution priority: `docs/BUILD-TO-SELL-EXECUTION-2026-09-06.md`.
 
 1. BK-SR-02 remains CLOSED at exact release checkpoint `d2ee14f`; do not reopen it without contradictory evidence.
 2. BK-SR-03 is ACTIVE at staging-isolation checkpoint `e65366f`; local tests/lint/build/audit and staging-boundary checks are PASS.
-3. Continue BK-SR-03 only on approved non-production runtime. Current blocker: Cloudflare staging authentication plus populated `.env.staging.local` containing isolated non-production Supabase, non-production LINE OA, and Stripe test credentials.
+3. Continue BK-SR-03 only on approved non-production runtime. Cloudflare OAuth is authenticated and Owner approved shared `wstera-lab` (`ykxlqnshaaxmzzocpjlj`) as the BK01 test runtime. Remaining blocker: populate `.env.staging.local` with `wstera-lab` API values plus non-production LINE OA and Stripe test credentials.
 4. The temporary Claude session lock is RELEASED as of 2026-09-06 14:08 Asia/Bangkok; preserve existing evidence and resume bounded work without restarting completed stages.
 5. Do not use `.env.local`, production/KMO credentials, or production targets as a staging shortcut. Do not start Order implementation automatically.
+
+## Shared WSTERA Lab Boundary ? Owner Decision 2026-09-07
+
+- `wstera-lab` (`ykxlqnshaaxmzzocpjlj`) is the approved shared non-production runtime for BK01 and other WSTERA products.
+- BK01 uses application schema `local_service`; remote migration history matches BK01 local migrations `29/29`, so no database push is required for the current staging rehearsal.
+- Project-global `auth`, storage, cron and `supabase_migrations` are shared surfaces. Do not mutate unknown/shared cron jobs or another product's resources. New shared resources should be product-namespaced where practical.
+- Existing private bucket `deposit-slips` is grandfathered BK01 state; do not rename it during BK-SR-03.
+- `Shared SaaS Runtime` (`gyleqrjdzwwlqierdwcy`) is the production destination only after test/pilot/release gates pass; it must not be used as a staging shortcut.
 
 ## Hard Stop for Order Implementation
 
