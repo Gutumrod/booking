@@ -94,3 +94,25 @@ Current bounded blocker: approved non-production LINE OA credentials, approved S
 - Verification: exactly one key entry exists, encoded as 64 hex characters; the value was not printed, copied into the repo, or sent to Cloudflare.
 - Vault inventory sanity after write: 123 assignments / 123 unique key names / 0 duplicates; required WSTERA Lab and existing provider key names remain present.
 - Provider blocker remains bounded to approved BK01 non-production LINE OA credentials and approved Stripe test/webhook credentials; `.env.staging.local` is still intentionally absent.
+
+## 2026-09-07 follow-up - Queueeasy LINE staging E2E and reminder defect
+
+Queueeasy was used only as the canonical `WSTERA Shared LINE OA Test Fixture` under BK-SR-03. Provider identity was verified as `Queueeasy` / Basic ID `@264iezuj`; no secret values were recorded.
+
+- Cloudflare consumer staging deployed successfully at `wstera-consumer-staging.titazmth.workers.dev`, version `cf65c2f7-b81b-427a-8fd3-139a8437df65`; staging cron remained disabled.
+- LINE webhook endpoint was configured to `/api/line/webhook`; provider webhook verification returned HTTP 200 / success and webhook usage was confirmed active.
+- `wstera-lab` required the documented manual Data API step to expose `local_service`; after Owner completed it, application-schema reads succeeded.
+- Public `create_booking_hold` RPC created a staging booking; Owner sent the prefilled binding command through Queueeasy and received the Flex confirmation.
+- DB evidence confirmed the customer LINE UID is present, one `line_users` binding exists, and the webhook Flex audit row reached `sent`.
+- Subsequent server-side dispatcher push succeeded without another binding action, proving persisted UID reuse.
+
+Duplicate-like delivery investigation found two distinct due jobs, not one duplicated idempotency key: immediate `booking_created` plus `reminder_24h`. The test appointment was created inside the 24-hour window, so the reminder's `scheduled_for` timestamp was already in the past and was claimed together with confirmation.
+
+Remediation: migration `20260907181500_skip_overdue_line_reminders.sql` adds a DB-boundary invariant that suppresses only newly inserted pending `reminder_24h` rows whose `scheduled_for <= now()`. It does not cancel correctly queued reminders that later become delayed by an outage.
+
+Verification:
+- `npm test` PASS 21/21 including the new scheduling contract test.
+- lint PASS with 0 errors / 13 pre-existing warnings; `git diff --check` PASS.
+- Migration applied only to linked `wstera-lab`.
+- Fresh <24h public booking `BK-J24DX2` produced exactly one notification job: `booking_created`; no `reminder_24h` row was created.
+- Live staging dispatch returned `CLAIMED=1`, `SENT=1`, `FAILED=0`.
