@@ -2,7 +2,7 @@
 
 **Product:** Booking by WSTERA (BK01)
 **Repository branch:** `feature/bk-a-v1-contract-remediation`
-**Current release code checkpoint:** `e65366f` - BK-SR-03 staging-isolation implementation; local release checks PASS. Verify live Git divergence before any new mutation.
+**Current release code checkpoint:** `dba74bd` - BK-SR-03 LINE staging E2E + overdue-reminder remediation; tests 21/21 PASS and live staging single-notification regression PASS.
 **Portfolio mode:** BUILD-TO-SELL / active Booking V1 release track
 
 ## Verified Current State
@@ -26,15 +26,15 @@ Execution priority: `docs/BUILD-TO-SELL-EXECUTION-2026-09-06.md`.
 ## Next Authorized Action
 
 1. BK-SR-02 remains CLOSED at exact release checkpoint `d2ee14f`; do not reopen it without contradictory evidence.
-2. BK-SR-03 is ACTIVE at staging-isolation checkpoint `e65366f`; local tests/lint/build/audit and staging-boundary checks are PASS.
-3. Continue BK-SR-03 only on approved non-production runtime. Cloudflare OAuth is authenticated and Owner approved shared `wstera-lab` (`ykxlqnshaaxmzzocpjlj`) as the BK01 test runtime. Supabase staging values are obtainable. `NOTIFICATION_DISPATCH_SECRET_BK01_STAGING` has been generated in the canonical vault (value not copied or logged). `.env.staging.local` must remain unassembled until approved non-production LINE OA and approved Stripe test/webhook credentials are available. `.env.local` is confirmed production-bound and must not be copied.
+2. BK-SR-03 is ACTIVE at checkpoint `dba74bd`; Queueeasy LINE staging E2E, UID binding/reuse, and the single-notification regression are PASS. BK-SR-03 is not closed yet.
+3. Continue BK-SR-03 only on approved non-production runtime. `wstera-lab` is linked with migration history `30/30`; consumer staging is deployed. Queueeasy is now RELEASE_PENDING after the approved LINE slice; final fixture reset requires `Use webhook` OFF plus provider verification `active=false`. Remaining BK-SR-03 work is rollback/redeploy proof, Stripe test/webhook rehearsal, and closure review. `.env.local` remains production-bound and forbidden as a staging source.
 4. The temporary Claude session lock is RELEASED as of 2026-09-06 14:08 Asia/Bangkok; preserve existing evidence and resume bounded work without restarting completed stages.
 5. Do not use `.env.local`, production/KMO credentials, or production targets as a staging shortcut. Do not start Order implementation automatically.
 
 ## Shared WSTERA Lab Boundary ? Owner Decision 2026-09-07
 
 - `wstera-lab` (`ykxlqnshaaxmzzocpjlj`) is the approved shared non-production runtime for BK01 and other WSTERA products.
-- BK01 uses application schema `local_service`; remote migration history matches BK01 local migrations `29/29`, so no database push is required for the current staging rehearsal.
+- BK01 uses application schema `local_service`; remote migration history now matches BK01 local migrations `30/30`, including the staging-proven overdue-reminder suppression migration.
 - Project-global `auth`, storage, cron and `supabase_migrations` are shared surfaces. Do not mutate unknown/shared cron jobs or another product's resources. New shared resources should be product-namespaced where practical.
 - Existing private bucket `deposit-slips` is grandfathered BK01 state; do not rename it during BK-SR-03.
 - `Shared SaaS Runtime` (`gyleqrjdzwwlqierdwcy`) is the production destination only after test/pilot/release gates pass; it must not be used as a staging shortcut.
@@ -48,6 +48,6 @@ Earliest exception requires BK-A + BK-B closed, Order contracts locked, Reuse Ga
 **BOOKING CORE BUILD TRACK:** AUTHORIZED / BUILD-TO-SELL
 **BK-A:** CLOSED / CONT04_PASS
 **BK-SR-02 / BK-B:** CLOSED / exact release checkpoint `d2ee14f`
-**BK-SR-03:** ACTIVE / BLOCKED_PENDING_APPROVED_RUNTIME at `e65366f`
+**BK-SR-03:** ACTIVE / LINE_STAGING_SLICE_PASS at `dba74bd`; remaining rollback + Stripe + closure review
 **ORDER PHASE 0 DOCS:** COMPLETE / LOCKED
 **ORDER IMPLEMENTATION:** NOT AUTHORIZED

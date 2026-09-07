@@ -116,3 +116,13 @@ Verification:
 - Migration applied only to linked `wstera-lab`.
 - Fresh <24h public booking `BK-J24DX2` produced exactly one notification job: `booking_created`; no `reminder_24h` row was created.
 - Live staging dispatch returned `CLAIMED=1`, `SENT=1`, `FAILED=0`.
+
+## 2026-09-07 Owner external acceptance after reminder remediation
+
+Owner reported receipt of exactly one new LINE notification for the fresh regression booking after the overdue-reminder fix:
+
+`ยืนยันคิว BK-J24DX2 ที่ BK-SR-03 QEASY Fixture วันที่ 2026-09-08 เวลา 16:00`
+
+This matches the server-side evidence for that run: one `booking_created` job, no newly-created `reminder_24h`, and dispatcher result `CLAIMED=1 / SENT=1 / FAILED=0`. The earlier duplicate-like symptom is therefore externally resolved for the reproduced <24h case.
+
+Queueeasy remains a shared non-production fixture. After this approved LINE slice, BK01 must release/reset the fixture before another product claims it. Final BK-SR-03 closure still requires the remaining rollback/redeploy, Stripe test/webhook, and closure-review evidence.
