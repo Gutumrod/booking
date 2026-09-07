@@ -70,6 +70,7 @@ BK-SR-02 / BK-B is CLOSED. BK-SR-03 staging/external-system rehearsal is next; t
 - [x] static LINE signature/retry/idempotency and secret/logging boundaries reviewed
 - [x] approved Cloudflare staging authentication available; Wrangler OAuth verified on 2026-09-07
 - [x] Owner-approved shared test Supabase selected and linked: `wstera-lab` (`ykxlqnshaaxmzzocpjlj`); remote BK01 migration history matches local `29/29`
+- [x] staging-only internal dispatch secret generated in canonical vault as `NOTIFICATION_DISPATCH_SECRET_BK01_STAGING`; value not logged or committed
 - [ ] populated `.env.staging.local` with `wstera-lab` API values, non-production LINE OA and Stripe test values
 - [ ] `npm run cf:dry-run:staging` PASS
 - [ ] staging consumer/admin deploy + post-deploy smoke PASS

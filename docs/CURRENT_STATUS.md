@@ -27,7 +27,7 @@ Execution priority: `docs/BUILD-TO-SELL-EXECUTION-2026-09-06.md`.
 
 1. BK-SR-02 remains CLOSED at exact release checkpoint `d2ee14f`; do not reopen it without contradictory evidence.
 2. BK-SR-03 is ACTIVE at staging-isolation checkpoint `e65366f`; local tests/lint/build/audit and staging-boundary checks are PASS.
-3. Continue BK-SR-03 only on approved non-production runtime. Cloudflare OAuth is authenticated and Owner approved shared `wstera-lab` (`ykxlqnshaaxmzzocpjlj`) as the BK01 test runtime. Supabase staging values are obtainable, but `.env.staging.local` must remain unassembled until approved non-production LINE OA, approved Stripe test credentials, and a staging notification-dispatch secret are available. `.env.local` is confirmed production-bound and must not be copied.
+3. Continue BK-SR-03 only on approved non-production runtime. Cloudflare OAuth is authenticated and Owner approved shared `wstera-lab` (`ykxlqnshaaxmzzocpjlj`) as the BK01 test runtime. Supabase staging values are obtainable. `NOTIFICATION_DISPATCH_SECRET_BK01_STAGING` has been generated in the canonical vault (value not copied or logged). `.env.staging.local` must remain unassembled until approved non-production LINE OA and approved Stripe test/webhook credentials are available. `.env.local` is confirmed production-bound and must not be copied.
 4. The temporary Claude session lock is RELEASED as of 2026-09-06 14:08 Asia/Bangkok; preserve existing evidence and resume bounded work without restarting completed stages.
 5. Do not use `.env.local`, production/KMO credentials, or production targets as a staging shortcut. Do not start Order implementation automatically.
 

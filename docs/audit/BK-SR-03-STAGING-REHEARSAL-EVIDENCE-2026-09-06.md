@@ -86,3 +86,11 @@ Read-only checks only; no provider secret was copied or exposed.
 - `.env.local` lacks `NOTIFICATION_DISPATCH_SECRET` and has no merchant channel mapping configured.
 
 Current bounded blocker: approved non-production LINE OA credentials, approved Stripe test credentials for BK01 staging, notification dispatch secret generation, and final assembly of `.env.staging.local`.
+
+## 2026-09-07 follow-up - staging internal dispatch secret
+
+- Canonical vault policy re-verified: `D:\AI-Workspace\.secrets\keys.txt` is the single secret store; secret values must not appear in chat, docs, logs, or commits.
+- Generated a dedicated 32-byte staging internal secret under the vault-only key name `NOTIFICATION_DISPATCH_SECRET_BK01_STAGING`.
+- Verification: exactly one key entry exists, encoded as 64 hex characters; the value was not printed, copied into the repo, or sent to Cloudflare.
+- Vault inventory sanity after write: 123 assignments / 123 unique key names / 0 duplicates; required WSTERA Lab and existing provider key names remain present.
+- Provider blocker remains bounded to approved BK01 non-production LINE OA credentials and approved Stripe test/webhook credentials; `.env.staging.local` is still intentionally absent.
