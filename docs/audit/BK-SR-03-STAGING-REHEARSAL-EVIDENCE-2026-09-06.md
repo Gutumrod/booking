@@ -138,3 +138,15 @@ Live staging then proved the remaining delivery semantics:
 - Synthetic invalid-recipient fixtures were deleted after the rehearsal.
 
 No production endpoint, production credential, or non-BK01 shared application state was used for these checks.
+
+## 2026-09-08 Cloudflare rollback / redeploy acceptance
+
+Rollback proof was executed only against `wstera-consumer-staging`.
+
+- Existing staging version `cf65c2f7-b81b-427a-8fd3-139a8437df65` was the rollback target.
+- Same-baseline rehearsal candidate `a26e94ed-d24b-4a4b-86b6-1fe7031b4615` was uploaded and deployed at 100%.
+- Candidate smoke PASS: root HTTP 200; unsigned `/api/line/webhook` POST HTTP 401.
+- Rollback to `cf65c2f7-b81b-427a-8fd3-139a8437df65` succeeded; smoke PASS 200 / 401.
+- Redeploy of `a26e94ed-d24b-4a4b-86b6-1fe7031b4615` succeeded; final smoke PASS 200 / 401.
+
+No production Worker name or production deployment was touched.

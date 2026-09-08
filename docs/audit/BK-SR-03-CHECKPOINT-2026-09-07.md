@@ -53,3 +53,16 @@ Additional live staging checks:
 - Temporary invalid-recipient/customer fixtures were deleted after evidence capture.
 
 LINE matrix result: confirmation, persisted UID reuse, >24h scheduling, <24h suppression, reminder delivery, reschedule, cancellation, no-recipient failure, provider failure/backoff, retry cap, and repeated-dispatch idempotency are all staging-proven.
+
+## 2026-09-08 Cloudflare rollback / recovery proof
+
+Consumer staging rollback rehearsal completed without touching production Worker names.
+
+- Baseline active version: `cf65c2f7-b81b-427a-8fd3-139a8437df65`.
+- Rehearsal candidate uploaded from the same BK01 code/config baseline: `a26e94ed-d24b-4a4b-86b6-1fe7031b4615`.
+- Candidate deployed at 100%; smoke PASS: root HTTP 200, unsigned LINE webhook POST HTTP 401.
+- Rolled back to `cf65c2f7-b81b-427a-8fd3-139a8437df65`; smoke PASS: 200 / 401.
+- Redeployed candidate `a26e94ed-d24b-4a4b-86b6-1fe7031b4615` at 100%; smoke PASS: 200 / 401.
+- Final active staging version after recovery proof: `a26e94ed-d24b-4a4b-86b6-1fe7031b4615`.
+
+This closes the Cloudflare rollback/redeploy portion of BK-SR-03. Remaining external rehearsal is Stripe test/webhook plus final closure review.
