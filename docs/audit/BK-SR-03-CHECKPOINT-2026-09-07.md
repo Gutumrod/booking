@@ -1,9 +1,9 @@
-# BK-SR-03 Checkpoint — 2026-09-07
+﻿# BK-SR-03 Checkpoint â€” 2026-09-07
 
 **Mode:** BUILD-TO-SELL / staging external rehearsal
 **Branch:** `feature/bk-a-v1-contract-remediation`
 **Checkpoint base:** `dba74bd` (`fix(booking): suppress overdue line reminders`)
-**BK-SR-03:** ACTIVE — LINE staging slice PASS; ticket not closed
+**BK-SR-03:** ACTIVE â€” LINE staging slice PASS; ticket not closed
 
 ## Verified PASS
 
@@ -20,8 +20,23 @@
 
 ## Remaining BK-SR-03 work
 
-- Queueeasy fixture cleanup is `RELEASE_PENDING:BK01` until `Use webhook` is manually disabled and `active=false` is verified.
+- Queueeasy fixture testing was resumed by Owner on 2026-09-08; canonical shared-fixture state is `TESTING:BK01`. Final release still requires `Use webhook` OFF and provider verification `active=false`.
 - Complete staging rollback/redeploy proof and capture Cloudflare version evidence.
 - Complete approved Stripe test/webhook rehearsal; do not substitute production credentials.
 - Reconcile final BK-SR-03 evidence and obtain independent closure review before marking CLOSED.
 - Order V1 runtime testing is not available: Order contract is locked but implementation remains `BUILD AUTHORIZATION: NO`.
+
+
+## 2026-09-08 resumed LINE notification matrix
+
+Owner resumed the bounded BK01 Queueeasy test before fixture reset.
+
+- >24h new booking `BK-9V8ZYT` created two idempotent jobs: immediate `booking_created` plus future `reminder_24h`; its new customer had no LINE UID, so confirmation failed safely with `Customer has not linked LINE` and no wrong-recipient delivery occurred. The fixture-only pending jobs were closed after this intentional negative case.
+- Returning-customer booking `BK-UKKMBG` reused the persisted LINE UID without another bind. It created immediate confirmation plus a future 24h reminder; immediate dispatch returned `CLAIMED=1 / SENT=1 / FAILED=0`.
+- Rescheduling `BK-UKKMBG` from 2026-09-15 17:00 to 2026-09-22 17:00 marked the old reminder `failed / Superseded by customer reschedule`, created a replacement reminder for 2026-09-21 17:00, and queued one `booking_rescheduled` event.
+- Reschedule dispatch returned `CLAIMED=1 / SENT=1 / FAILED=0`; an immediate second dispatcher call returned `CLAIMED=0`, proving no duplicate due delivery.
+- Customer cancellation then marked the replacement reminder `failed / Booking cancelled before delivery`, queued one `booking_cancelled` event, and dispatch returned `CLAIMED=1 / SENT=1 / FAILED=0`.
+- A second dispatcher call after cancellation again returned `CLAIMED=0`.
+- Fixture shop cancellation/reschedule windows were explicitly set to 6 hours for this staging-only test because the fixture had null policy values and correctly failed closed before configuration.
+
+No production target, Order runtime, or Queueeasy ownership model was changed by this matrix.
