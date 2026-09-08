@@ -58,3 +58,23 @@ Earliest exception requires BK-A + BK-B closed, Order contracts locked, Reuse Ga
 **BK-SR-03:** ACTIVE / LINE_STAGING_SLICE_PASS at `dba74bd`; remaining rollback + Stripe + closure review
 **ORDER PHASE 0 DOCS:** COMPLETE / LOCKED
 **ORDER IMPLEMENTATION:** NOT AUTHORIZED
+
+## Shared-Runtime Junction A Execution Override — 2026-09-08
+
+This section is newer than the 2026-09-06 status above and controls the current shared-runtime execution state.
+
+- A0 live baseline refresh completed against WSTERA LAB.
+- The reviewed BK01 platform bootstrap was applied through the platform lane, then **failed A2 isolation/regression acceptance**.
+- Live proof reproduced a Booking regression: `local_service.is_shop_member(...)` failed with `42501 permission denied for schema auth` after function ownership transfer to `bk01_migrator`.
+- The new BK role also inherited write-capable `net` access from platform `PUBLIC` ACLs. The same platform-level exposure exists for PS01 product roles and therefore requires platform isolation governance rather than a BK01-local ACL workaround.
+- The bootstrap was immediately rolled back before any BK01 product-local forward migration was applied.
+- Rollback restored BK01, PS01, MT01 and measured shared-surface signatures to the pre-bootstrap values. Booking probe recovered.
+- Global history retains `bk01_platform_bootstrap` and `bk01_platform_bootstrap_rollback` as platform audit evidence; history was not repaired or erased.
+
+**JUNCTION A:** FAIL / ROLLED BACK
+
+**BK01 SHARED-RUNTIME ADMISSION:** QUARANTINED / FORWARD RUNTIME MIGRATIONS LOCKED
+
+**ORDER/CLAIM LIVE RUNTIME:** NOT AUTHORIZED
+
+Evidence: `docs/audit/BK01-SHARED-RUNTIME-JUNCTION-A-FAILURE-EVIDENCE-2026-09-08.md`.

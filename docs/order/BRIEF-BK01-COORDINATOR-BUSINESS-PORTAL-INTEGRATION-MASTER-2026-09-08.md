@@ -478,3 +478,23 @@ Where sequencing conflicts with the older 2026-09-05 default "Booking release fi
 **FINAL DESTINATION:** Unified BK01 Business Portal proven in WSTERA LAB and ready for Owner pilot/release decision.
 
 **FINAL CONVERGENCE:** Junction C after coordinator shared-runtime closure + Codex Order runtime + Claude Claim runtime are integrated and independently verified.
+## Execution checkpoint — Junction A attempt 2026-09-08
+
+The first live Junction A attempt was executed and **FAILED A2**. This checkpoint supersedes any assumption in this master path that the reviewed bootstrap is currently safe to re-apply.
+
+- A0 refresh confirmed concurrent MT01 migrations and preserved BK01/PS01/shared baselines.
+- `bk01_platform_bootstrap` was applied through the platform migration lane.
+- A2 reproduced a real Booking regression after function ownership transfer: `permission denied for schema auth` in `local_service.is_shop_member`.
+- A2 also proved product roles inherit write-capable access to shared `net` objects from platform `PUBLIC` ACLs; this is a platform-level isolation gap also observable on PS01 roles.
+- No PS01/MT01 product ownership/history was modified by BK01 remediation.
+- No BK01 product-local forward migration was applied.
+- `bk01_platform_bootstrap_rollback` restored the measured pre-bootstrap state and removed BK01 migration roles/internal schema.
+- PS01, MT01 and measured shared-surface signatures matched the A0 baseline after rollback.
+
+**JUNCTION A:** FAIL / ROLLED BACK
+
+**RUNTIME UNLOCK:** DENIED. Phases I1-I4 and live Order/Claim migrations remain blocked.
+
+Do not rerun the current bootstrap. Resolve the platform shared-runtime isolation model and the BK01 `auth.*` function ownership model first, then issue a new reviewed bootstrap/remediation checkpoint.
+
+Canonical evidence: `docs/audit/BK01-SHARED-RUNTIME-JUNCTION-A-FAILURE-EVIDENCE-2026-09-08.md`.
