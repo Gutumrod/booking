@@ -23,6 +23,11 @@ export function createOrderLineSnapshot(source: CatalogOrderSource, quantity: nu
   return Object.freeze({ ...source, quantity, lineTotalSatang: source.unitPriceSatang * quantity });
 }
 
+export function calculateOrderRequirements(lines: readonly OrderLineSnapshot[]): Readonly<{ requiredLeadDays: number; requiredCapacityUnits: number }> {
+  if (lines.length === 0) throw new Error('Order requires at least one line');
+  return Object.freeze({ requiredLeadDays: Math.max(...lines.map((line) => line.leadDays)), requiredCapacityUnits: lines.reduce((total, line) => total + line.quantity * line.capacityUnits, 0) });
+}
+
 export type CapacityDay = Readonly<{ date: string; isOpen: boolean; effectiveCapacityUnits: number; reservedUnits: number }>;
 export function calculateEarliestReadyDate(input: Readonly<{ today: string; requiredLeadDays: number; requiredCapacityUnits: number; days: readonly CapacityDay[]; requestedReadyDate?: string }>): Readonly<{ scheduledProductionDate: string; promisedReadyDate: string; requestedDateFeasible: boolean }> {
   const earliest = new Date(`${input.today}T00:00:00Z`); earliest.setUTCDate(earliest.getUTCDate() + input.requiredLeadDays);
@@ -34,6 +39,12 @@ export function calculateEarliestReadyDate(input: Readonly<{ today: string; requ
 
 export function canCreateBookingForOrder(order: Readonly<{ lifecycle: OrderLifecycle; appointmentRequired: boolean }>): boolean {
   return order.appointmentRequired && order.lifecycle === 'READY';
+}
+
+export function decideCancellationCapacityRelease(lifecycle: OrderLifecycle): 'RELEASE' | 'REQUIRES_PRIVILEGED_AUDIT' {
+  if (lifecycle === 'CONFIRMED') return 'RELEASE';
+  if (lifecycle === 'IN_PROGRESS' || lifecycle === 'READY') return 'REQUIRES_PRIVILEGED_AUDIT';
+  throw new Error(`Order in ${lifecycle} has no cancellable production reservation`);
 }
 
 export interface OrderRepository { getById(shopId: string, orderId: string): Promise<unknown | null>; }

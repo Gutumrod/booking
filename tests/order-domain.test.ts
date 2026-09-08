@@ -7,6 +7,8 @@ import {
   createOrderLineSnapshot,
   canCreateBookingForOrder,
   getOrderRuntimeUnavailable,
+  calculateOrderRequirements,
+  decideCancellationCapacityRelease,
   type CapacityDay,
 } from '../order/core/index.ts';
 
@@ -14,6 +16,25 @@ test('accepts only canonical order lifecycle transitions', () => {
   assert.doesNotThrow(() => assertOrderTransition('SUBMITTED', 'CONFIRMED'));
   assert.throws(() => assertOrderTransition('DRAFT', 'READY'));
   assert.throws(() => assertOrderTransition('COMPLETED', 'CONFIRMED'));
+});
+
+test('uses maximum line lead and quantity multiplied by snapshotted capacity', () => {
+  const result = calculateOrderRequirements([
+    createOrderLineSnapshot({ id: 'a', name: 'A', sku: 'A', unitPriceSatang: 100, leadDays: 2, capacityUnits: 3 }, 2),
+    createOrderLineSnapshot({ id: 'b', name: 'B', sku: 'B', unitPriceSatang: 100, leadDays: 5, capacityUnits: 1 }, 4),
+  ]);
+  assert.deepEqual(result, { requiredLeadDays: 5, requiredCapacityUnits: 10 });
+});
+
+test('reports an earlier requested date truthfully instead of silently promising it', () => {
+  const result = calculateEarliestReadyDate({ today: '2026-09-08', requiredLeadDays: 1, requiredCapacityUnits: 1, requestedReadyDate: '2026-09-08', days: [{ date: '2026-09-09', isOpen: true, effectiveCapacityUnits: 1, reservedUnits: 0 }] });
+  assert.equal(result.requestedDateFeasible, false);
+});
+
+test('releases reserved capacity only for cancellable pre-production lifecycle', () => {
+  assert.equal(decideCancellationCapacityRelease('CONFIRMED'), 'RELEASE');
+  assert.equal(decideCancellationCapacityRelease('IN_PROGRESS'), 'REQUIRES_PRIVILEGED_AUDIT');
+  assert.throws(() => decideCancellationCapacityRelease('COMPLETED'));
 });
 
 test('production runtime adapter fails closed and never returns a fake order success', async () => {
