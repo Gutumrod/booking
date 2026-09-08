@@ -126,3 +126,15 @@ Owner reported receipt of exactly one new LINE notification for the fresh regres
 This matches the server-side evidence for that run: one `booking_created` job, no newly-created `reminder_24h`, and dispatcher result `CLAIMED=1 / SENT=1 / FAILED=0`. The earlier duplicate-like symptom is therefore externally resolved for the reproduced <24h case.
 
 Queueeasy remains a shared non-production fixture. After this approved LINE slice, BK01 must release/reset the fixture before another product claims it. Final BK-SR-03 closure still requires the remaining rollback/redeploy, Stripe test/webhook, and closure-review evidence.
+
+## 2026-09-08 extended LINE matrix acceptance
+
+Owner screenshot visually confirmed the expected confirmation, reschedule, and cancellation messages for `BK-UKKMBG` in sequence with no duplicate message visible.
+
+Live staging then proved the remaining delivery semantics:
+- Time-compressed `reminder_24h` on `BK-QXLJSJ` delivered once after confirmation; a repeated dispatcher call claimed zero work.
+- A synthetic invalid LINE recipient produced provider HTTP 400, remained retryable through attempts 1-4, and became terminal `failed` at attempt 5 with no next retry.
+- Booking status remained `confirmed` throughout provider failure/retry attempts, proving notification failure does not mutate booking truth.
+- Synthetic invalid-recipient fixtures were deleted after the rehearsal.
+
+No production endpoint, production credential, or non-BK01 shared application state was used for these checks.

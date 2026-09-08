@@ -40,3 +40,16 @@ Owner resumed the bounded BK01 Queueeasy test before fixture reset.
 - Fixture shop cancellation/reschedule windows were explicitly set to 6 hours for this staging-only test because the fixture had null policy values and correctly failed closed before configuration.
 
 No production target, Order runtime, or Queueeasy ownership model was changed by this matrix.
+
+## 2026-09-08 extended LINE notification matrix
+
+Owner-visible acceptance screenshot confirmed three distinct deliveries for `BK-UKKMBG`: confirmation, reschedule to 2026-09-22 17:00, and cancellation, with no duplicate delivery visible between them.
+
+Additional live staging checks:
+- `reminder_24h` time-compressed rehearsal on `BK-QXLJSJ`: confirmation dispatch `1/1/0`, reminder dispatch `1/1/0`, immediate repeated dispatch `0/0/0`.
+- New customer without a LINE UID fails closed with `Customer has not linked LINE`; booking truth remains authoritative.
+- Invalid provider recipient rehearsal returned LINE HTTP 400; attempts 1-4 stayed `pending` with retry scheduled.
+- Attempt 5 transitioned the notification to `failed` with no further retry, while booking truth remained `confirmed`.
+- Temporary invalid-recipient/customer fixtures were deleted after evidence capture.
+
+LINE matrix result: confirmation, persisted UID reuse, >24h scheduling, <24h suppression, reminder delivery, reschedule, cancellation, no-recipient failure, provider failure/backoff, retry cap, and repeated-dispatch idempotency are all staging-proven.
