@@ -50,13 +50,16 @@ test('production runtime adapter fails closed and never returns a fake order suc
 });
 
 test('snapshots catalog values independently from later catalog edits', () => {
-  const catalog = { id: 'product-1', name: 'โต๊ะ', sku: 'TABLE-1', unitPriceSatang: 125000, leadDays: 3, capacityUnits: 2 };
+  const catalog = { id: 'product-1', name: 'โต๊ะ', sku: 'TABLE-1', unitPriceSatang: 125000, leadDays: 3, capacityUnits: 2, depositAmountSatang: 25000, fulfillmentType: 'ON_SITE_SERVICE' as const, appointmentRequired: true };
   const line = createOrderLineSnapshot(catalog, 2);
   catalog.name = 'โต๊ะใหม่';
   catalog.unitPriceSatang = 1;
   assert.equal(line.name, 'โต๊ะ');
   assert.equal(line.unitPriceSatang, 125000);
   assert.equal(line.capacityUnits, 2);
+  assert.equal(line.depositAmountSatang, 25000);
+  assert.equal(line.appointmentRequired, true);
+  assert.equal(line.fulfillmentType, 'ON_SITE_SERVICE');
 });
 
 test('finds earliest open date with lead and enough single-day capacity', () => {

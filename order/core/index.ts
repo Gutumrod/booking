@@ -21,7 +21,7 @@ export function transitionOrder(from: OrderLifecycle, to: OrderLifecycle, audit:
   return Object.freeze({ from, to, actorId: audit.actorId, reason: audit.reason });
 }
 
-export type CatalogOrderSource = Readonly<{ id: string; name: string; sku: string; unitPriceSatang: number; leadDays: number; capacityUnits: number }>;
+export type CatalogOrderSource = Readonly<{ id: string; name: string; sku: string; unitPriceSatang: number; leadDays: number; capacityUnits: number; depositAmountSatang?: number; fulfillmentType?: FulfillmentType; appointmentRequired?: boolean }>;
 export type OrderLineSnapshot = Readonly<CatalogOrderSource & { quantity: number; lineTotalSatang: number }>;
 
 export function createOrderLineSnapshot(source: CatalogOrderSource, quantity: number): OrderLineSnapshot {
