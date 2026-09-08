@@ -9,6 +9,7 @@ import {
   getOrderRuntimeUnavailable,
   calculateOrderRequirements,
   decideCancellationCapacityRelease,
+  transitionOrder,
   type CapacityDay,
 } from '../order/core/index.ts';
 
@@ -16,6 +17,12 @@ test('accepts only canonical order lifecycle transitions', () => {
   assert.doesNotThrow(() => assertOrderTransition('SUBMITTED', 'CONFIRMED'));
   assert.throws(() => assertOrderTransition('DRAFT', 'READY'));
   assert.throws(() => assertOrderTransition('COMPLETED', 'CONFIRMED'));
+});
+
+test('requires actor and reason for auditable transitions and privileged recovery', () => {
+  assert.deepEqual(transitionOrder('SUBMITTED', 'CONFIRMED', { actorId: 'merchant-1', reason: 'capacity accepted' }), { from: 'SUBMITTED', to: 'CONFIRMED', actorId: 'merchant-1', reason: 'capacity accepted' });
+  assert.throws(() => transitionOrder('CANCELLED', 'SUBMITTED', { actorId: 'merchant-1', reason: '' }));
+  assert.doesNotThrow(() => transitionOrder('CANCELLED', 'SUBMITTED', { actorId: 'merchant-1', reason: 'customer correction', privilegedRecovery: true }));
 });
 
 test('uses maximum line lead and quantity multiplied by snapshotted capacity', () => {

@@ -13,6 +13,14 @@ export function assertOrderTransition(from: OrderLifecycle, to: OrderLifecycle):
   if (!transitions[from].includes(to)) throw new Error(`Invalid Order lifecycle transition: ${from} -> ${to}`);
 }
 
+export type OrderTransitionAudit = Readonly<{ actorId: string; reason: string; privilegedRecovery?: boolean }>;
+export function transitionOrder(from: OrderLifecycle, to: OrderLifecycle, audit: OrderTransitionAudit): Readonly<{ from: OrderLifecycle; to: OrderLifecycle; actorId: string; reason: string }> {
+  const recovery = (from === 'CANCELLED' || from === 'COMPLETED') && audit.privilegedRecovery === true;
+  if (!recovery) assertOrderTransition(from, to);
+  if (!audit.actorId.trim() || !audit.reason.trim()) throw new Error('Order transition requires actorId and reason');
+  return Object.freeze({ from, to, actorId: audit.actorId, reason: audit.reason });
+}
+
 export type CatalogOrderSource = Readonly<{ id: string; name: string; sku: string; unitPriceSatang: number; leadDays: number; capacityUnits: number }>;
 export type OrderLineSnapshot = Readonly<CatalogOrderSource & { quantity: number; lineTotalSatang: number }>;
 
