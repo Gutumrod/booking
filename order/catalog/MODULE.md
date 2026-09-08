@@ -1,5 +1,7 @@
 # Product Catalog Module
 
+> BK01 COPY NOTE: This is upstream reference documentation. BK01 intentionally excludes the CSV/local-filesystem adapters described below. Application code must enter through `../catalog-adaptation.ts`, which disables inventory semantics for Order V1; the raw vendored entrypoint is internal.
+
 **Version:** 0.1.0
 **Status:** ✅ Completed
 **Documentation Authority:** Current version/status follow `../REGISTRY.md`; this document describes the module contract/design for that registered version.
