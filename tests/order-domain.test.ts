@@ -94,3 +94,27 @@ test('security boundaries reject cross-shop references and weak tracking tokens'
   assert.equal(isOpaqueTrackingToken('trk_9d4f6e3c81a74f2e'), true);
   assert.deepEqual(publicOrderProjection({ orderId: 'o1', customerPhone: '0812345678', lifecycle: 'READY', totalSatang: 1000 }), { orderId: 'o1', lifecycle: 'READY' });
 });
+
+test('lifecycle, payment and deposit state domains stay independently typed', () => {
+  const lifecycle: import('../order/core/index.ts').OrderLifecycle = 'CONFIRMED';
+  const payment: import('../order/core/index.ts').OrderPaymentState = 'UNPAID';
+  const deposit: import('../order/core/index.ts').DepositVerificationState = 'PENDING';
+  assert.deepEqual({ lifecycle, payment, deposit }, { lifecycle: 'CONFIRMED', payment: 'UNPAID', deposit: 'PENDING' });
+});
+
+test('rejects empty orders and invalid line quantities', () => {
+  assert.throws(() => calculateOrderRequirements([]));
+  assert.throws(() => createOrderLineSnapshot({ id: 'a', name: 'A', sku: 'A', unitPriceSatang: 1, leadDays: 0, capacityUnits: 1 }, 0));
+});
+
+test('does not expose inventory or stock reservation semantics in Order line snapshots', () => {
+  const line = createOrderLineSnapshot({ id: 'a', name: 'A', sku: 'A', unitPriceSatang: 100, leadDays: 0, capacityUnits: 1 }, 1);
+  assert.equal('stockQuantity' in line, false);
+  assert.equal('inventoryReserved' in line, false);
+});
+
+test('runtime-unavailable submit result contains no order identity or payment success', async () => {
+  const result = await getOrderRuntimeUnavailable().submitPublicOrder();
+  assert.equal('orderId' in result, false);
+  assert.equal('paymentStatus' in result, false);
+});
