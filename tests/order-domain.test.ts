@@ -12,6 +12,7 @@ import {
   transitionOrder,
   type CapacityDay,
 } from '../order/core/index.ts';
+import { authorizeOrderBookingLink } from '../order/core/booking-link.ts';
 
 test('accepts only canonical order lifecycle transitions', () => {
   assert.doesNotThrow(() => assertOrderTransition('SUBMITTED', 'CONFIRMED'));
@@ -77,4 +78,10 @@ test('finds earliest open date with lead and enough single-day capacity', () => 
 test('does not allow appointment creation before an appointment-required order is READY', () => {
   assert.equal(canCreateBookingForOrder({ lifecycle: 'CONFIRMED', appointmentRequired: true }), false);
   assert.equal(canCreateBookingForOrder({ lifecycle: 'READY', appointmentRequired: true }), true);
+});
+
+test('Order to Booking link delegates authority and is READY-only', () => {
+  const base = { shopId: 'shop-1', orderId: 'order-1', bookingId: 'booking-1', idempotencyKey: 'idem-1', appointmentRequired: true as const };
+  assert.deepEqual(authorizeOrderBookingLink({ ...base, orderLifecycle: 'CONFIRMED' }), { allowed: false, reason: 'READY_REQUIRED' });
+  assert.deepEqual(authorizeOrderBookingLink({ ...base, orderLifecycle: 'READY' }), { allowed: true, reason: 'DELEGATE_TO_BOOKING' });
 });
