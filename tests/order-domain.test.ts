@@ -13,6 +13,7 @@ import {
   type CapacityDay,
 } from '../order/core/index.ts';
 import { authorizeOrderBookingLink } from '../order/core/booking-link.ts';
+import { assertSameShop, isOpaqueTrackingToken, publicOrderProjection } from '../order/core/security.ts';
 
 test('accepts only canonical order lifecycle transitions', () => {
   assert.doesNotThrow(() => assertOrderTransition('SUBMITTED', 'CONFIRMED'));
@@ -84,4 +85,12 @@ test('Order to Booking link delegates authority and is READY-only', () => {
   const base = { shopId: 'shop-1', orderId: 'order-1', bookingId: 'booking-1', idempotencyKey: 'idem-1', appointmentRequired: true as const };
   assert.deepEqual(authorizeOrderBookingLink({ ...base, orderLifecycle: 'CONFIRMED' }), { allowed: false, reason: 'READY_REQUIRED' });
   assert.deepEqual(authorizeOrderBookingLink({ ...base, orderLifecycle: 'READY' }), { allowed: true, reason: 'DELEGATE_TO_BOOKING' });
+});
+
+test('security boundaries reject cross-shop references and weak tracking tokens', () => {
+  assert.throws(() => assertSameShop('shop-1', 'shop-2'));
+  assert.doesNotThrow(() => assertSameShop('shop-1', 'shop-1'));
+  assert.equal(isOpaqueTrackingToken('phone-0812345678'), false);
+  assert.equal(isOpaqueTrackingToken('trk_9d4f6e3c81a74f2e'), true);
+  assert.deepEqual(publicOrderProjection({ orderId: 'o1', customerPhone: '0812345678', lifecycle: 'READY', totalSatang: 1000 }), { orderId: 'o1', lifecycle: 'READY' });
 });
