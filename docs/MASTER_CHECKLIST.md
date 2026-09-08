@@ -27,8 +27,8 @@ Implementation snapshot (2026-08-29): code/static/build work is recorded in `doc
 - [x] auth-user→staff mapping and staff self-scope — *CONT04_PASS: auth/role gate G4 10/10 PASS (HEAD 6e1c0c6)*
 - [x] annual UI/copy removed; monthly billing truth reconciled — *CONT-03 static PASS (no annual offer) + CONT04_PASS G8 billing 9/9 PASS (HEAD 6e1c0c6)*
 - [x] legacy paid booking quota wall retired/remediated — *CONT-03 static PASS (no legacy 100/500 paid claim) + CONT04_PASS entitlement gates G3/G4 PASS (HEAD 6e1c0c6)*
-- [ ] merchant-owned LINE OA secret/config boundary — *DB boundary G6B 8/8 PASS (CONT04_PASS); real LINE-provider runtime evidence still required*
-- [ ] confirmation + reminder automation evidence — *real LINE message delivery evidence required (not covered by DB gates)*
+- [x] WSTERA Central OA default notification path + server-side secret/config boundary — *live Queueeasy staging PASS; merchant-owned OA moved to optional managed add-on by Owner override 2026-09-08*
+- [x] confirmation + reminder automation evidence — *live LINE acceptance PASS: confirmation, 24h reminder, reschedule, cancel, UID reuse, idempotent dispatch, provider retry cap*
 - [ ] Pro automatic slip verification + cost/allowance/failure policy — *real auto-slip provider integration evidence required*
 - [ ] controlled PromptPay QR generation — *CONT-03 static: no promptpay.io; runtime implementation evidence required*
 - [x] customer self-reschedule/cancel atomic flow — *CONT04_PASS: concurrency/atomic gate G5 22/22 PASS (HEAD 6e1c0c6)*

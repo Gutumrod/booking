@@ -11,8 +11,8 @@ BK01 does not monetize database rows. Paid packaging is based on operational val
 | Plan | Public price status | Booking capacity | Staff/providers | LINE mode | Auto-slip | Intended use |
 |---|---|---:|---:|---|---|---|
 | Trial | ฿0 / 14 days | 50 total evaluation bookings | up to 5 | WSTERA central OA onboarding mode | limited evaluation allowance, subject to provider readiness | prove first value |
-| Basic | **Pilot reference ฿490/mo; not final** | effectively unlimited for normal ICP / fair-use protected | up to 5 | merchant-owned LINE OA | manual verification | small single-location teams |
-| Pro | **Pilot reference ฿990/mo; not final** | effectively unlimited for normal ICP / fair-use protected | up to 10 | merchant-owned LINE OA | automatic verification required before sale | teams needing lower manual deposit workload |
+| Basic | **Pilot reference ฿490/mo; not final** | effectively unlimited for normal ICP / fair-use protected | up to 5 | WSTERA Central OA included; merchant OA optional add-on | manual verification | small single-location teams |
+| Pro | **Pilot reference ฿990/mo; not final** | effectively unlimited for normal ICP / fair-use protected | up to 10 | WSTERA Central OA included; merchant OA optional add-on | automatic verification required before sale | teams needing lower manual deposit workload |
 
 ## Billing cadence
 - Public V1 supports monthly Stripe subscription billing only.
@@ -28,8 +28,9 @@ BK01 does not monetize database rows. Paid packaging is based on operational val
 - Inactive historical providers do not consume active-provider entitlement.
 - Reactivation must enforce the same limit transactionally.
 ## LINE entitlement and cost ownership
-- Trial: central WSTERA LINE OA may be used to reduce onboarding friction. Any managed-message allowance must be explicit before launch.
-- Basic/Pro paid production: merchant-owned LINE OA is the default production path. Merchant bears its LINE OA plan/message cost unless a future managed messaging add-on says otherwise.
+- Trial/Basic/Pro default: WSTERA Central LINE OA is the standard notification path and is bundled with the monthly BK01 service.
+- Merchant-owned LINE OA is optional, not required. If a merchant chooses its own OA, WSTERA treats setup/configuration/ongoing management as a paid add-on; the merchant remains responsible for its own LINE OA/message-plan charges.
+- Exact Central OA fair-use/message allowance and merchant-OA add-on price remain pending the commercial lock; do not invent or market final numbers before that gate.
 - BK01 must surface notification delivery/failure evidence regardless of who owns the OA.
 - Custom token configuration must use a server-side secret boundary; no raw channel access token is stored in ordinary shop rows or exposed in the dashboard/client.
 

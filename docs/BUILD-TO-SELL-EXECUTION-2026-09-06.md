@@ -9,7 +9,7 @@ BK01 is ready to sell when a new merchant can be onboarded, configure booking ru
 
 ## Locked boundaries
 - Booking V1 is the active product. Order implementation stays deferred until Booking release/pilot decision.
-- Merchant-owned LINE OA remains the V1 commercial model.
+- WSTERA Central OA is the default V1 notification path and is bundled with monthly service; merchant-owned OA is an optional managed add-on with separate setup/management/support pricing to be locked commercially.
 - Pro auto-slip is not publicly sellable until provider/economics/reliability/failure-path evidence is complete.
 - No transaction/commission model in V1.
 - No final public price lock before pilot/unit-economics evidence.
@@ -21,16 +21,16 @@ Record `CONT04_PASS` on current status/roadmap/checklists, link durable closure 
 ### BK-SR-02 — BK-B release/repository readiness — CLOSED at `d2ee14f`
 Run fresh CI/test/lint/build/diff/security checks on the current release candidate. Prove consumer/admin production builds, database/RLS negatives, concurrency, role denial, support/platform-admin boundaries, and clean-clone reproducibility.
 
-### BK-SR-03 - Staging + external-system rehearsal - ACTIVE / LINE SLICE PASS at `dba74bd`
-Approved non-production runtime only. Cloudflare consumer staging deploy, Queueeasy webhook/binding, persisted UID reuse, and live LINE dispatch are proven. A duplicate-like notification defect was traced to an overdue 24h reminder being queued beside confirmation; `dba74bd` suppresses only newly-created overdue 24h reminders, and the live <24h regression delivered exactly one message. Remaining scope: Queueeasy RESET verification, rollback/redeploy proof, Stripe test/webhook rehearsal, final evidence reconciliation, and independent closure review. Never substitute `.env.local` or production/KMO credentials.
+### BK-SR-03 - Staging + external-system rehearsal - ACTIVE / LINE + ROLLBACK PASS
+Approved non-production runtime only. Cloudflare consumer staging deploy, Queueeasy webhook/binding, persisted UID reuse, and live LINE dispatch are proven. A duplicate-like notification defect was traced to an overdue 24h reminder being queued beside confirmation; `dba74bd` suppresses only newly-created overdue 24h reminders, and the live <24h regression delivered exactly one message. Remaining scope: Queueeasy RESET verification, Stripe test/webhook rehearsal, final evidence reconciliation, and independent closure review. Never substitute `.env.local` or production/KMO credentials.
 ### BK-SR-04 — Pilot-ready onboarding and operations
 Create merchant onboarding checklist, configuration checklist, support/incident path, backup/restore proof, operator ownership, and pilot instrumentation for activation, booking integrity, no-show/cancel/reschedule, support burden, notification consumption, and WTP.
 
 ### BK-SR-05 — Commercial lock and public launch
-After pilot evidence: approve final public Basic/Pro prices, auto-slip commercial terms, merchant LINE cost disclosure, cancellation/reschedule defaults, public claims, support promise, and launch checklist. Public Pro requires auto-slip evidence.
+After pilot evidence: approve final public Basic/Pro prices, auto-slip commercial terms, WSTERA Central OA fair-use/message allowance, merchant-owned OA add-on price/operating terms, cancellation/reschedule defaults, public claims, support promise, and launch checklist. Public Pro requires auto-slip evidence.
 
 ## Immediate next ticket
-**Continue BK-SR-03 from checkpoint `dba74bd`.** LINE external rehearsal is PASS and the reminder defect is fixed. First finish Queueeasy RELEASE/RESET verification, then complete rollback/redeploy evidence and the approved Stripe test/webhook rehearsal. BK-SR-01 and BK-SR-02 remain CLOSED. Do not start Order implementation.
+**Continue BK-SR-03 from evidence checkpoint `3ee8368`.** LINE external rehearsal and rollback/redeploy proof are PASS. Finish Queueeasy RELEASE/RESET verification, then complete the approved Stripe test/webhook rehearsal and closure review. BK-SR-01 and BK-SR-02 remain CLOSED. Do not start Order implementation.
 
 ## Definition of done
 - One exact release commit has passing release/security/database evidence.

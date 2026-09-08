@@ -54,7 +54,7 @@
 | ID | Requirement | V1 |
 |---|---|---|
 | FR-LINE-001 | Confirmation and at least one pre-appointment reminder are required notification events with sent/failed audit evidence. | Required |
-| FR-LINE-002 | Paid production supports merchant-owned LINE OA; central WSTERA OA is limited to trial/onboarding mode. | Required |
+| FR-LINE-002 | Trial/Basic/Pro default to WSTERA Central OA for notifications; merchant-owned LINE OA is an optional managed add-on and must remain server-side/configurable without changing booking truth. | Required |
 | FR-LINE-003 | Notification failure never mutates authoritative booking state and exposes recoverable operator evidence. | Required |
 | FR-BILL-001 | Trial, Basic and Pro state are sourced from authoritative subscription data; Stripe webhook state is idempotent and out-of-order safe. | Required |
 | FR-BILL-002 | Only monthly paid billing is public V1; annual billing UI/copy is removed until annual prices exist. | Required |

@@ -14,7 +14,7 @@ Decision records must capture final decision, rejected alternatives, rationale, 
 | PD-002 | Paid-plan booking quota | Do not use 100/500 as paid-plan value wall; keep trial/free quota, make paid booking capacity effectively unlimited or operationally generous | Onque/JongQ offer unlimited; QueueBooking gives 2,000 at ฿990 | APPROVED 2026-08-28 |
 | PD-003 | Final ฿490/฿990 prices | Keep prices **provisional**, not LOCKED, until feature contract + pilot WTP; do not change price merely to undercut competitors | Current product lacks features needed to justify Pro confidently | APPROVED 2026-08-28 |
 | PD-004 | Auto-slip | Make automatic verification a **V1 REQUIRED Pro capability before public Pro sale**; remove claim until implemented and verified | Direct competitors already treat automation as normal paid functionality | APPROVED 2026-08-28 |
-| PD-005 | LINE architecture | V1 must deliberately support a merchant-brand path; recommended: own shop LINE OA for paid production, central OA only as trial/low-friction onboarding mode | Market favors shop-owned OA for brand/trust; central OA can still reduce setup | APPROVED 2026-08-28 |
+| PD-005 | LINE architecture | WSTERA Central OA is the default V1 production notification path and is bundled with the monthly service; merchant-owned OA is an optional managed add-on | Owner commercial override after live BK-SR-03 LINE acceptance | OVERRIDDEN 2026-09-08 |
 | PD-006 | Staff identity | Add explicit auth-user→staff mapping; staff sees own bookings/schedule, owner/admin sees shop scope | Required to make existing role promise enforceable | APPROVED 2026-08-28 |
 | PD-007 | Slip storage | Private bucket + authorized/signed access; retire public object URLs | Current public bucket conflicts with privacy/security intent | APPROVED 2026-08-28 |
 | PD-008 | Annual billing | POST-V1 until true annual Stripe prices/state are implemented; remove annual UI/copy in BK-A | Current checkout is monthly-only | APPROVED 2026-08-28 |
@@ -34,7 +34,7 @@ Decision records must capture final decision, rejected alternatives, rationale, 
 Do not price database rows. For paid tiers, monetize operational value and variable-cost automation:
 - trial/free: capacity-limited for evaluation/abuse control;
 - paid booking volume: unlimited or a high fair-use ceiling that normal ICP shops will not hit;
-- LINE message allowance: explicit when WSTERA bears message cost, otherwise merchant-owned OA cost is separate;
+- LINE messaging: default WSTERA Central OA is bundled with the monthly service; final managed-message fair-use/allowance is locked at the commercial gate; merchant-owned OA remains an optional managed add-on with separate setup/management cost;
 - auto-slip verification: explicit monthly allowance/top-up because it has provider variable cost;
 - staff/provider or advanced operations may differentiate tiers only if the ICP values the distinction.
 
@@ -78,9 +78,10 @@ Approval consequences:
 **Rationale:** competitor parity and manual-work value proposition.
 **Impact:** provider selection, cost allowance, failure-state implementation and tests in BK-A.
 ### PD-005 — LINE architecture
-**Decision:** paid production uses merchant-owned LINE OA; central WSTERA OA is trial/onboarding mode.
-**Rejected:** central OA for all paid merchants; raw token in normal dashboard/shop row.
-**Impact:** server-side merchant secret boundary, onboarding, pricing and LINE tests.
+**Owner override — 2026-09-08:** WSTERA Central OA is the default notification path for Trial/Basic/Pro and is bundled with the monthly BK01 service. A merchant may optionally use its own LINE OA as a managed add-on; WSTERA may charge additional setup/management/support fees. Exact add-on price and Central OA fair-use/message allowance remain for commercial lock.
+**Supersedes:** the 2026-08-28 rule that paid production defaults to merchant-owned OA.
+**Rejected:** requiring every paid merchant to bring its own OA; exposing raw channel credentials in ordinary shop/client data.
+**Impact:** default onboarding uses WSTERA Central OA; merchant-owned credentials remain server-side and optional; pricing/operations must distinguish bundled central messaging from the managed merchant-OA add-on.
 
 ### PD-006 — Staff identity
 **Decision:** explicit auth-user→staff mapping; staff sees own bookings/schedule only.

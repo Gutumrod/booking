@@ -20,14 +20,14 @@
 
 **2026-08-29 status:** implementation candidate completed for all non-provider-decision items; unit/static, lint, and production builds pass. BK-A is not release-complete because local database replay/pgTAP and DB-backed G2–G9 acceptance are blocked by unavailable local PostgreSQL. BK-B remains closed. Evidence: `docs/audit/BK-A-IMPLEMENTATION-EVIDENCE-2026-08-29.md`.
 
-**2026-09-06 status (supersedes DB-blocked note above):** CONT04_PASS at HEAD `6e1c0c6` closes all DB-backed gate blockers for BK-A — see 2026-09-06 CONT-04 closure entry above. Remaining open items in BK-A: real LINE-provider runtime evidence (merchant OA boundary, confirmation/reminder delivery), Pro auto-slip provider integration evidence, and commercial copy/pricing items requiring Owner price approval — see `docs/MASTER_CHECKLIST.md` BK-A section. BK-B repository-readiness gate is CLOSED at exact release checkpoint `d2ee14f`; BK-SR-03 staging/external-system rehearsal is the current active gate.
+**2026-09-08 LINE update:** live WSTERA Central OA staging acceptance is PASS: UID binding/reuse, confirmation, 24h reminder, reschedule, cancel, idempotent dispatch and capped provider retry are proven. Merchant-owned OA is no longer a V1 prerequisite; it is an optional managed add-on under Owner override PD-005. Remaining external commercial blockers are Pro auto-slip, Stripe rehearsal/closure, and final pricing terms. BK-B repository-readiness gate is CLOSED at exact release checkpoint `d2ee14f`; BK-SR-03 staging/external-system rehearsal is the current active gate.
 
 Close all baseline→target gaps before public sale:
 1. private deposit-slip storage + authorized read path;
 2. explicit auth-user→staff identity and staff self-scope;
 3. remove annual billing UI/copy and reconcile monthly-only checkout;
 4. retire legacy paid 100/500 booking value walls from entitlement logic/UI;
-5. merchant-owned LINE OA production secret boundary + central OA trial mode;
+5. WSTERA Central OA default production notification path + server-side secret boundary; merchant-owned OA remains optional managed add-on;
 6. confirmation + pre-appointment reminder delivery/retry evidence;
 7. Pro automatic slip verification provider integration, allowance and fail-safe review;
 8. controlled PromptPay QR generation without `promptpay.io`;

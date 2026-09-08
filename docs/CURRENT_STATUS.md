@@ -2,7 +2,7 @@
 
 **Product:** Booking by WSTERA (BK01)
 **Repository branch:** `feature/bk-a-v1-contract-remediation`
-**Current release code checkpoint:** `dba74bd` - BK-SR-03 LINE staging E2E + overdue-reminder remediation; tests 21/21 PASS and live staging single-notification regression PASS.
+**Current release code checkpoint:** `dba74bd` - BK-SR-03 LINE remediation code. Current evidence checkpoint: `3ee8368`; full LINE matrix + live reminder acceptance PASS, and Cloudflare rollback/redeploy proof PASS.
 **Portfolio mode:** BUILD-TO-SELL / active Booking V1 release track
 
 ## Verified Current State
@@ -26,10 +26,17 @@ Execution priority: `docs/BUILD-TO-SELL-EXECUTION-2026-09-06.md`.
 ## Next Authorized Action
 
 1. BK-SR-02 remains CLOSED at exact release checkpoint `d2ee14f`; do not reopen it without contradictory evidence.
-2. BK-SR-03 is ACTIVE at checkpoint `dba74bd`; Queueeasy LINE staging E2E, UID binding/reuse, and the single-notification regression are PASS. BK-SR-03 is not closed yet.
-3. Continue BK-SR-03 only on approved non-production runtime. `wstera-lab` is linked with migration history `30/30`; consumer staging is deployed. Queueeasy is now RELEASE_PENDING after the approved LINE slice; final fixture reset requires `Use webhook` OFF plus provider verification `active=false`. Remaining BK-SR-03 work is rollback/redeploy proof, Stripe test/webhook rehearsal, and closure review. `.env.local` remains production-bound and forbidden as a staging source.
+2. BK-SR-03 is ACTIVE; LINE integration acceptance is PASS end-to-end and Cloudflare rollback/redeploy proof is PASS. BK-SR-03 is not closed yet.
+3. Continue BK-SR-03 only on approved non-production runtime. `wstera-lab` is linked with migration history `30/30`; consumer staging is deployed and rollback/redeploy is proven. Queueeasy is RELEASE_PENDING; final fixture reset requires `Use webhook` OFF plus provider verification `active=false`. Remaining BK-SR-03 work is Stripe test/webhook rehearsal and closure review. `.env.local` remains production-bound and forbidden as a staging source.
 4. The temporary Claude session lock is RELEASED as of 2026-09-06 14:08 Asia/Bangkok; preserve existing evidence and resume bounded work without restarting completed stages.
 5. Do not use `.env.local`, production/KMO credentials, or production targets as a staging shortcut. Do not start Order implementation automatically.
+
+## LINE Commercial Path — Owner Override 2026-09-08
+
+- WSTERA Central OA is the default Trial/Basic/Pro notification path and is bundled with monthly BK01 service.
+- Merchant-owned LINE OA is optional future/managed add-on, not a V1 onboarding prerequisite.
+- Merchant-owned OA setup/configuration/management/support carries additional WSTERA service pricing; merchant bears its own LINE OA/message-plan charges.
+- Exact Central OA fair-use/message allowance and merchant-OA add-on price remain for BK-SR-05 commercial lock.
 
 ## Shared WSTERA Lab Boundary ? Owner Decision 2026-09-07
 
