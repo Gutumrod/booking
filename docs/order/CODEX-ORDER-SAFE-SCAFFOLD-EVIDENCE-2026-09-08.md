@@ -37,7 +37,7 @@ No file under `supabase/migrations` or `supabase/bk01-migrations` was changed.
 | Command | Result |
 |---|---|
 | `npm ci` | exit 0 |
-| `npm test` | exit 0; 50/50 tests |
+| `npm test` | exit 0; 51/51 tests |
 | `npm run lint` | exit 0; 13 pre-existing warnings, 0 errors |
 | `npm run build` | exit 0 for both apps using a temporary placeholder-only copy of `.env.example`; all temporary `.env.local` files removed afterward |
 | `npm run db:bk01:verify` | exit 0; repository verification PASS |

@@ -15,6 +15,12 @@ import {
   assertPaymentTransition,
   assertDepositVerificationTransition,
   type CapacityDay,
+  type CatalogReadRepository,
+  type CapacityCalendarRepository,
+  type AtomicOrderConfirmationPort,
+  type PublicOrderSubmitPort,
+  type PublicOrderTrackingPort,
+  type OrderBookingLinkPort,
 } from '../order/core/index.ts';
 import { authorizeOrderBookingLink } from '../order/core/booking-link.ts';
 import { assertSameShop, isOpaqueTrackingToken, publicOrderProjection } from '../order/core/security.ts';
@@ -141,6 +147,16 @@ test('security boundaries reject cross-shop references and weak tracking tokens'
   assert.equal(isOpaqueTrackingToken('phone-0812345678'), false);
   assert.equal(isOpaqueTrackingToken('trk_9d4f6e3c81a74f2e'), true);
   assert.deepEqual(publicOrderProjection({ orderId: 'o1', customerPhone: '0812345678', lifecycle: 'READY', totalSatang: 1000 }), { orderId: 'o1', lifecycle: 'READY' });
+});
+
+test('every repository and service request contract carries explicit shop identity', () => {
+  const catalog: Parameters<CatalogReadRepository['listForShop']>[0] = { shopId: 'shop-1', catalogId: 'catalog-1' };
+  const calendar: Parameters<CapacityCalendarRepository['listCandidateDays']>[0] = { shopId: 'shop-1', fromDate: '2026-09-08', throughDate: '2026-09-30' };
+  const confirmation: Parameters<AtomicOrderConfirmationPort['confirm']>[0] = { shopId: 'shop-1', orderId: 'order-1', idempotencyKey: 'confirm-1' };
+  const submit: Parameters<PublicOrderSubmitPort['submit']>[0] = { shopId: 'shop-1', idempotencyKey: 'submit-1', selections: [{ catalogProductId: 'product-1', quantity: 1 }], fulfillmentType: 'PICKUP' };
+  const tracking: Parameters<PublicOrderTrackingPort['findByOpaqueToken']>[0] = { shopId: 'shop-1', opaqueToken: 'trk_9d4f6e3c81a74f2e' };
+  const link: Parameters<OrderBookingLinkPort['createIdempotentLink']>[0] = { shopId: 'shop-1', orderId: 'order-1', bookingId: 'booking-1', idempotencyKey: 'link-1' };
+  assert.deepEqual([catalog.shopId, calendar.shopId, confirmation.shopId, submit.shopId, tracking.shopId, link.shopId], Array(6).fill('shop-1'));
 });
 
 test('lifecycle, payment and deposit state domains stay independently typed', () => {
