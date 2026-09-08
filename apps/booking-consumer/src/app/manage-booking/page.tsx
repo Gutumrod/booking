@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 
 import { LanguageToggle } from '@/components/language-toggle';
+import { ClaimEntryPoint } from '@/components/claim-entry-point';
 import { supabase } from '@/lib/supabase';
 
 function ManageBookingForm() {
@@ -50,6 +51,11 @@ function ManageBookingForm() {
         <button disabled={busy || !reason.trim() || !date || !time} onClick={reschedule} className="rounded-xl bg-emerald-500 p-3 font-semibold text-slate-950 disabled:opacity-40">{t('reschedule')}</button>
       </div>
       {message && <p className="rounded-xl border border-slate-700 bg-slate-900 p-3 text-sm">{message}</p>}
+      {/* Additive Booking -> Claim entry point. Fail-closed: no live Claim
+          capability source exists yet, so this renders nothing. When the
+          shared-runtime gate opens, resolve the shop capability + slug here
+          and forward only the customer-held manage token. */}
+      <ClaimEntryPoint claimEnabled={false} shopSlug={null} manageToken={token} />
     </main>
   );
 }
