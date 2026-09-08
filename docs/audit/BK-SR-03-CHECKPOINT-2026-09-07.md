@@ -66,3 +66,12 @@ Consumer staging rollback rehearsal completed without touching production Worker
 - Final active staging version after recovery proof: `a26e94ed-d24b-4a4b-86b6-1fe7031b4615`.
 
 This closes the Cloudflare rollback/redeploy portion of BK-SR-03. Remaining external rehearsal is Stripe test/webhook plus final closure review.
+
+## 2026-09-08 Owner-visible reminder acceptance
+
+Owner supplied LINE client evidence for booking `BK-QXLJSJ` showing two distinct messages from Queueeasy:
+
+- confirmation: `ยืนยันคิว BK-QXLJSJ ... วันที่ 2026-09-29 เวลา 16:00`
+- reminder: `แจ้งเตือนคิว BK-QXLJSJ ... วันที่ 2026-09-29 เวลา 16:00`
+
+This externally confirms the staging time-compression test: confirmation and `reminder_24h` are separate event types, both delivered once, with the repeat dispatcher run claiming zero additional jobs. No duplicate delivery was observed.
