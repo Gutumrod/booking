@@ -518,3 +518,25 @@ This does not reopen runtime work. Because Junction A remains FAIL/rolled back, 
 **FORMAL JUNCTION B:** WAITING ON JUNCTION A PASS
 
 **ORDER/CLAIM RUNTIME:** LOCKED
+## Pre-integration hygiene checkpoint — 2026-09-08
+
+Independent Codex hygiene audit returned `PASS WITH CLEANUP REQUIRED` and confirmed both accepted safe-lane SHAs remain source-compatible with the current coordinator checkpoint.
+
+Coordinator then executed the approved ignored/generated cleanup set only:
+
+- removed redundant real `.env.local` copies from Claude and coordinator app workspaces;
+- removed Codex placeholder app env copies;
+- removed reproducible dependency/build artifacts from the three audited worktrees;
+- preserved coordinator canonical local env sources, `supabase/.temp`, local coordination state, and the shared Git object database;
+- verified Claude `45fa3abf5a316dea622b005bfced1acf948cb8bc` and Codex `982188170f6a80ce492723786ca1e21cc2435733` still match origin;
+- verified no integration branch was created.
+
+**PRE-INTEGRATION HYGIENE:** PASS
+
+Remaining runtime-design requirement: public Order tracking must use a distinct opaque public reference rather than an ambiguous raw `orderId` contract before enablement.
+
+This checkpoint does not override Junction A. Formal Junction B and runtime unlock remain blocked until House/platform remediation is returned and Junction A is independently re-proven PASS.
+
+Evidence:
+- `docs/order/BK01-PRE-INTEGRATION-HYGIENE-INDEPENDENT-AUDIT-2026-09-08.md`
+- `docs/order/BK01-PRE-INTEGRATION-HYGIENE-CLEANUP-EVIDENCE-2026-09-08.md`

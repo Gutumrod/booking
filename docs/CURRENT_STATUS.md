@@ -97,3 +97,22 @@ Claude and Codex bounded parallel lanes are complete and independently reviewed.
 No Order/Claim live runtime work or integration merge is authorized until House/platform remediation returns and Junction A is re-proven PASS.
 
 Canonical review: `docs/order/JUNCTION-B-SAFE-LANE-INDEPENDENT-REVIEW-2026-09-08.md`.
+## Pre-Integration Hygiene Cleanup — 2026-09-08
+
+Independent Codex audit verdict: `PASS WITH CLEANUP REQUIRED`.
+
+Coordinator executed only the approved ignored/generated cleanup set:
+
+- removed redundant coordinator app `.env.local` copies;
+- removed Claude root/app real `.env.local` duplicates;
+- removed Codex placeholder app `.env.local` copies;
+- removed reproducible `node_modules`, `.next`, `.open-next`, `.wrangler`, `next-env.d.ts`, and `tsconfig.tsbuildinfo` artifacts where present;
+- preserved coordinator canonical `.env.local`, `.env.staging.local`, `supabase/.temp`, local coordination state, and Git object database;
+- verified Claude/Codex HEADs still equal origin and both worktrees remain clean;
+- verified no integration branch exists.
+
+**PRE-INTEGRATION HYGIENE:** PASS
+
+This does not change Junction A authority. Formal Junction B, integration merge, and Order/Claim runtime remain blocked until Junction A is re-proven PASS.
+
+Evidence: `docs/order/BK01-PRE-INTEGRATION-HYGIENE-INDEPENDENT-AUDIT-2026-09-08.md` and `docs/order/BK01-PRE-INTEGRATION-HYGIENE-CLEANUP-EVIDENCE-2026-09-08.md`.
