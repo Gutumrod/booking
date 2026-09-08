@@ -1,5 +1,8 @@
 # For detailed configuration reference documentation, visit:
 # https://supabase.com/docs/guides/local-development/cli/config
+# LOCAL DEVELOPMENT ONLY. Shared WSTERA LAB/Production project configuration is platform-owned.
+# DO NOT run `supabase config push` from this product repository against a shared environment.
+# Remote exposed-schema/config truth is governed by the platform shared-runtime ADR.
 # A string used to distinguish different Supabase projects on the same host. Defaults to the
 # working directory name when running `supabase init`.
 project_id = "booking"

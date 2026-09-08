@@ -17,6 +17,13 @@
     "dev:admin": "npm --workspace apps/booking-admin run dev",
     "prebuild": "npm run sync-env",
     "build": "npm --workspace apps/booking-consumer run build && npm --workspace apps/booking-admin run build",
-    "lint": "npm --workspace apps/booking-consumer run lint && npm --workspace apps/booking-admin run lint"
+    "lint": "npm --workspace apps/booking-consumer run lint && npm --workspace apps/booking-admin run lint",
+    "db:bk01:generate": "node scripts/generate-bk01-shared-runtime.mjs",
+    "db:bk01:verify": "node scripts/verify-bk01-shared-runtime.mjs",
+    "db:bk01:plan": "node scripts/bk01-migrate.mjs plan",
+    "db:bk01:apply": "node scripts/bk01-migrate.mjs apply"
+  },
+  "devDependencies": {
+    "postgres": "3.4.9"
   }
 }

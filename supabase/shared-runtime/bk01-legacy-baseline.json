@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "source": "supabase/migrations",
+  "frozenMigrationCount": 30,
+  "sourceSha256": "812b4656b5fcc65d881afd1712581d7c4ba0fd37f39a35c9d7d7d6173b695f5a",
+  "lastLegacyVersion": "20260907181500",
+  "generatedAt": "2026-09-08T08:45:07.512Z"
+}
