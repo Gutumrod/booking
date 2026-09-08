@@ -55,9 +55,12 @@ export function decideCancellationCapacityRelease(lifecycle: OrderLifecycle): 'R
   throw new Error(`Order in ${lifecycle} has no cancellable production reservation`);
 }
 
-export interface OrderRepository { getById(shopId: string, orderId: string): Promise<unknown | null>; }
+export interface CatalogReadRepository { listForShop(input: Readonly<{ shopId: string; catalogId: string }>): Promise<readonly CatalogOrderSource[]>; }
+export interface OrderRepository { getById(shopId: string, orderId: string): Promise<unknown | null>; save(shopId: string, order: unknown, idempotencyKey: string): Promise<unknown>; }
+export interface CapacityCalendarRepository { listCandidateDays(input: Readonly<{ shopId: string; fromDate: string; throughDate: string }>): Promise<readonly CapacityDay[]>; }
 export interface AtomicOrderConfirmationPort { confirm(input: Readonly<{ shopId: string; orderId: string; idempotencyKey: string }>): Promise<unknown>; }
-export interface PublicOrderTrackingPort { findByOpaqueToken(shopId: string, token: string): Promise<unknown | null>; }
+export interface PublicOrderSubmitPort { submit(input: Readonly<{ shopId: string; idempotencyKey: string; lineSnapshots: readonly OrderLineSnapshot[] }>): Promise<unknown>; }
+export interface PublicOrderTrackingPort { findByOpaqueToken(input: Readonly<{ shopId: string; opaqueToken: string }>): Promise<unknown | null>; }
 export interface OrderBookingLinkPort { createIdempotentLink(input: Readonly<{ shopId: string; orderId: string; bookingId: string; idempotencyKey: string }>): Promise<unknown>; }
 
 export function getOrderRuntimeUnavailable(): Readonly<{ submitPublicOrder(): Promise<Readonly<{ available: false; code: 'ORDER_RUNTIME_UNAVAILABLE' }>> }> {
