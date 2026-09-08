@@ -498,3 +498,23 @@ The first live Junction A attempt was executed and **FAILED A2**. This checkpoin
 Do not rerun the current bootstrap. Resolve the platform shared-runtime isolation model and the BK01 `auth.*` function ownership model first, then issue a new reviewed bootstrap/remediation checkpoint.
 
 Canonical evidence: `docs/audit/BK01-SHARED-RUNTIME-JUNCTION-A-FAILURE-EVIDENCE-2026-09-08.md`.
+
+## Safe-lane completion checkpoint — 2026-09-08
+
+Both autonomous safe lanes are now complete and independently reviewed.
+
+- Claude final SHA: `45fa3abf5a316dea622b005bfced1acf948cb8bc` — accepted.
+- Codex final SHA: `982188170f6a80ce492723786ca1e21cc2435733` — accepted.
+- Both branches are pushed to origin and remain free of Supabase migration/shared-runtime changes.
+- Independent verification passed for tests, lint, build and BK01 repository gates.
+- Product Catalog provenance and source verification were independently rechecked.
+
+Canonical review: `docs/order/JUNCTION-B-SAFE-LANE-INDEPENDENT-REVIEW-2026-09-08.md`.
+
+This does not reopen runtime work. Because Junction A remains FAIL/rolled back, formal Junction B convergence and integration branch creation remain blocked.
+
+**SAFE-LANE INPUTS:** READY
+
+**FORMAL JUNCTION B:** WAITING ON JUNCTION A PASS
+
+**ORDER/CLAIM RUNTIME:** LOCKED

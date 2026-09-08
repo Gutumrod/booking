@@ -78,3 +78,22 @@ This section is newer than the 2026-09-06 status above and controls the current 
 **ORDER/CLAIM LIVE RUNTIME:** NOT AUTHORIZED
 
 Evidence: `docs/audit/BK01-SHARED-RUNTIME-JUNCTION-A-FAILURE-EVIDENCE-2026-09-08.md`.
+
+## Safe-Lane Review Update — 2026-09-08
+
+Claude and Codex bounded parallel lanes are complete and independently reviewed.
+
+- Claude Portal + Claim safe lane accepted at `45fa3abf5a316dea622b005bfced1acf948cb8bc`.
+- Codex Order safe scaffold accepted at `982188170f6a80ce492723786ca1e21cc2435733`.
+- Both branches are clean and pushed to origin.
+- Both remain migration/shared-runtime clean.
+- Independent tests/lint/build/BK01 verification passed for both lanes.
+- Product Catalog provenance was rechecked against Module Hub commit `cd88c570ab57f6976d15f85d09973d0cfbf0cd63`; source 213/213 tests + typecheck PASS.
+
+**JUNCTION B INPUTS:** READY
+
+**FORMAL JUNCTION B / MERGE:** BLOCKED BY JUNCTION A FAIL
+
+No Order/Claim live runtime work or integration merge is authorized until House/platform remediation returns and Junction A is re-proven PASS.
+
+Canonical review: `docs/order/JUNCTION-B-SAFE-LANE-INDEPENDENT-REVIEW-2026-09-08.md`.
