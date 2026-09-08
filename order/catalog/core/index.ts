@@ -1,0 +1,12 @@
+export { ProductCatalogError } from './errors.js';
+export { assertNoCircularCategory, createProductCatalogService } from './service.js';
+export { validateCustomAttributes } from './validators/attribute.validator.js';
+export { validateCreateCategoryInput, validateUpdateCategoryInput } from './validators/category.validator.js';
+export { validateCreateProductInput, validateUpdateProductInput } from './validators/product.validator.js';
+export { normalizeSku, validateSku } from './validators/sku.validator.js';
+export { generateUniqueSlug, slugify } from './utils/slug.js';
+export { isValidSku } from './utils/sku.js';
+export { assertSafePath, sanitizeFileName } from './utils/sanitize.js';
+export type { ProductCatalogErrorCode } from './errors.js';
+export type { ProductCatalogService } from './service.js';
+export type * from './types.js';

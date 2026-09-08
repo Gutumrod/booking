@@ -50,3 +50,5 @@ cloudflare-env.d.ts
 .playwright-cli/
 .agy-*.md
 **/.agy-*.md
+
+/order/catalog/node_modules/
