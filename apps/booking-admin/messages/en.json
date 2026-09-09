@@ -307,7 +307,8 @@
     "saveServiceFailed": "Failed to save service",
     "toggleServiceFailed": "Failed to change service status",
     "depositExceedsPrice": "Deposit must not be greater than the service price",
-    "durationInvalidMultiple": "For now, service duration must be a multiple of 15 minutes (free-minute durations are coming soon)"
+    "durationInvalidMultiple": "For now, service duration must be a multiple of 15 minutes (free-minute durations are coming soon)",
+    "numericFieldInvalid": "Please enter valid numbers for duration, price and deposit"
   },
   "tickets": {
     "backToDashboard": "Back to main dashboard",

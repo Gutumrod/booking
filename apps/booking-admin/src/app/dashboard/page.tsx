@@ -32,6 +32,7 @@ import {
   type DashboardSubscription,
 } from '@/lib/admin-service';
 import { LanguageToggle } from '@/components/language-toggle';
+import { commitNumericField } from '@/lib/numeric-field';
 import { 
   Calendar, Users, DollarSign, Eye, Clock,
   Settings, AlertCircle, Plus, ShieldCheck,
@@ -142,9 +143,11 @@ export default function AdminDashboard() {
   const [showServiceForm, setShowServiceForm] = useState(false);
   const [serviceName, setServiceName] = useState('');
   const [serviceDesc, setServiceDesc] = useState('');
-  const [serviceDuration, setServiceDuration] = useState(45);
-  const [servicePrice, setServicePrice] = useState(350);
-  const [serviceDeposit, setServiceDeposit] = useState(100);
+  // Held as strings while editing so a field can be cleared to empty (KMO-08);
+  // parsed and validated at save via commitNumericField.
+  const [serviceDuration, setServiceDuration] = useState('45');
+  const [servicePrice, setServicePrice] = useState('350');
+  const [serviceDeposit, setServiceDeposit] = useState('100');
 
   // Filter Bookings by Date View
   const [bookingFilter, setBookingFilter] = useState<'today' | 'upcoming' | 'all'>('all');
@@ -512,9 +515,9 @@ export default function AdminDashboard() {
     setEditingService(null);
     setServiceName('');
     setServiceDesc('');
-    setServiceDuration(45);
-    setServicePrice(350);
-    setServiceDeposit(100);
+    setServiceDuration('45');
+    setServicePrice('350');
+    setServiceDeposit('100');
     setShowServiceForm(true);
   };
 
@@ -522,9 +525,9 @@ export default function AdminDashboard() {
     setEditingService(sv);
     setServiceName(sv.name);
     setServiceDesc(sv.description);
-    setServiceDuration(sv.duration);
-    setServicePrice(sv.price);
-    setServiceDeposit(sv.deposit);
+    setServiceDuration(String(sv.duration));
+    setServicePrice(String(sv.price));
+    setServiceDeposit(String(sv.deposit));
     setShowServiceForm(true);
   };
 
@@ -532,16 +535,27 @@ export default function AdminDashboard() {
     e.preventDefault();
     if (!shopId || !serviceName.trim()) return;
 
-    if (serviceDeposit > servicePrice) {
+    const durationParsed = commitNumericField(serviceDuration, { min: 5, integer: true });
+    const priceParsed = commitNumericField(servicePrice, { min: 0 });
+    const depositParsed = commitNumericField(serviceDeposit, { min: 0 });
+    if (durationParsed.error || priceParsed.error || depositParsed.error) {
+      setManagementError(t('numericFieldInvalid'));
+      return;
+    }
+    const duration = durationParsed.value as number;
+    const price = priceParsed.value as number;
+    const deposit = depositParsed.value as number;
+
+    if (deposit > price) {
       setManagementError(t('depositExceedsPrice'));
       return;
     }
 
     // R7 (HC-09): create_service / update_service still reject a duration that is
     // not a positive multiple of 15 minutes. Mirror that here so the merchant gets
-    // a clear message instead of a raw RPC error. Relax to "positive integer" once
-    // the server rule is removed and free-minute durations are allowed.
-    if (!Number.isInteger(serviceDuration) || serviceDuration < 5 || serviceDuration % 15 !== 0) {
+    // a clear message instead of a raw RPC error. Relax once the server rule is
+    // removed and free-minute durations are allowed.
+    if (duration % 15 !== 0) {
       setManagementError(t('durationInvalidMultiple'));
       return;
     }
@@ -549,9 +563,9 @@ export default function AdminDashboard() {
     const input = {
       name: serviceName.trim(),
       description: serviceDesc.trim(),
-      duration: serviceDuration,
-      price: servicePrice,
-      deposit: serviceDeposit,
+      duration,
+      price,
+      deposit,
     };
 
     setMutatingResourceId(editingService?.id ?? 'service-new');
@@ -1309,7 +1323,7 @@ export default function AdminDashboard() {
                         min={5}
                         step={5}
                         value={serviceDuration}
-                        onChange={(e) => setServiceDuration(Number(e.target.value))}
+                        onChange={(e) => setServiceDuration(e.target.value)}
                         className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 font-mono text-white focus:outline-none focus:border-emerald-500"
                       />
                     </div>
@@ -1321,7 +1335,7 @@ export default function AdminDashboard() {
                         type="number"
                         min={0}
                         value={servicePrice}
-                        onChange={(e) => setServicePrice(Number(e.target.value))}
+                        onChange={(e) => setServicePrice(e.target.value)}
                         className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 font-mono text-emerald-400 font-bold focus:outline-none focus:border-emerald-500"
                       />
                     </div>
@@ -1333,7 +1347,7 @@ export default function AdminDashboard() {
                         type="number"
                         min={0}
                         value={serviceDeposit}
-                        onChange={(e) => setServiceDeposit(Number(e.target.value))}
+                        onChange={(e) => setServiceDeposit(e.target.value)}
                         className="w-full bg-slate-900 border border-amber-500/40 rounded-xl px-3 py-2 font-mono text-amber-400 font-bold focus:outline-none focus:border-amber-500"
                       />
                     </div>
