@@ -16,6 +16,7 @@ import {
 import { LanguageToggle } from '@/components/language-toggle';
 import { QRCodeSVG } from 'qrcode.react';
 import { createPromptPayPayload } from '../../../lib/promptpay';
+import { resolveBookingPageState, type BookingPageState } from '../../../lib/booking-state';
 
 const CENTRAL_LINE_OA_ID = process.env.NEXT_PUBLIC_CENTRAL_LINE_OA_ID || 'central_booking_oa';
 
@@ -30,6 +31,51 @@ function isValidThaiMobilePhone(value: string): boolean {
   return thaiMobilePhonePattern.test(value.replace(/[\s-]/g, ''));
 }
 
+function BookingStatusScreen({
+  state, t, phone, phoneHref,
+}: {
+  state: Exclude<BookingPageState, 'OK' | 'LOADING'>;
+  t: ReturnType<typeof useTranslations<'booking'>>;
+  phone: string;
+  phoneHref?: string;
+}) {
+  const content = ((): { Icon: React.ComponentType<{ className?: string }>; title: string; description: string } => {
+    switch (state) {
+      case 'LOAD_ERROR':
+        return { Icon: AlertTriangle, title: t('states.loadErrorTitle'), description: t('states.loadErrorDescription') };
+      case 'SHOP_NOT_FOUND':
+        return { Icon: AlertTriangle, title: t('states.notFoundTitle'), description: t('states.notFoundDescription') };
+      case 'BOOKING_DISABLED':
+        return { Icon: CalendarOff, title: t('blocked.title'), description: t('blocked.description') };
+      case 'NO_SERVICES':
+        return { Icon: Clock, title: t('states.noServicesTitle'), description: t('states.noServicesDescription') };
+      case 'NO_STAFF':
+        return { Icon: User, title: t('states.noStaffTitle'), description: t('states.noStaffDescription') };
+      case 'NO_SCHEDULE':
+        return { Icon: CalendarOff, title: t('states.noScheduleTitle'), description: t('states.noScheduleDescription') };
+    }
+  })();
+  const { Icon, title, description } = content;
+  return (
+    <div className="bg-slate-900/90 border border-amber-500/40 rounded-2xl p-6 text-center shadow-xl shadow-amber-950/40 space-y-3">
+      <div className="w-14 h-14 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 flex items-center justify-center mx-auto">
+        <Icon className="w-7 h-7" />
+      </div>
+      <h2 className="text-lg font-bold text-white">{title}</h2>
+      <p className="text-xs text-slate-400">{description}</p>
+      {phoneHref && (
+        <a
+          href={phoneHref}
+          className="inline-flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-200 py-3 px-4 rounded-xl font-bold text-xs border border-slate-700 transition-all"
+        >
+          <Phone className="w-4 h-4 text-emerald-400" />
+          {t('callShop', { phone })}
+        </a>
+      )}
+    </div>
+  );
+}
+
 export default function BookingPage() {
   const t = useTranslations('booking');
   const tc = useTranslations('common');
@@ -42,6 +88,7 @@ export default function BookingPage() {
   const [staffSchedules, setStaffSchedules] = useState<StaffSchedule[]>([]);
   const [shopHolidays, setShopHolidays] = useState<ShopHoliday[]>([]);
   const [isLoadingShop, setIsLoadingShop] = useState(true);
+  const [loadError, setLoadError] = useState(false);
 
   const [step, setStep] = useState<number>(1);
   const [selectedService, setSelectedService] = useState<Service | null>(null);
@@ -70,6 +117,7 @@ export default function BookingPage() {
   useEffect(() => {
     async function loadData() {
       setIsLoadingShop(true);
+      setLoadError(false);
       try {
         const shopData = await getShopBySlug(slug);
         if (shopData) {
@@ -93,7 +141,9 @@ export default function BookingPage() {
         }
       } catch (error) {
         console.error('Error loading booking page data:', error);
-        setShop(null);
+        // A thrown fetch is a runtime failure, distinct from a genuinely missing
+        // shop (getShopBySlug returns null without throwing for that).
+        setLoadError(true);
       } finally {
         setIsLoadingShop(false);
       }
@@ -134,7 +184,14 @@ export default function BookingPage() {
   const shopPhoneHref = shop?.phone?.trim()
     ? `tel:${shop.phone.replace(/-/g, '')}`
     : undefined;
-  const isBookingBlocked = shop?.is_accepting_online_bookings === false;
+  const pageState = resolveBookingPageState({
+    isLoading: isLoadingShop,
+    loadError,
+    shop,
+    serviceCount: services.length,
+    staffCount: staffList.length,
+    scheduleCount: staffSchedules.length,
+  });
   const depositAmount = selectedService?.deposit_amount ?? shop?.default_deposit_amount ?? 100;
   const promptpayPayload = useMemo(() => {
     try {
@@ -360,21 +417,8 @@ export default function BookingPage() {
           </div>
         )}
 
-        {isBookingBlocked ? (
-          <div className="bg-slate-900/90 border border-amber-500/40 rounded-2xl p-6 text-center shadow-xl shadow-amber-950/40 space-y-3">
-            <div className="w-14 h-14 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 flex items-center justify-center mx-auto">
-              <CalendarOff className="w-7 h-7" />
-            </div>
-            <h2 className="text-lg font-bold text-white">{t('blocked.title')}</h2>
-            <p className="text-xs text-slate-400">{t('blocked.description')}</p>
-            <a
-              href={shopPhoneHref}
-              className="inline-flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-200 py-3 px-4 rounded-xl font-bold text-xs border border-slate-700 transition-all"
-            >
-              <Phone className="w-4 h-4 text-emerald-400" />
-              {t('callShop', { phone: shopPhone })}
-            </a>
-          </div>
+        {pageState !== 'OK' && pageState !== 'LOADING' ? (
+          <BookingStatusScreen state={pageState} t={t} phone={shopPhone} phoneHref={shopPhoneHref} />
         ) : bookingSuccess ? (
           /* CONFIRMED OR PENDING REVIEW STATE (PRODUCT_RULES_V1 SECTION 1.4) */
           <div className={`bg-slate-900/90 rounded-2xl p-6 text-center shadow-xl animate-fade-in space-y-5 ${

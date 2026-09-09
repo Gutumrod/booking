@@ -31,6 +31,18 @@
       "title": "This shop is not accepting online bookings right now",
       "description": "Please contact the shop directly for more information."
     },
+    "states": {
+      "loadErrorTitle": "We couldn't load this booking page",
+      "loadErrorDescription": "Something went wrong on our side. Please try again in a moment, or contact the shop.",
+      "notFoundTitle": "Shop not found",
+      "notFoundDescription": "This booking link may be wrong or the shop is no longer available.",
+      "noServicesTitle": "No services available yet",
+      "noServicesDescription": "This shop hasn't added any bookable services yet. Please contact them directly.",
+      "noStaffTitle": "No staff available yet",
+      "noStaffDescription": "This shop hasn't set up anyone to take bookings yet. Please contact them directly.",
+      "noScheduleTitle": "Booking schedule not set up yet",
+      "noScheduleDescription": "This shop hasn't configured its opening hours yet. Please contact them directly."
+    },
     "success": {
       "confirmedTitle": "Booking confirmed",
       "reviewTitle": "Slip received, payment is being reviewed",
