@@ -1312,11 +1312,7 @@ export default function AdminDashboard() {
                         type="number"
                         min={0}
                         value={servicePrice}
-                        onChange={(e) => {
-                          const val = Number(e.target.value);
-                          setServicePrice(val);
-                          setServiceDeposit(Math.round(val * 0.3));
-                        }}
+                        onChange={(e) => setServicePrice(Number(e.target.value))}
                         className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 font-mono text-emerald-400 font-bold focus:outline-none focus:border-emerald-500"
                       />
                     </div>
