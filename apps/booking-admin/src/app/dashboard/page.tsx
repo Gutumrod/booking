@@ -34,6 +34,7 @@ import {
 import { LanguageToggle } from '@/components/language-toggle';
 import { commitNumericField } from '@/lib/numeric-field';
 import { computeReadiness, isShopReady, type ReadinessKey } from '@/lib/readiness';
+import { TimeField } from '@/components/time-field';
 import { 
   Calendar, Users, DollarSign, Eye, Clock,
   Settings, AlertCircle, Plus, ShieldCheck,
@@ -1017,13 +1018,15 @@ export default function AdminDashboard() {
                       <div>
                         <label className="text-[11px] font-semibold text-slate-300 block mb-1">{t('workTimeLabel')}</label>
                         <div className="flex items-center gap-1.5">
-                          <input type="time" value={selectedDay.workStart} disabled={!canManageSchedules || !selectedDay.isWorkingDay}
-                            onChange={(event) => updateScheduleDay(sch.staffId, selectedDay.dayOfWeek, { workStart: event.target.value })}
+                          <TimeField value={selectedDay.workStart} disabled={!canManageSchedules || !selectedDay.isWorkingDay}
+                            ariaLabel={t('workTimeLabel')}
+                            onChange={(v) => updateScheduleDay(sch.staffId, selectedDay.dayOfWeek, { workStart: v })}
                             className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-white font-mono text-center focus:outline-none focus:border-emerald-500 font-bold"
                           />
                           <span className="text-slate-500 text-[10px]">{t('to')}</span>
-                          <input type="time" value={selectedDay.workEnd} disabled={!canManageSchedules || !selectedDay.isWorkingDay}
-                            onChange={(event) => updateScheduleDay(sch.staffId, selectedDay.dayOfWeek, { workEnd: event.target.value })}
+                          <TimeField value={selectedDay.workEnd} disabled={!canManageSchedules || !selectedDay.isWorkingDay}
+                            ariaLabel={t('workTimeLabel')}
+                            onChange={(v) => updateScheduleDay(sch.staffId, selectedDay.dayOfWeek, { workEnd: v })}
                             className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-white font-mono text-center focus:outline-none focus:border-emerald-500 font-bold"
                           />
                         </div>
@@ -1034,13 +1037,15 @@ export default function AdminDashboard() {
                           <Coffee className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" /> {t('breakLabel')}
                         </label>
                         <div className="flex items-center gap-1.5">
-                          <input type="time" value={selectedDay.breakStart} disabled={!canManageSchedules || !selectedDay.isWorkingDay}
-                            onChange={(event) => updateScheduleDay(sch.staffId, selectedDay.dayOfWeek, { breakStart: event.target.value })}
+                          <TimeField value={selectedDay.breakStart} disabled={!canManageSchedules || !selectedDay.isWorkingDay}
+                            ariaLabel={t('breakLabel')}
+                            onChange={(v) => updateScheduleDay(sch.staffId, selectedDay.dayOfWeek, { breakStart: v })}
                             className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-white font-mono text-center focus:outline-none focus:border-amber-500 font-bold"
                           />
                           <span className="text-slate-500 text-[10px]">{t('to')}</span>
-                          <input type="time" value={selectedDay.breakEnd} disabled={!canManageSchedules || !selectedDay.isWorkingDay}
-                            onChange={(event) => updateScheduleDay(sch.staffId, selectedDay.dayOfWeek, { breakEnd: event.target.value })}
+                          <TimeField value={selectedDay.breakEnd} disabled={!canManageSchedules || !selectedDay.isWorkingDay}
+                            ariaLabel={t('breakLabel')}
+                            onChange={(v) => updateScheduleDay(sch.staffId, selectedDay.dayOfWeek, { breakEnd: v })}
                             className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-white font-mono text-center focus:outline-none focus:border-amber-500 font-bold"
                           />
                         </div>
