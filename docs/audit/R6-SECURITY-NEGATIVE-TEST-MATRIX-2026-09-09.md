@@ -42,17 +42,21 @@ the specific holes below.
 | SEC-GAP-1 | `customer_reschedule_booking` has no booking-collision check → a token-holding customer can double-book a provider server-side | `bk_a_v1_contract_remediation.sql:514-576`; also **violates BK01's own** `docs/05_BOOKING_DOMAIN_RULES.md:44` ("same availability/collision rules") | **P0** | R7 (R2 §7 primitive) |
 | SEC-GAP-2 | Three divergent availability implementations; only `create_booking_hold` enforces collision | R0 KMO-X2 / R1 HC-27 | **P0** | R7 |
 | SEC-GAP-3 | Consumer generates a PromptPay QR paying `0812345678` a real amount when the shop has no PromptPay configured | `book/[slug]/page.tsx:124,131` | **P0** (false payment truth) | R4-7 (client) + R7 (`PAYMENT_NOT_CONFIGURED` server guard) |
-| SEC-GAP-4 | `serviceDeposit > servicePrice` is a client-only guard; the `create_service`/`update_service` RPC path is not shown to reject it server-side | `dashboard/page.tsx:535` (client); need to confirm RPC — **R6 action item** | P1 | R7 |
-| SEC-GAP-5 | `create_booking_hold` accepts any `p_start_time` — no slot-interval alignment, no lead-time, no horizon enforcement | all `create_booking_hold` defs | P1 | R7 (R5 §3) |
-| SEC-GAP-6 | Staff-deny for schedules/holidays is partly UI-only (`disabled` props); need DB/RPC proof that `upsert_staff_weekly_schedule` / `create_shop_holiday` reject a `staff`-role caller | `dashboard/page.tsx:920,991,1003,1048`; BK-A policies exist for tables but RPC-level check unverified | P1 | R6 verification + R7 if missing |
+| ~~SEC-GAP-4~~ | **RESOLVED — not a gap.** `create_service` and `update_service` both reject `p_deposit_amount > p_price` server-side | `20260807175455_...:93-95, 159-161` | — | verified 2026-09-09 |
+| SEC-GAP-5 | `create_booking_hold` accepts any `p_start_time` — no slot-interval alignment, no lead-time, no horizon enforcement. (Note: `create_service`/`update_service` **do** enforce "duration is a positive multiple of 15 minutes" server-side at `...:89, 155` — that hardcoded 15 is a real HC-09 server-side instance, not a missing check) | all `create_booking_hold` defs | P1 | R7 (R5 §3) |
+| ~~SEC-GAP-6~~ | **RESOLVED — not a gap.** `upsert_staff_weekly_schedule` (`:44`), `create_shop_holiday` (`:132`), `delete_shop_holiday` (`:202`) all check `has_shop_role(shop, ['owner','admin'])` server-side; `create_staff`/`set_staff_active` are owner-only (`:222, 276`). Staff-deny is enforced at the RPC, not UI-only | `20260807181852_...`, `20260807175455_...` | — | verified 2026-09-09 |
 | SEC-GAP-7 | `create_booking_hold` / `submit_deposit_slip` granted to `anon`; the recovery-token abuse guard (`authorize_booking_recovery_attempt`, 5/15min/30min) covers slip submit + reschedule but **not** initial hold creation — an anon caller can spam `create_booking_hold` | grants at `phase_a_...:291`; abuse guard scope `bk_a_v1_...:40-60` | P2 | R7 (rate-limit hold creation per shop/IP) |
 | SEC-GAP-8 | `shop_holidays` overloads shop-closure and staff-time-off on one table; a mis-scoped RLS/RPC change could let a shop admin write another shop's staff time-off | R2 §6 open item | P2 (latent) | R7 table decision |
 
-**R6 action items (verify against source before R7, no runtime needed):**
-- read `create_service` / `update_service` RPC bodies → confirm/deny SEC-GAP-4.
-- read `upsert_staff_weekly_schedule`, `create_shop_holiday`, `delete_shop_holiday` RPC
-  bodies → confirm the `has_shop_role(..., ARRAY['owner','admin'])` check is present
-  (SEC-GAP-6).
+**R6 action items — DONE 2026-09-09 (source verification, no runtime):**
+- `create_service` / `update_service`: server-side `p_deposit_amount > p_price` reject
+  present → SEC-GAP-4 closed.
+- `upsert_staff_weekly_schedule` / `create_shop_holiday` / `delete_shop_holiday`:
+  `has_shop_role(shop, ['owner','admin'])` present; `create_staff` / `set_staff_active`
+  owner-only → SEC-GAP-6 closed.
+- Residual: `create_service`/`update_service` hardcode the 15-minute duration multiple
+  server-side (`...:89, 155`) — folded into HC-09; R5/R7 removes it with the scheduling
+  model.
 
 ---
 

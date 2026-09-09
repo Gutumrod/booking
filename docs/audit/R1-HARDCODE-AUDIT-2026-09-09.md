@@ -62,7 +62,7 @@ list.
 
 | ID | Location | Current hardcoded value | Class | Owner | Sev | Junction A |
 |---|---|---|---|---|---|---|
-| HC-09 | `dashboard/page.tsx:1300-1301` | duration input `min={15} step={15}` | `MERCHANT_CONFIG` (unit + granularity) | shop | **P1** (= KMO-07) | clear for input; model needs R5/R7 |
+| HC-09 | `dashboard/page.tsx:1300-1301` (client) **and** `create_service`/`update_service` RPC `RAISE EXCEPTION 'Duration must be a positive multiple of 15 minutes'` (`20260807175455_...:89,155`) | duration `min/step 15` client + server-enforced 15-minute multiple | `MERCHANT_CONFIG` (unit + granularity) | shop | **P1** (= KMO-07) | client input clear; server rule needs R5/R7 |
 | HC-10 | `dashboard/page.tsx:145,516` | `serviceDuration` default `45` | `PRODUCT_DEFAULT` | shop | P2 | clear |
 | HC-11 | `initial_schema.sql:43` | `services.duration_minutes INTEGER NOT NULL DEFAULT 30` | `PRODUCT_DEFAULT` | shop | P2 | schema — R7 |
 | HC-12 | `book/[slug]/page.tsx:22` | `ALL_TIME_SLOTS = ['09:00',...,'19:00']` 30-min grid, service-independent, client-only | `MERCHANT_CONFIG` (slot interval + open hours) | shop | **P1** (= KMO-X2) | clear (client reads config); needs a config source R3/R7 |
