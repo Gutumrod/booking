@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
 import {
@@ -35,6 +35,7 @@ import { LanguageToggle } from '@/components/language-toggle';
 import { commitNumericField } from '@/lib/numeric-field';
 import { computeReadiness, isShopReady, type ReadinessKey } from '@/lib/readiness';
 import { TimeField } from '@/components/time-field';
+import { mergeServerSchedules } from '@/lib/schedule-merge';
 import { 
   Calendar, Users, DollarSign, Eye, Clock,
   Settings, AlertCircle, Plus, ShieldCheck,
@@ -115,6 +116,14 @@ export default function AdminDashboard() {
   const [staffList, setStaffList] = useState<StaffMember[]>([]);
   const [schedules, setSchedules] = useState<DashboardStaffSchedule[]>([]);
   const [selectedScheduleDays, setSelectedScheduleDays] = useState<Record<string, number>>({});
+  // Staff whose schedule has unsaved edits (KMO-05). A ref mirror lets a
+  // background refetch keep their local edits instead of overwriting them.
+  const [dirtyStaffIds, setDirtyStaffIds] = useState<ReadonlySet<string>>(new Set());
+  const dirtyStaffIdsRef = useRef<ReadonlySet<string>>(new Set());
+  const setDirty = (next: ReadonlySet<string>) => {
+    dirtyStaffIdsRef.current = next;
+    setDirtyStaffIds(next);
+  };
   const [services, setServices] = useState<ServiceItem[]>([]);
   const [selectedSlipBooking, setSelectedSlipBooking] = useState<Booking | null>(null);
   const [signedSlipUrl, setSignedSlipUrl] = useState<string | null>(null);
@@ -206,7 +215,6 @@ export default function AdminDashboard() {
   };
 
   // Stable callback is required by the initial-load effect below.
-  // eslint-disable-next-line react-hooks/preserve-manual-memoization
   const loadDashboardBookings = useCallback(async (showLoading = true) => {
     if (showLoading) setIsBookingsLoading(true);
     setBookingError('');
@@ -226,7 +234,7 @@ export default function AdminDashboard() {
       setLineOaId(data.shop.lineOaId);
       setServices(data.services);
       setStaffList(data.staff);
-      setSchedules(data.schedules);
+      setSchedules((prev) => mergeServerSchedules(prev, data.schedules, dirtyStaffIdsRef.current));
       setHolidaysList(data.holidays);
       setSubscription(data.subscription);
       setBillingLoadError(data.subscriptionError ?? '');
@@ -257,7 +265,7 @@ export default function AdminDashboard() {
         setLineOaId(data.shop.lineOaId);
         setServices(data.services);
         setStaffList(data.staff);
-        setSchedules(data.schedules);
+        setSchedules((prev) => mergeServerSchedules(prev, data.schedules, dirtyStaffIdsRef.current));
         setHolidaysList(data.holidays);
         setSubscription(data.subscription);
         setBillingLoadError(data.subscriptionError ?? '');
@@ -276,6 +284,17 @@ export default function AdminDashboard() {
       isCurrent = false;
     };
   }, [t]);
+
+  // Warn before leaving with unsaved staff schedule edits (KMO-05).
+  useEffect(() => {
+    if (dirtyStaffIds.size === 0) return;
+    const handler = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [dirtyStaffIds]);
 
   const handleApproveSlip = async (bookingId: string) => {
     setMutatingBookingId(bookingId);
@@ -522,19 +541,48 @@ export default function AdminDashboard() {
     setSchedules((previous) => previous.map((schedule) => schedule.staffId === staffId
       ? { ...schedule, days: schedule.days.map((day) => day.dayOfWeek === dayOfWeek ? { ...day, ...changes } : day) }
       : schedule));
+    setDirty(new Set(dirtyStaffIdsRef.current).add(staffId));
   };
 
+  const clearDirty = (staffId: string) => {
+    const next = new Set(dirtyStaffIdsRef.current);
+    next.delete(staffId);
+    setDirty(next);
+  };
+
+  // Save one staff schedule. Does NOT refetch all schedules (that was the KMO-05
+  // bug -- it overwrote other cards' unsaved edits). The in-memory `days` is
+  // exactly what was saved.
   const handleSaveSchedule = async (schedule: DashboardStaffSchedule) => {
     setMutatingResourceId(schedule.staffId);
     setManagementError('');
     try {
       await saveStaffWeeklySchedule(schedule.staffId, schedule.days);
-      await loadDashboardBookings(false);
+      clearDirty(schedule.staffId);
     } catch (error) {
       setManagementError(error instanceof Error ? error.message : t('saveScheduleFailed'));
     } finally {
       setMutatingResourceId(null);
     }
+  };
+
+  const handleSaveAllSchedules = async () => {
+    const targets = schedules.filter((s) => dirtyStaffIdsRef.current.has(s.staffId));
+    if (targets.length === 0) return;
+    setMutatingResourceId('schedules-all');
+    setManagementError('');
+    let failed: string | null = null;
+    for (const schedule of targets) {
+      try {
+        await saveStaffWeeklySchedule(schedule.staffId, schedule.days);
+        clearDirty(schedule.staffId);
+      } catch (error) {
+        failed = error instanceof Error ? error.message : t('saveScheduleFailed');
+        break;
+      }
+    }
+    if (failed) setManagementError(failed);
+    setMutatingResourceId(null);
   };
 
   const handleOpenAddService = () => {
@@ -972,10 +1020,30 @@ export default function AdminDashboard() {
         {activeTab === 'schedules' && (
           <div className="space-y-6">
             <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
-              <h2 className="text-base font-bold text-white flex items-center gap-2">
-                <Clock className="w-5 h-5 text-emerald-400" />
-                {t('schedulesTitle')}
-              </h2>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <h2 className="text-base font-bold text-white flex items-center gap-2">
+                  <Clock className="w-5 h-5 text-emerald-400" />
+                  {t('schedulesTitle')}
+                </h2>
+                {dirtyStaffIds.size > 0 && (shopRole === 'owner' || shopRole === 'admin') && (
+                  <button
+                    type="button"
+                    onClick={handleSaveAllSchedules}
+                    disabled={mutatingResourceId === 'schedules-all'}
+                    className="rounded-xl bg-emerald-500 px-4 py-2 text-xs font-bold text-slate-950 disabled:opacity-50 flex items-center gap-1.5"
+                  >
+                    <Save className="w-3.5 h-3.5" />
+                    {mutatingResourceId === 'schedules-all'
+                      ? tCommon('saving')
+                      : t('saveAllSchedules', { count: dirtyStaffIds.size })}
+                  </button>
+                )}
+              </div>
+              {dirtyStaffIds.size > 0 && (
+                <p className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-2.5 text-[11px] text-amber-200">
+                  {t('unsavedSchedulesNote')}
+                </p>
+              )}
 
               {managementError && (
                 <p role="alert" className="rounded-xl border border-rose-500/40 bg-rose-500/10 p-3 text-xs text-rose-300">{managementError}</p>
@@ -992,11 +1060,14 @@ export default function AdminDashboard() {
                   const selectedDay = sch.days.find((day) => day.dayOfWeek === selectedDayNumber) ?? sch.days[0];
                   if (!selectedDay) return null;
                   const canManageSchedules = shopRole === 'owner' || shopRole === 'admin';
+                  const isDirty = dirtyStaffIds.has(sch.staffId);
                   return (
-                  <div key={sch.staffId} className="bg-slate-950 border border-slate-800 rounded-2xl p-4 text-xs space-y-3 shadow-md hover:border-slate-700 transition-all">
+                  <div key={sch.staffId} className={`bg-slate-950 border rounded-2xl p-4 text-xs space-y-3 shadow-md transition-all ${isDirty ? 'border-amber-500/50' : 'border-slate-800 hover:border-slate-700'}`}>
                     <div className="border-b border-slate-800 pb-2 flex items-center justify-between">
                       <span className="font-bold text-sm text-emerald-400">{sch.staffName}</span>
-                      <span className="text-[10px] text-slate-500">{t('workingDays', { count: sch.days.filter((day) => day.isWorkingDay).length })}</span>
+                      {isDirty
+                        ? <span className="text-[10px] font-bold text-amber-400">{t('unsavedBadge')}</span>
+                        : <span className="text-[10px] text-slate-500">{t('workingDays', { count: sch.days.filter((day) => day.isWorkingDay).length })}</span>}
                     </div>
                     <div className="flex flex-wrap gap-1">
                       {DAY_NAMES.map((dayName, dayOfWeek) => {
