@@ -110,15 +110,17 @@ export default function BookingPage() {
   useEffect(() => {
     if (step !== 3 || bookingSuccess) return;
     const expiresAtMs = holdResult?.expires_at ? new Date(holdResult.expires_at).getTime() : null;
-    if (expiresAtMs === null || Number.isNaN(expiresAtMs)) {
-      setTimeLeft(0);
-      return;
-    }
-    const tick = () => setTimeLeft(Math.max(0, Math.round((expiresAtMs - Date.now()) / 1000)));
-    tick();
-    const timer = setInterval(tick, 1000);
+    if (expiresAtMs === null || Number.isNaN(expiresAtMs)) return;
+    // Recompute from the server deadline each tick so the countdown does not drift.
+    const timer = setInterval(
+      () => setTimeLeft(Math.max(0, Math.round((expiresAtMs - Date.now()) / 1000))),
+      1000,
+    );
     return () => clearInterval(timer);
   }, [step, bookingSuccess, holdResult]);
+
+  const remainingSecondsFromExpiry = (expiresAt: string | null) =>
+    expiresAt ? Math.max(0, Math.round((new Date(expiresAt).getTime() - Date.now()) / 1000)) : 0;
 
   const formatCountdown = (totalSeconds: number) => {
     const mins = Math.floor(totalSeconds / 60);
@@ -265,7 +267,9 @@ export default function BookingPage() {
       if (res.status === 'confirmed' && res.deposit_status === 'not_required') {
         setBookingSuccess(true);
       } else if (res.status === 'hold' && res.deposit_status === 'awaiting') {
-        // countdown is derived from res.expires_at by the timer effect
+        // Seed the countdown from the server deadline; the timer effect keeps it
+        // in sync from res.expires_at afterwards.
+        setTimeLeft(remainingSecondsFromExpiry(res.expires_at));
         setStep(3);
       } else {
         throw new Error(t('errors.invalidBookingStatus'));
