@@ -306,7 +306,8 @@
     "saveScheduleFailed": "บันทึกตารางเวลาไม่สำเร็จ",
     "saveServiceFailed": "บันทึกบริการไม่สำเร็จ",
     "toggleServiceFailed": "เปลี่ยนสถานะบริการไม่สำเร็จ",
-    "depositExceedsPrice": "ยอดเงินมัดจำต้องไม่มากกว่าราคาบริการ"
+    "depositExceedsPrice": "ยอดเงินมัดจำต้องไม่มากกว่าราคาบริการ",
+    "durationInvalidMultiple": "ตอนนี้ระยะเวลาบริการต้องเป็นจำนวนเท่าของ 15 นาที (ระบบจะรองรับค่าอิสระเร็ว ๆ นี้)"
   },
   "tickets": {
     "backToDashboard": "กลับหน้าแดชบอร์ดหลัก",

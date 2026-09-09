@@ -537,6 +537,15 @@ export default function AdminDashboard() {
       return;
     }
 
+    // R7 (HC-09): create_service / update_service still reject a duration that is
+    // not a positive multiple of 15 minutes. Mirror that here so the merchant gets
+    // a clear message instead of a raw RPC error. Relax to "positive integer" once
+    // the server rule is removed and free-minute durations are allowed.
+    if (!Number.isInteger(serviceDuration) || serviceDuration < 5 || serviceDuration % 15 !== 0) {
+      setManagementError(t('durationInvalidMultiple'));
+      return;
+    }
+
     const input = {
       name: serviceName.trim(),
       description: serviceDesc.trim(),
@@ -1297,8 +1306,8 @@ export default function AdminDashboard() {
                       <input
                         required
                         type="number"
-                        min={15}
-                        step={15}
+                        min={5}
+                        step={5}
                         value={serviceDuration}
                         onChange={(e) => setServiceDuration(Number(e.target.value))}
                         className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 font-mono text-white focus:outline-none focus:border-emerald-500"

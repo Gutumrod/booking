@@ -306,7 +306,8 @@
     "saveScheduleFailed": "Failed to save schedule",
     "saveServiceFailed": "Failed to save service",
     "toggleServiceFailed": "Failed to change service status",
-    "depositExceedsPrice": "Deposit must not be greater than the service price"
+    "depositExceedsPrice": "Deposit must not be greater than the service price",
+    "durationInvalidMultiple": "For now, service duration must be a multiple of 15 minutes (free-minute durations are coming soon)"
   },
   "tickets": {
     "backToDashboard": "Back to main dashboard",
