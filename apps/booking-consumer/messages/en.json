@@ -41,7 +41,9 @@
       "noStaffTitle": "No staff available yet",
       "noStaffDescription": "This shop hasn't set up anyone to take bookings yet. Please contact them directly.",
       "noScheduleTitle": "Booking schedule not set up yet",
-      "noScheduleDescription": "This shop hasn't configured its opening hours yet. Please contact them directly."
+      "noScheduleDescription": "This shop hasn't configured its opening hours yet. Please contact them directly.",
+      "paymentNotConfiguredTitle": "Deposit payment not set up yet",
+      "paymentNotConfiguredDescription": "This shop requires a deposit but hasn't finished its payment setup. Please contact the shop to book."
     },
     "success": {
       "confirmedTitle": "Booking confirmed",

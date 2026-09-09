@@ -17,7 +17,7 @@ import { LanguageToggle } from '@/components/language-toggle';
 import { QRCodeSVG } from 'qrcode.react';
 import { createPromptPayPayload } from '../../../lib/promptpay';
 import { resolveBookingPageState, type BookingPageState } from '../../../lib/booking-state';
-import { resolveDepositDisplay } from '../../../lib/deposit-display';
+import { resolvePaymentInstruction, preHoldServiceDeposit } from '../../../lib/payment-instruction';
 
 const CENTRAL_LINE_OA_ID = process.env.NEXT_PUBLIC_CENTRAL_LINE_OA_ID || 'central_booking_oa';
 
@@ -30,6 +30,16 @@ function getErrorMessage(error: unknown, fallback: string): string {
 
 function isValidThaiMobilePhone(value: string): boolean {
   return thaiMobilePhonePattern.test(value.replace(/[\s-]/g, ''));
+}
+
+function remainingSecondsFromExpiry(expiresAt: string | null): number {
+  return expiresAt ? Math.max(0, Math.round((new Date(expiresAt).getTime() - Date.now()) / 1000)) : 0;
+}
+
+function formatCountdown(totalSeconds: number): string {
+  const mins = Math.floor(totalSeconds / 60);
+  const secs = totalSeconds % 60;
+  return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
 }
 
 function BookingStatusScreen({
@@ -54,6 +64,8 @@ function BookingStatusScreen({
         return { Icon: User, title: t('states.noStaffTitle'), description: t('states.noStaffDescription') };
       case 'NO_SCHEDULE':
         return { Icon: CalendarOff, title: t('states.noScheduleTitle'), description: t('states.noScheduleDescription') };
+      case 'PAYMENT_NOT_CONFIGURED':
+        return { Icon: QrCode, title: t('states.paymentNotConfiguredTitle'), description: t('states.paymentNotConfiguredDescription') };
     }
   })();
   const { Icon, title, description } = content;
@@ -170,24 +182,23 @@ export default function BookingPage() {
     return () => clearInterval(timer);
   }, [step, bookingSuccess, holdResult]);
 
-  const remainingSecondsFromExpiry = (expiresAt: string | null) =>
-    expiresAt ? Math.max(0, Math.round((new Date(expiresAt).getTime() - Date.now()) / 1000)) : 0;
-
-  const formatCountdown = (totalSeconds: number) => {
-    const mins = Math.floor(totalSeconds / 60);
-    const secs = totalSeconds % 60;
-    return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
-  };
-
-  // Never invent a recipient or an amount (KMO-X3 / brief section 9). If the shop
-  // has no PromptPay configured, the deposit flow fails closed instead of showing
-  // a QR that pays an arbitrary hardcoded number.
+  // Never invent a recipient, an account name, or an amount (KMO-X3 / brief
+  // section 9 / Amendment B1 / Codex F1-F2). PromptPay identity comes only from
+  // the shop's own configured fields; the deposit amount for an awaiting
+  // instruction comes only from the server hold result.
   const promptpayNumber = shop?.promptpay_number?.trim() || null;
-  const promptpayName = promptpayNumber ? (shop?.promptpay_name?.trim() || shop?.name || t('fallbackShopName')) : null;
+  const promptpayName = shop?.promptpay_name?.trim() || null;
   const shopPhone = shop?.phone?.trim() || t('shopPhoneMissing');
   const shopPhoneHref = shop?.phone?.trim()
     ? `tel:${shop.phone.replace(/-/g, '')}`
     : undefined;
+  // Mirrors the server's own deposit-required rule without deriving a displayed
+  // amount: a service needs a deposit only when it carries an explicit positive
+  // amount. Shops relying on a shop-level default are not page-blocked here --
+  // the post-hold guard below catches those attempts.
+  const everyServiceNeedsDeposit =
+    services.length > 0
+    && services.every((s) => typeof s.deposit_amount === 'number' && s.deposit_amount > 0);
   const pageState = resolveBookingPageState({
     isLoading: isLoadingShop,
     loadError,
@@ -195,21 +206,26 @@ export default function BookingPage() {
     serviceCount: services.length,
     staffCount: staffList.length,
     scheduleCount: staffSchedules.length,
-  });
-  const { amount: depositAmount, showQr: canShowDepositQr } = resolveDepositDisplay({
-    holdDepositAmount: holdResult?.deposit_amount,
-    serviceDepositAmount: selectedService?.deposit_amount,
-    shopDefaultDepositAmount: shop?.default_deposit_amount,
+    requireDeposit: shop?.require_deposit === true,
     promptpayNumber,
+    promptpayName,
+    everyServiceNeedsDeposit,
   });
-  const promptpayPayload = useMemo(() => {
-    if (!canShowDepositQr || !promptpayNumber || depositAmount == null) return null;
+  // Post-hold payment instruction: shown only when number + configured account
+  // name + a positive server amount are all present.
+  const paymentInstruction = resolvePaymentInstruction({
+    promptpayNumber,
+    promptpayName,
+    holdDepositAmount: holdResult?.deposit_amount,
+  });
+  const promptpayPayload = ((): string | null => {
+    if (!paymentInstruction.ok) return null;
     try {
-      return createPromptPayPayload({ recipient: promptpayNumber, amount: depositAmount });
+      return createPromptPayPayload({ recipient: paymentInstruction.number, amount: paymentInstruction.amount });
     } catch {
       return null;
     }
-  }, [canShowDepositQr, promptpayNumber, depositAmount]);
+  })();
 
   const handleCopyPromptpay = () => {
     if (!promptpayNumber) return;
@@ -229,7 +245,7 @@ export default function BookingPage() {
     const qrData = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg.outerHTML)}`;
     const link = document.createElement('a');
     link.href = qrData;
-    link.download = `PromptPay-QR-Deposit-${depositAmount}THB.svg`;
+    link.download = `PromptPay-QR-Deposit-${paymentInstruction.amount ?? ''}THB.svg`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -335,10 +351,16 @@ export default function BookingPage() {
       if (res.status === 'confirmed' && res.deposit_status === 'not_required') {
         setBookingSuccess(true);
       } else if (res.status === 'hold' && res.deposit_status === 'awaiting') {
-        // Fail closed: a deposit is due but the shop has no verified PromptPay
-        // recipient. Do not show a QR paying an invented number (KMO-X3).
+        // Fail closed unless the full payment tuple is verified: a configured
+        // recipient number, a configured account-holder name, and a positive
+        // server-issued amount (Codex F1). Never advance to a QR step otherwise.
         // R7 also enforces this server-side (PAYMENT_NOT_CONFIGURED).
-        if (!promptpayNumber) {
+        const instruction = resolvePaymentInstruction({
+          promptpayNumber,
+          promptpayName,
+          holdDepositAmount: res.deposit_amount,
+        });
+        if (!instruction.ok) {
           setErrorMessage(t('errors.paymentNotConfigured'));
           return;
         }
@@ -484,9 +506,9 @@ export default function BookingPage() {
                 <p>{t('success.staff')} <span className="font-semibold text-white">{selectedStaff?.nickname || t('staff.random')}</span></p>
                 <p>{t('success.appointment')} <span className="font-semibold text-emerald-400">{t('success.appointmentValue', { date: selectedDate, time: selectedTime })}</span></p>
                 <p>{t('success.deposit')} <span className="font-semibold text-emerald-400 font-mono">
-                  {holdResult?.deposit_status === 'not_required'
+                  {holdResult?.deposit_status === 'not_required' || !paymentInstruction.ok
                     ? t('success.noDeposit')
-                    : t('success.slipSubmitted', { amount: holdResult?.deposit_amount ?? 0 })}
+                    : t('success.slipSubmitted', { amount: paymentInstruction.amount })}
                 </span></p>
                 <p className="text-slate-400 pt-1">{t('success.shopDirectPhone')} <a href={shopPhoneHref} className="font-mono font-bold text-amber-400 hover:underline">{shopPhone}</a></p>
               </div>
@@ -555,8 +577,8 @@ export default function BookingPage() {
                       <div className="flex items-center justify-between text-[11px] text-slate-400 border-t border-slate-800/80 pt-2.5">
                         <span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5 text-slate-500" /> {tc('durationMinutes', { minutes: sv.duration_minutes })}</span>
                         <span className="text-amber-400 font-medium">{
-                          (sv.deposit_amount ?? shop?.default_deposit_amount) != null
-                            ? t('step1.depositLabel', { amount: (sv.deposit_amount ?? shop?.default_deposit_amount) as number })
+                          preHoldServiceDeposit(sv.deposit_amount) !== null
+                            ? t('step1.depositLabel', { amount: preHoldServiceDeposit(sv.deposit_amount) as number })
                             : t('step1.depositSetByShop')
                         }</span>
                       </div>
@@ -709,7 +731,11 @@ export default function BookingPage() {
             )}
 
             {/* STEP 3: PROMPTPAY DEPOSIT & SLIP UPLOAD */}
-            {step === 3 && (
+            {step === 3 && !paymentInstruction.ok && (
+              <BookingStatusScreen state="PAYMENT_NOT_CONFIGURED" t={t} phone={shopPhone} phoneHref={shopPhoneHref} />
+            )}
+
+            {step === 3 && paymentInstruction.ok && (
               <form onSubmit={handleCompleteBooking} className="space-y-4">
                 <div>
                   <h2 className="text-lg font-bold text-white mb-1">{t('step3.title')}</h2>
@@ -765,11 +791,11 @@ export default function BookingPage() {
 
                   <div>
                     <p className="text-xs text-slate-400">{t('step3.depositAmountLabel')}</p>
-                    <p className="text-2xl font-extrabold text-emerald-400 font-mono my-0.5">{tc('currencyAmount', { amount: holdResult?.deposit_amount ?? depositAmount ?? 0 })}</p>
-                    <p className="text-[11px] text-slate-400">{t('step3.accountName')} <span className="text-white font-medium">{promptpayName}</span></p>
+                    <p className="text-2xl font-extrabold text-emerald-400 font-mono my-0.5">{tc('currencyAmount', { amount: paymentInstruction.amount })}</p>
+                    <p className="text-[11px] text-slate-400">{t('step3.accountName')} <span className="text-white font-medium">{paymentInstruction.name}</span></p>
                     
                     <div className="flex items-center justify-center gap-2 mt-1">
-                      <span className="text-xs text-slate-400">{t('step3.promptpayNumber')} <span className="font-mono text-white font-bold">{promptpayNumber}</span></span>
+                      <span className="text-xs text-slate-400">{t('step3.promptpayNumber')} <span className="font-mono text-white font-bold">{paymentInstruction.number}</span></span>
                       <button
                         type="button"
                         onPointerDown={() => setCopiedPromptpay(true)}

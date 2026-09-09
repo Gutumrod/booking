@@ -10,7 +10,9 @@ export interface Shop {
   promptpay_number: string;
   promptpay_name: string;
   require_deposit: boolean;
-  default_deposit_amount: number;
+  // default_deposit_amount is intentionally NOT read by the consumer: the client
+  // never derives a displayed deposit from a shop-level default (Codex F2). The
+  // authoritative amount for an awaiting instruction comes only from the hold RPC.
   // Public, non-sensitive booking eligibility flag from shop_public_profile.
   // Billing status and the reason for any block remain server-side.
   is_accepting_online_bookings?: boolean;
@@ -90,7 +92,7 @@ export async function getShopBySlug(slug: string): Promise<Shop | null> {
   // trial_ends_at, owner_name, etc.
   const { data, error } = await supabase
     .from('shop_public_profile')
-    .select('id, name, slug, phone, address, line_oa_id, promptpay_number, promptpay_name, require_deposit, default_deposit_amount, is_accepting_online_bookings')
+    .select('id, name, slug, phone, address, line_oa_id, promptpay_number, promptpay_name, require_deposit, is_accepting_online_bookings')
     .eq('slug', slug)
     .single();
 
