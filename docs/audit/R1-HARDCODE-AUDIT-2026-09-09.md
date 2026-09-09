@@ -54,6 +54,8 @@ list.
 | HC-05 | `initial_schema.sql:19` | `shops.require_deposit BOOLEAN DEFAULT true` | `PRODUCT_DEFAULT` | shop | P1 | schema — R7 |
 | HC-06 | `create_booking_hold` (all defs, e.g. `20260807052329_fix_service_deposit_override.sql:62`) | `v_deposit_required := COALESCE(v_shop.require_deposit, true)` | `PRODUCT_DEFAULT` | shop | P1 | RPC — R7 |
 | HC-07 | `book/[slug]/page.tsx:1446,1458` + `update_shop_settings` RPC (`20260807191046_...:74-80`) | PromptPay number **and** name `RAISE EXCEPTION ... required` — blocks all profile saves | `SYSTEM_INVARIANT` misplacement — payment gate on profile RPC | split (R3) | **P0** (= KMO-06) | RPC split — R7 |
+| HC-07b | `provision_owner_shop` RPC (`20260807161412_...:58-60`) | registration `RAISE EXCEPTION 'All shop and owner fields are required'` includes `p_promptpay_number` + `p_promptpay_name` — a shop **cannot be created** without PromptPay | `SYSTEM_INVARIANT` misplacement — second payment gate, on provisioning | split (R3) | **P0** (= KMO-06) | RPC — R7 |
+| HC-07c | `provision_owner_shop` RPC (`...:99,112`) | `line_oa_id` hardcoded to literal `'central_booking_oa'` on every new shop | `PRODUCT_DEFAULT` (matches LINE commercial override, but a literal) | platform | P2 | RPC — R7 |
 | HC-08 | `dashboard/page.tsx:535` | `if (serviceDeposit > servicePrice)` client-only guard | `SYSTEM_INVARIANT` (should also be server-side) | server | P1 | RPC — R7 |
 
 ### B. Duration, slot interval, business hours
