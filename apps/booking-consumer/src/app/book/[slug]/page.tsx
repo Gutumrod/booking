@@ -17,6 +17,7 @@ import { LanguageToggle } from '@/components/language-toggle';
 import { QRCodeSVG } from 'qrcode.react';
 import { createPromptPayPayload } from '../../../lib/promptpay';
 import { resolveBookingPageState, type BookingPageState } from '../../../lib/booking-state';
+import { resolveDepositDisplay } from '../../../lib/deposit-display';
 
 const CENTRAL_LINE_OA_ID = process.env.NEXT_PUBLIC_CENTRAL_LINE_OA_ID || 'central_booking_oa';
 
@@ -178,8 +179,11 @@ export default function BookingPage() {
     return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
   };
 
-  const promptpayNumber = shop?.promptpay_number || '0812345678';
-  const promptpayName = shop?.promptpay_name || shop?.name || t('fallbackShopName');
+  // Never invent a recipient or an amount (KMO-X3 / brief section 9). If the shop
+  // has no PromptPay configured, the deposit flow fails closed instead of showing
+  // a QR that pays an arbitrary hardcoded number.
+  const promptpayNumber = shop?.promptpay_number?.trim() || null;
+  const promptpayName = promptpayNumber ? (shop?.promptpay_name?.trim() || shop?.name || t('fallbackShopName')) : null;
   const shopPhone = shop?.phone?.trim() || t('shopPhoneMissing');
   const shopPhoneHref = shop?.phone?.trim()
     ? `tel:${shop.phone.replace(/-/g, '')}`
@@ -192,16 +196,23 @@ export default function BookingPage() {
     staffCount: staffList.length,
     scheduleCount: staffSchedules.length,
   });
-  const depositAmount = selectedService?.deposit_amount ?? shop?.default_deposit_amount ?? 100;
+  const { amount: depositAmount, showQr: canShowDepositQr } = resolveDepositDisplay({
+    holdDepositAmount: holdResult?.deposit_amount,
+    serviceDepositAmount: selectedService?.deposit_amount,
+    shopDefaultDepositAmount: shop?.default_deposit_amount,
+    promptpayNumber,
+  });
   const promptpayPayload = useMemo(() => {
+    if (!canShowDepositQr || !promptpayNumber || depositAmount == null) return null;
     try {
       return createPromptPayPayload({ recipient: promptpayNumber, amount: depositAmount });
     } catch {
       return null;
     }
-  }, [promptpayNumber, depositAmount]);
+  }, [canShowDepositQr, promptpayNumber, depositAmount]);
 
   const handleCopyPromptpay = () => {
+    if (!promptpayNumber) return;
     setCopiedPromptpay(true);
     if (navigator.clipboard?.writeText) {
       void navigator.clipboard
@@ -324,6 +335,13 @@ export default function BookingPage() {
       if (res.status === 'confirmed' && res.deposit_status === 'not_required') {
         setBookingSuccess(true);
       } else if (res.status === 'hold' && res.deposit_status === 'awaiting') {
+        // Fail closed: a deposit is due but the shop has no verified PromptPay
+        // recipient. Do not show a QR paying an invented number (KMO-X3).
+        // R7 also enforces this server-side (PAYMENT_NOT_CONFIGURED).
+        if (!promptpayNumber) {
+          setErrorMessage(t('errors.paymentNotConfigured'));
+          return;
+        }
         // Seed the countdown from the server deadline; the timer effect keeps it
         // in sync from res.expires_at afterwards.
         setTimeLeft(remainingSecondsFromExpiry(res.expires_at));
@@ -536,7 +554,11 @@ export default function BookingPage() {
                       <p className="text-xs text-slate-400 mb-3 leading-relaxed">{sv.description}</p>
                       <div className="flex items-center justify-between text-[11px] text-slate-400 border-t border-slate-800/80 pt-2.5">
                         <span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5 text-slate-500" /> {tc('durationMinutes', { minutes: sv.duration_minutes })}</span>
-                        <span className="text-amber-400 font-medium">{t('step1.depositLabel', { amount: sv.deposit_amount ?? shop?.default_deposit_amount ?? 100 })}</span>
+                        <span className="text-amber-400 font-medium">{
+                          (sv.deposit_amount ?? shop?.default_deposit_amount) != null
+                            ? t('step1.depositLabel', { amount: (sv.deposit_amount ?? shop?.default_deposit_amount) as number })
+                            : t('step1.depositSetByShop')
+                        }</span>
                       </div>
                     </div>
                   ))}
@@ -743,7 +765,7 @@ export default function BookingPage() {
 
                   <div>
                     <p className="text-xs text-slate-400">{t('step3.depositAmountLabel')}</p>
-                    <p className="text-2xl font-extrabold text-emerald-400 font-mono my-0.5">{tc('currencyAmount', { amount: selectedService?.deposit_amount ?? shop?.default_deposit_amount ?? 100 })}</p>
+                    <p className="text-2xl font-extrabold text-emerald-400 font-mono my-0.5">{tc('currencyAmount', { amount: holdResult?.deposit_amount ?? depositAmount ?? 0 })}</p>
                     <p className="text-[11px] text-slate-400">{t('step3.accountName')} <span className="text-white font-medium">{promptpayName}</span></p>
                     
                     <div className="flex items-center justify-center gap-2 mt-1">

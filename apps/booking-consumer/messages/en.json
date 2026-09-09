@@ -66,6 +66,7 @@
       "title": "1. Select a service",
       "description": "Choose a service to see duration and deposit details.",
       "depositLabel": "Deposit ฿{amount}",
+      "depositSetByShop": "Deposit set by the shop",
       "next": "Next: Staff & time"
     },
     "step2": {
@@ -129,7 +130,8 @@
       "slipUnsupportedType": "Only JPG, PNG, or WebP files are supported.",
       "slipTooLarge": "The slip file must be 5 MB or smaller.",
       "slipUrlFailed": "Could not create the slip URL.",
-      "shopBlockedService": "This shop is not accepting online bookings right now."
+      "shopBlockedService": "This shop is not accepting online bookings right now.",
+      "paymentNotConfigured": "This shop requires a deposit but hasn't finished its payment setup yet. Please contact the shop to book."
     }
   },
   "manageBooking": {
