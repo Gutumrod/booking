@@ -61,8 +61,10 @@ export default function BookingPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const qrContainerRef = useRef<HTMLDivElement>(null);
 
-  // 15-Minute Countdown Timer (900 seconds)
-  const [timeLeft, setTimeLeft] = useState<number>(900);
+  // Deposit hold countdown. Derived from the server-issued expires_at on the
+  // hold response -- never a client-side duration literal, so it stays correct
+  // if the hold window becomes merchant-configurable later.
+  const [timeLeft, setTimeLeft] = useState<number>(0);
 
   // Fetch shop, services, staff from Supabase
   useEffect(() => {
@@ -106,14 +108,17 @@ export default function BookingPage() {
   }, [slipPreview]);
 
   useEffect(() => {
-    let timer: NodeJS.Timeout;
-    if (step === 3 && !bookingSuccess && timeLeft > 0) {
-      timer = setInterval(() => {
-        setTimeLeft(prev => (prev > 0 ? prev - 1 : 0));
-      }, 1000);
+    if (step !== 3 || bookingSuccess) return;
+    const expiresAtMs = holdResult?.expires_at ? new Date(holdResult.expires_at).getTime() : null;
+    if (expiresAtMs === null || Number.isNaN(expiresAtMs)) {
+      setTimeLeft(0);
+      return;
     }
+    const tick = () => setTimeLeft(Math.max(0, Math.round((expiresAtMs - Date.now()) / 1000)));
+    tick();
+    const timer = setInterval(tick, 1000);
     return () => clearInterval(timer);
-  }, [step, bookingSuccess, timeLeft]);
+  }, [step, bookingSuccess, holdResult]);
 
   const formatCountdown = (totalSeconds: number) => {
     const mins = Math.floor(totalSeconds / 60);
@@ -260,7 +265,7 @@ export default function BookingPage() {
       if (res.status === 'confirmed' && res.deposit_status === 'not_required') {
         setBookingSuccess(true);
       } else if (res.status === 'hold' && res.deposit_status === 'awaiting') {
-        setTimeLeft(900); // 15 mins
+        // countdown is derived from res.expires_at by the timer effect
         setStep(3);
       } else {
         throw new Error(t('errors.invalidBookingStatus'));
