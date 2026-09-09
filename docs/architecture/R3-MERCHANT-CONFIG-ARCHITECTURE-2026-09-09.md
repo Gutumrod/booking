@@ -18,6 +18,59 @@ Nothing here is applied. Migrations land in R7.
 
 ---
 
+## AMENDMENT 1 — 2026-09-09 R0–R6 Review Gate (CEO)
+
+Overrides the body below on conflict. Frozen pre-amendment: `520bb08`. Log:
+`docs/audit/R0-R6-AMENDMENT-LOG-2026-09-09.md`.
+
+**B1 — Deposit defaults (new shops opt IN to deposit).**
+- `shops.require_deposit` default becomes **`false`** for newly created shops (R7 migration
+  alters the column default). Existing rows keep their current value — **no rewrite**.
+- `shops.default_deposit_amount` default becomes **`NULL`** = "not set". `NULL` is not `0`
+  and never resolves to a number. `0` on a service still means "explicit no deposit for this
+  service" (unchanged, `fix_service_deposit_override`).
+- Every layer must be checked and made consistent in R7 / R4:
+  1. DB column default (`ALTER TABLE ... ALTER COLUMN require_deposit SET DEFAULT false`,
+     `... default_deposit_amount DROP DEFAULT`).
+  2. `provision_owner_shop` — already drops PromptPay from required (HC-07b); also must not
+     force a deposit amount.
+  3. registration / onboarding UI — no deposit step required to finish signup.
+  4. `seed_demo_shop` and every test fixture — align to `require_deposit=false`,
+     `default_deposit_amount=NULL` unless a test specifically exercises the deposit path.
+  5. client fallback — consumer stops using `?? 100` (R4-7); admin service form stops
+     seeding `100` / auto-30% (R4-1).
+- **Fail-closed rule:** if `require_deposit = true` (a shop that opted in) **and**
+  (`default_deposit_amount IS NULL` and the selected service has no `deposit_amount`)
+  **or** no valid PromptPay recipient → `create_booking_hold` raises
+  `PAYMENT_NOT_CONFIGURED`; the consumer shows the readiness/negative "payment not
+  configured" state; the admin readiness panel shows `payment` = attention. Never a
+  fallback recipient, never a fallback amount.
+
+**A1 — Slot interval** (see R2 AMENDMENT 1 A1): `slot_interval_minutes int NOT NULL
+DEFAULT 30 CHECK (BETWEEN 1 AND 1440)` — not an enum. Slot interval and service duration are
+separate concepts; the 15-minute duration-multiple rule is removed in R7.
+
+**A3 — DATE_RANGE deferred** (see R5 AMENDMENT 1): D4 "Services" domain in V1 stores a
+single `TIME_SLOT` duration in minutes. No `scheduling_mode`, no `duration_unit`, no
+`skip_closed_days`, no date-range capacity columns this round.
+
+**A4 — Bookable Resource** (see R2 AMENDMENT 1 A4): D5 is "Bookable Resource", V1 = Staff.
+No `resource_kind` column. Config domains D2/D3 stay resource-agnostic.
+
+**Default-status confirmation (CEO ask B):** every value below is an *overridable product
+default* held on a `shops` / `services` column with an owner/admin RPC setter — none is a
+business truth a merchant cannot change:
+`weekly_closure_mode`, `slot_interval_minutes`, `booking_lead_time_minutes`,
+`booking_horizon_days`, `reminder_offsets_minutes`, `reminder_enabled`,
+`services.duration` (minutes), `require_deposit`, `default_deposit_amount`,
+`customer_cancel_before_hours`, `customer_reschedule_before_hours`.
+The **invariants** (in code, not merchant-settable): tenant isolation, auth boundaries,
+server-side collision prevention, idempotency, atomic state, payment recipient must be real,
+audit for sensitive mutations, bounded public exposure, fail-closed on missing
+security/payment authority, lifecycle transition integrity.
+
+---
+
 ## 1. Current state (evidence)
 
 One RPC, `update_shop_settings(p_shop_id, p_name, p_phone, p_address, p_promptpay_number,
@@ -177,10 +230,14 @@ ALTER TABLE local_service.shops
   ADD COLUMN weekly_closure_mode       text    NOT NULL DEFAULT 'STAFF_WEEKLY'
        CHECK (weekly_closure_mode IN ('SHOP_WEEKLY','STAFF_WEEKLY')),
   ADD COLUMN slot_interval_minutes     int     NOT NULL DEFAULT 30
-       CHECK (slot_interval_minutes IN (5,10,15,20,30,60)),
+       CHECK (slot_interval_minutes BETWEEN 1 AND 1440),   -- AMENDMENT 1 A1: not an enum
   ADD COLUMN booking_lead_time_minutes int     NOT NULL DEFAULT 0  CHECK (booking_lead_time_minutes >= 0),
   ADD COLUMN booking_horizon_days      int     NOT NULL DEFAULT 60 CHECK (booking_horizon_days BETWEEN 1 AND 365);
+ALTER TABLE local_service.shops ALTER COLUMN require_deposit SET DEFAULT false;    -- AMENDMENT 1 B1
+ALTER TABLE local_service.shops ALTER COLUMN default_deposit_amount DROP DEFAULT;  -- -> NULL
 -- customer_cancel_before_hours / customer_reschedule_before_hours already exist (bk_a_v1)
+-- D4 Services: NO new columns this round (AMENDMENT 1 A3). services.duration_minutes stays
+--   a single integer; R7 removes the "multiple of 15" rule from create_service/update_service.
 
 -- D3: from R2
 CREATE TABLE local_service.shop_weekly_closures (...);          -- R2 §6

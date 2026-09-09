@@ -23,6 +23,54 @@ Brief §8 constraints, verbatim intent:
 
 ---
 
+## AMENDMENT 1 — 2026-09-09 R0–R6 Review Gate (CEO)
+
+Overrides the body below on conflict. Frozen pre-amendment: `520bb08`. Log:
+`docs/audit/R0-R6-AMENDMENT-LOG-2026-09-09.md`.
+
+**A3 — DATE_RANGE is fully DEFERRED. V1 implements `TIME_SLOT` only.**
+
+Reason: BK01 Order already owns day-based production semantics —
+`production_weekly_schedule`, `production_day_overrides`, day-level capacity, single
+target-day allocation (`docs/order/01_ORDER_V1_CONTRACT.md:60,71,84,119`). Building a
+parallel `DATE_RANGE` calendar inside Booking before the Booking ↔ Order ownership boundary
+is decided risks two half-overlapping production calendars — exactly what brief §14 forbids.
+
+**This round MUST NOT create:**
+- `services.scheduling_mode`
+- `services.duration_unit` (and no `duration_unit = 'day'`)
+- `services.skip_closed_days`, `services.max_concurrent_date_range_jobs`
+- `bookings.booking_start_date` / `bookings.booking_end_date`
+- any date-range capacity / overlap logic
+- an `is_service_bookable` sibling primitive
+
+**DATE_RANGE status:** `DEFERRED — pending Booking ↔ Order ownership decision.` The
+day-by-day calendar walk worked through in §4 below (skip closed days, derived end date,
+production-day vs calendar-day count, inclusive overlap, capacity per resource) is
+**retained as the design of record for whenever it is built** — it is correct and not
+`days × 1440` — but it is not scheduled and not part of V1 schema.
+
+**V1 `TIME_SLOT` scope (what R5 actually delivers):**
+- `services.duration_minutes` stays a single integer, minutes.
+- Admin duration input: remove `min={15} step={15}` → free positive integer minutes
+  (client change, R4). The server-side "multiple of 15" rule in `create_service` /
+  `update_service` is removed in R7.
+- Optional: a pure-UI minute↔hour *display* toggle (`90 min` ⇄ `1 ชม 30 น`) — presentation
+  math only, **no schema column**, no `duration_unit`.
+- `shops.slot_interval_minutes int NOT NULL DEFAULT 30 CHECK (BETWEEN 1 AND 1440)` — the one
+  new column from this phase; consumer grid generated from it (R2 A1). Slot interval and
+  service duration are separate concepts.
+- `create_booking_hold` (R7): validate `p_start_time` aligns to `slot_interval_minutes`;
+  no duration-multiple rule.
+
+**A4 — Bookable Resource** (see R2 AMENDMENT 1 A4): `requires_provider` is retained as a
+boolean but documented as "requires a Bookable Resource; Staff-only in V1". No
+`resource_kind` column.
+
+Read §2–§6 below as the **deferred DATE_RANGE design record**, not V1 work.
+
+---
+
 ## 1. Current state (evidence)
 
 - `services.duration_minutes INTEGER NOT NULL DEFAULT 30`
@@ -74,12 +122,13 @@ ALTER TABLE local_service.services
 
 ## 3. Slot interval — configurable, not 15/30
 
-From R2 §6 / R3 D2:
+From R2 §6 / R3 D2. **AMENDMENT 1 A1:** `CHECK` is `BETWEEN 1 AND 1440`, not an enum;
+slot interval ≠ service duration; the "duration multiple of 15" rule is removed in R7.
 
 ```sql
 ALTER TABLE local_service.shops
   ADD COLUMN slot_interval_minutes int NOT NULL DEFAULT 30
-    CHECK (slot_interval_minutes IN (5,10,15,20,30,60));
+    CHECK (slot_interval_minutes BETWEEN 1 AND 1440);
 ```
 
 - The **30** default is now an explicit configurable product default (brief §8 requirement

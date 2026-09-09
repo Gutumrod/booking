@@ -19,6 +19,50 @@ Nothing here is applied to WSTERA LAB. Implementation is R7, after Junction A PA
 
 ---
 
+## AMENDMENT 1 — 2026-09-09 R0–R6 Review Gate (CEO)
+
+This block overrides the body below wherever they conflict. Frozen pre-amendment version:
+`docs/bk01-real-shop-hardening` @ `520bb08`. Rationale + cross-doc log:
+`docs/audit/R0-R6-AMENDMENT-LOG-2026-09-09.md`.
+
+**A1 — Slot interval is not an enum, and is a separate concept from service duration.**
+- `slot_interval_minutes int NOT NULL DEFAULT 30 CHECK (slot_interval_minutes BETWEEN 1 AND 1440)`.
+  The earlier `CHECK (... IN (5,10,15,20,30,60))` is **withdrawn** — it was an invented
+  constraint with no system basis (a shop may legitimately use 25 / 45 / 90).
+- **Slot interval ≠ service duration.** Slot interval only governs the *offered start-time
+  grid* (open time + k·interval). Service duration is an independent per-service value.
+  A service duration need not be a multiple of the slot interval; the only hard rule is
+  layer 5/6 (fits before close / outside break / no collision).
+- The server-side rule "duration must be a positive multiple of 15 minutes" in
+  `create_service` / `update_service` (`20260807175455_...:89,155`) is **removed** in R7.
+  Duration becomes a free positive integer (minutes) for the V1 `TIME_SLOT` mode.
+- `slot_generation_strategy` (fixed-grid vs back-to-back/dynamic start times) is a
+  **future capability**, not built this round. V1 = fixed grid only.
+
+**A4 — "Bookable Resource" framing.**
+- The unit reserved by a booking is a **Bookable Resource**. **V1 implementation = Staff**
+  (the existing `staff` table / `bookings.staff_id`). Future resources may be
+  Staff / Room / Table / Bay / Vehicle / Equipment.
+- **No `resource_kind` column is added this round.** The V1 resolver maps a Bookable
+  Resource directly to `staff_id`.
+- The shared primitive keeps the generic name `is_slot_bookable` (no `is_service_bookable`
+  sibling — see A3). Its resource parameter is `staff_id` in V1; the contract logic in
+  layers 4–6 is written as "the assigned Bookable Resource", not "staff", so a future
+  `booking_resources` table generalises it without touching this precedence contract.
+- Shop-level layers 1–3 and all shop calendar/config (`weekly_closure_mode`,
+  `shop_weekly_closures`, booking config) MUST NOT bake in a staff-only assumption — they
+  are already resource-agnostic; keep them so.
+
+**A3 — DATE_RANGE is fully deferred** (see R5 AMENDMENT 1). This contract covers `TIME_SLOT`
+only. Remove any reference below to a `DATE_RANGE` branch or an `is_service_bookable`
+sibling primitive — there is one primitive, `is_slot_bookable`, `TIME_SLOT` semantics.
+
+Read the body below with A1/A3/A4 applied. Wherever it says "staff" in layers 4–6, read
+"the assigned Bookable Resource (Staff in V1)". Wherever it constrains `slot_interval_minutes`
+to an enum, read `BETWEEN 1 AND 1440`.
+
+---
+
 ## 1. Model overview
 
 Availability is decided by six layers, evaluated top-down. The first layer that says "no"
@@ -189,10 +233,11 @@ Not decided in R2. Whatever R3 picks, layers 2 and 4 semantics above are fixed.
 
 ### Slot interval (from R1 HC-12)
 
-`shops.slot_interval_minutes int NOT NULL DEFAULT 30 CHECK (slot_interval_minutes IN (5,10,15,20,30,60))`
-— merchant-configurable; consumer grid is generated from it; `create_booking_hold` MUST
-validate `p_start_time` aligns to it (currently unenforced). Exact allowed set finalised in
-R5 alongside the TIME_SLOT / DATE_RANGE model.
+`shops.slot_interval_minutes int NOT NULL DEFAULT 30 CHECK (slot_interval_minutes BETWEEN 1 AND 1440)`
+(AMENDMENT 1 A1 — the enum was withdrawn) — merchant-configurable; consumer grid is
+generated from it; `create_booking_hold` MUST validate `p_start_time` aligns to it (currently
+unenforced). Slot interval is a **separate concept** from service duration; duration need
+not be a multiple of it.
 
 ---
 

@@ -26,6 +26,45 @@ Items are ordered by isolation (safest first).
 
 ---
 
+## AMENDMENT 1 — 2026-09-09 R0–R6 Review Gate (CEO)
+
+Frozen pre-amendment: `520bb08`. Log: `docs/audit/R0-R6-AMENDMENT-LOG-2026-09-09.md`.
+
+**New item R4-9 — free-minute service duration input (from KMO-07 / R5 AMENDMENT 1).**
+- File: `apps/booking-admin/src/app/dashboard/page.tsx:1296-1306`.
+- Change `min={15} step={15}` → `min={1} step={1}` (or `step={5}` for convenience; not a
+  hard rule). Duration becomes any positive integer of minutes.
+- The server-side "multiple of 15" rejection in `create_service`/`update_service` is R7
+  (blocked by Junction A) — until then the RPC still rejects non-multiples-of-15, so R4-9's
+  client change is cosmetically ahead of the server. **Sequencing:** land R4-9's client
+  freedom together with the R7 RPC change, OR land R4-9 now but keep a client-side
+  "multiple of 5" hint until R7 removes the server rule. Recommend the latter — the client
+  should not offer values the current RPC will reject.
+- Optional pure-UI minute↔hour display toggle (`90` ⇄ `1 ชม 30 น`) — presentation only.
+- Test: fold into `useNumericField` (R4-2) — `{ min: 1, integer: true }`.
+
+**R4-7 deposit logic uses B1 rules:**
+- Consumer removes `?? 100` and `'0812345678'` (unchanged intent).
+- Deposit figure shown = the hold RPC response value only; step-1 preview shows
+  `selectedService.deposit_amount` when set, else "ร้านกำหนดมัดจำ" placeholder — never `100`,
+  never `default_deposit_amount` client-side.
+- `PAYMENT_NOT_CONFIGURED` state (R4-6) triggers when: a deposit-required service is selected
+  **and** (`promptpay_number` is null/blank **or** no resolvable amount). With B1 defaults
+  (`require_deposit=false`, `default_deposit_amount=NULL`) most fresh shops simply have no
+  deposit step — the not-configured screen only appears for a shop that opted into deposit
+  but hasn't finished payment setup.
+
+**R4-5 readiness `payment` capability:** GREEN when `require_deposit = false` (N/A) OR
+(`require_deposit = true` AND valid PromptPay number+name AND a resolvable amount). Attention
+otherwise.
+
+**No change to R4-1..R4-4, R4-6, R4-8** beyond the above.
+
+R4 total after amendment: **9 items**, all Junction-A-clear (source only), browser/mobile
+proof owed.
+
+---
+
 ## R4-1 — Remove auto-30% deposit overwrite (KMO-X4 / HC-01)
 
 **File:** `apps/booking-admin/src/app/dashboard/page.tsx:1315-1319`

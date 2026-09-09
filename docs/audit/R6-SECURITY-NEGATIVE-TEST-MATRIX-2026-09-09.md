@@ -19,6 +19,52 @@ Brief §13 proof requirements, mapped to a test ID scheme `SEC-<area>-<n>`.
 
 ---
 
+## AMENDMENT 1 — 2026-09-09 R0–R6 Review Gate (CEO)
+
+Test-matrix expectation updates. Frozen pre-amendment: `520bb08`. Log:
+`docs/audit/R0-R6-AMENDMENT-LOG-2026-09-09.md`.
+
+**A1 — slot interval expectations:**
+- `SEC-BC-2` change: `slot_interval_minutes = 7` is now **VALID** (`BETWEEN 1 AND 1440`).
+  Replace with: `= 0` → reject; `= 1441` → reject; `= 45` / `= 90` → **accept**.
+- New `SEC-BC-6`: a service with `duration_minutes = 50` on a shop with
+  `slot_interval_minutes = 15` → booking succeeds (duration is NOT required to be a
+  multiple of the slot interval or of 15). `create_service` accepts `duration_minutes = 50`,
+  `= 37`, `= 90` — no "multiple of 15" rejection after R7.
+- `SEC-AV-6` retained: `p_start_time` not aligned to `slot_interval_minutes` → reject.
+
+**A3 — DATE_RANGE tests removed** (feature deferred):
+- Delete `SEC-AV-8`, `SEC-AV-9` (date-range spanning closed days / capacity).
+- Delete `SEC-PUB-5` (date-range capacity projection).
+- Delete `SEC-RB-3` clause about `SHOP_WEEKLY` — keep the mode-rollback test but drop any
+  `DATE_RANGE` reference; delete `SEC-RB-4` (DATE_RANGE orphan bookings).
+- Delete `SEC-DEP` / `SEC-BC` rows that assume a `scheduling_mode` column.
+- The availability primitive cross-check (`SEC-AV-1`) covers `TIME_SLOT` tuples only.
+
+**A4 — Bookable Resource:** primitive tests reference `is_slot_bookable` with a `staff_id`
+resource parameter (V1). New `SEC-AV-10`: the primitive signature and the shop
+calendar/config tables contain no column or check that names "staff" as the only bookable
+kind (grep-level assertion in the R7 migration review) — the door to Room/Table/Bay/etc.
+stays open.
+
+**B1 — deposit-default tests** (expand `SEC-PP` / `SEC-DEP`):
+- `SEC-PP-11`: fresh shop from `provision_owner_shop` → `require_deposit = false`,
+  `default_deposit_amount IS NULL`; a booking with no service deposit confirms with no
+  payment step.
+- `SEC-DEP-5`: shop with `require_deposit = true` and `default_deposit_amount IS NULL` and
+  service `deposit_amount IS NULL` → `create_booking_hold` raises `PAYMENT_NOT_CONFIGURED`
+  (never resolves to `0`, never to `100`).
+- `SEC-DEP-6`: `default_deposit_amount IS NULL` is distinct from `= 0` — a `NULL` never
+  produces a deposit line; an explicit `0` on a service produces an explicit no-deposit
+  confirm.
+- `SEC-FIX-1` (new area, fixtures): `seed_demo_shop` and all `tests/` fixtures assert
+  `require_deposit = false` / `default_deposit_amount IS NULL` unless the test's own name
+  says it exercises the deposit path.
+
+Everything else in the matrix stands.
+
+---
+
 ## 1. Existing authorization model (baseline — evidence)
 
 | Primitive | Definition | Used by |
@@ -91,8 +137,9 @@ boundary, not the UI. Format: caller → action → expected.
 | SEC-AV-5 | concurrent `create_booking_hold` + `customer_reschedule_booking` targeting the same slot | at most one wins; no overlap persists |
 | SEC-AV-6 | `p_start_time` not aligned to `slot_interval_minutes` | reject (SEC-GAP-5) |
 | SEC-AV-7 | `p_booking_date` beyond `booking_horizon_days` / inside `booking_lead_time_minutes` | reject |
-| SEC-AV-8 | `DATE_RANGE` job spanning a shop closed day, `skip_closed_days = false` | reject |
-| SEC-AV-9 | `DATE_RANGE` job, concurrent confirmations exceeding `max_concurrent_date_range_jobs` | capacity never exceeded |
+| ~~SEC-AV-8~~ | DELETED (AMENDMENT 1 A3 — DATE_RANGE deferred) |
+| ~~SEC-AV-9~~ | DELETED (AMENDMENT 1 A3 — DATE_RANGE deferred) |
+| SEC-AV-10 | grep the R7 migration + `is_slot_bookable` signature | no column or CHECK names "staff" as the only bookable kind (AMENDMENT 1 A4) |
 
 ### 3.3 Profile / Payment split (R3 §3)
 
@@ -123,8 +170,9 @@ boundary, not the UI. Format: caller → action → expected.
 | ID | Caller | Action | Expected |
 |---|---|---|---|
 | SEC-BC-1 | `staff` | set `slot_interval_minutes` / `booking_enabled` / windows | deny |
-| SEC-BC-2 | owner | `slot_interval_minutes = 7` | reject (CHECK set) |
+| SEC-BC-2 | owner | `slot_interval_minutes = 45` / `90` | **accept** (AMENDMENT 1 A1 — `BETWEEN 1 AND 1440`); `= 0` / `= 1441` → reject |
 | SEC-BC-3 | owner | `booking_horizon_days = 0` or `400` | reject (CHECK 1..365) |
+| SEC-BC-6 | owner | `create_service` with `duration_minutes = 50` / `37` / `90` | **accept** — duration need not be a multiple of the slot interval or of 15 (AMENDMENT 1 A1); no "multiple of 15" rejection after R7 |
 | SEC-BC-4 | consumer | `booking_enabled = false` | consumer shows "online booking disabled"; `create_booking_hold` rejects |
 | SEC-BC-5 | `customer_reschedule_booking` with `customer_reschedule_before_hours` NULL | current behaviour is a hard error "policy not configured" — after R3/R4 it must be **set to a real value via UI** or the feature is explicitly off, not silently dead (HC-37) |
 
@@ -146,7 +194,7 @@ boundary, not the UI. Format: caller → action → expected.
 | SEC-PUB-2 | new readiness projection (if added) | exposes only capability booleans, never raw settings values |
 | SEC-PUB-3 | `get_bookable_slots` projection | returns slot times + availability only; no staff PII, no other customers' bookings, no internal reasons that leak schedule detail beyond "unavailable" |
 | SEC-PUB-4 | browser bundle / network | no `service_role` key, no Channel Access Token, no Channel Secret (existing test `line-config.test.ts` — extend to new endpoints) |
-| SEC-PUB-5 | `DATE_RANGE` capacity projection | never reveals other jobs' identities, only "N days available / not available" |
+| ~~SEC-PUB-5~~ | DELETED (AMENDMENT 1 A3 — DATE_RANGE deferred) |
 
 ### 3.8 Idempotency & audit (brief §13)
 
@@ -165,7 +213,7 @@ boundary, not the UI. Format: caller → action → expected.
 | SEC-RB-1 | every R7 forward migration ships with a tested `*_rollback` counterpart (pattern: `bk01_platform_bootstrap` + `bk01_platform_bootstrap_rollback`) |
 | SEC-RB-2 | rollback of `shop_weekly_closures` / new `shops` columns restores pre-migration BK01, PS01, MT01 and shared-surface signatures (Junction A discipline) |
 | SEC-RB-3 | a shop that configured `SHOP_WEEKLY` before a rollback degrades safely to `STAFF_WEEKLY` behaviour, no availability corruption |
-| SEC-RB-4 | `DATE_RANGE` services created before a rollback do not orphan bookings |
+| ~~SEC-RB-4~~ | DELETED (AMENDMENT 1 A3 — DATE_RANGE deferred) |
 
 ---
 

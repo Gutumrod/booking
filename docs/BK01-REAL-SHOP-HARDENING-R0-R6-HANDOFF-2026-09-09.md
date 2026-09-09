@@ -8,6 +8,90 @@
 live integration. Junction A remains `FAIL / ROLLED BACK`.
 **Baseline:** `npm test` 27/27 pass; working tree changes are docs only.
 
+---
+
+## AMENDMENT 1 — 2026-09-09 R0–R6 Review Gate (CEO): PASS WITH AMENDMENT
+
+Frozen audit baseline: `docs/bk01-real-shop-hardening` @ `520bb08` (pushed, **do not merge**,
+do not modify). Amendments live on `docs/bk01-real-shop-hardening-r2`. Full rationale:
+`docs/audit/R0-R6-AMENDMENT-LOG-2026-09-09.md`.
+
+Four contract changes; §4 (schema delta), §7 (browser evidence), §8 (blocked) and §9 (ready)
+below are superseded by this block where they conflict:
+
+**A1 Slot interval** — `slot_interval_minutes int NOT NULL DEFAULT 30 CHECK (BETWEEN 1 AND 1440)`
+(not an enum). Slot interval ≠ service duration. Remove the "duration multiple of 15" rule
+from `create_service`/`update_service` in R7. `slot_generation_strategy` = future capability.
+
+**A3 DATE_RANGE — fully DEFERRED.** V1 = `TIME_SLOT` only. This round does **not** create
+`services.scheduling_mode`, `duration_unit`, `skip_closed_days`,
+`max_concurrent_date_range_jobs`, `bookings.booking_start_date/end_date`, or any date-range
+capacity logic. Reason: Order already owns production-calendar semantics
+(`production_weekly_schedule` / `production_day_overrides` / capacity) — the Booking ↔ Order
+boundary must be decided first (brief §14). The day-walk design in R5 §4 is retained as the
+design of record for when it is built.
+
+**A4 Bookable Resource** — the reserved unit is a "Bookable Resource"; **V1 = Staff**. No
+`resource_kind` column. Shared primitive keeps the generic name `is_slot_bookable` (staff_id
+parameter in V1); its layers 4–6 are written as "the assigned Bookable Resource". Shop
+calendar/config stays resource-agnostic. V1 resolver maps resource → `staff_id`.
+
+**B1 Deposit defaults** — new shops: `require_deposit` default `false`, `default_deposit_amount`
+default `NULL` (≠ 0, = "not set"). Existing rows not rewritten. Consistency required across
+DB default, `provision_owner_shop`, onboarding UI, `seed_demo_shop` + test fixtures, and
+client fallbacks. If `require_deposit = true` but amount unset or PromptPay recipient
+missing → `create_booking_hold` `PAYMENT_NOT_CONFIGURED` + readiness error; never a fallback.
+
+**Revised schema delta (replaces §4):**
+```sql
+-- R7, product-local, behaviour-preserving for existing rows
+
+ALTER TABLE local_service.shops
+  ADD COLUMN booking_enabled            boolean NOT NULL DEFAULT true,
+  ADD COLUMN weekly_closure_mode        text    NOT NULL DEFAULT 'STAFF_WEEKLY'
+       CHECK (weekly_closure_mode IN ('SHOP_WEEKLY','STAFF_WEEKLY')),
+  ADD COLUMN slot_interval_minutes      int     NOT NULL DEFAULT 30
+       CHECK (slot_interval_minutes BETWEEN 1 AND 1440),
+  ADD COLUMN booking_lead_time_minutes  int     NOT NULL DEFAULT 0   CHECK (booking_lead_time_minutes >= 0),
+  ADD COLUMN booking_horizon_days       int     NOT NULL DEFAULT 60  CHECK (booking_horizon_days BETWEEN 1 AND 365),
+  ADD COLUMN reminder_offsets_minutes   int[]   NOT NULL DEFAULT '{1440,60}',
+  ADD COLUMN reminder_enabled           boolean NOT NULL DEFAULT true;
+ALTER TABLE local_service.shops ALTER COLUMN require_deposit SET DEFAULT false;      -- new shops
+ALTER TABLE local_service.shops ALTER COLUMN default_deposit_amount DROP DEFAULT;    -- -> NULL
+-- customer_cancel_before_hours / customer_reschedule_before_hours already exist (bk_a_v1)
+
+CREATE TABLE local_service.shop_weekly_closures (
+  shop_id     uuid NOT NULL REFERENCES local_service.shops(id) ON DELETE CASCADE,
+  day_of_week int  NOT NULL CHECK (day_of_week BETWEEN 0 AND 6),
+  created_at  timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (shop_id, day_of_week)
+);
+
+-- services: NO new columns this round. duration_minutes stays a single integer.
+--   R7 removes the "multiple of 15" rule from create_service / update_service.
+
+-- bookings: NO new columns this round.
+
+-- new RPCs: is_slot_bookable (TIME_SLOT only, staff_id resource param),
+--           get_bookable_slots (read projection), get_shop_readiness,
+--           update_shop_profile / update_shop_payment (split), + provision_owner_shop change,
+--           create_booking_hold PAYMENT_NOT_CONFIGURED + slot-alignment + lead/horizon guards,
+--           customer_reschedule_booking -> call is_slot_bookable (collision fix, KMO-X1).
+-- every forward migration ships a tested *_rollback.
+```
+
+**Not created this round (was in the frozen §4):** `services.scheduling_mode`,
+`duration_unit`, `duration_value`, `requires_provider` column, `skip_closed_days`,
+`max_concurrent_date_range_jobs`, `bookings.booking_start_date/end_date`. All belong to the
+deferred DATE_RANGE work.
+
+**R4 items after amendment (source-only, pre-Junction-A):** the 8 in R4 spec **plus R4-9**
+(remove `min={15} step={15}` from the admin duration input → free positive integer minutes;
+optional pure-UI hour display). R4-7 deposit logic uses the B1 rules (no `?? 100`, server
+value only, `PAYMENT_NOT_CONFIGURED` when `require_deposit=true` and unset).
+
+---
+
 ## Phase documents
 
 | Phase | Document | Status |
@@ -94,56 +178,18 @@ staff exact-date time-off → staff working time/break → booking collision →
 
 ## 4. Proposed schema / domain delta (R3 + R5, for R7 — nothing applied)
 
-All product-local, all with behaviour-preserving defaults, no shared surface touched.
+> **Superseded by AMENDMENT 1.** The authoritative schema delta is the SQL block in
+> AMENDMENT 1 at the top of this document. Summary of the difference from the frozen
+> baseline: `slot_interval_minutes CHECK` is `BETWEEN 1 AND 1440` (not an enum); **no**
+> `services` columns are added this round (`scheduling_mode`, `duration_unit`,
+> `duration_value`, `requires_provider`, `skip_closed_days`,
+> `max_concurrent_date_range_jobs` are all deferred with DATE_RANGE); **no**
+> `bookings.booking_start_date/end_date`; the one primitive is `is_slot_bookable`
+> (no `is_service_bookable`); `require_deposit` new-shop default → `false`,
+> `default_deposit_amount` default → `NULL`.
 
-```sql
--- RPC: replace update_shop_settings with two RPCs
---   update_shop_profile(shop, name, phone, address, business_category, line_oa_id)  -- owner+admin
---   update_shop_payment(shop, promptpay_number, promptpay_name, require_deposit, default_deposit_amount)  -- owner
--- RPC: provision_owner_shop drops p_promptpay_number / p_promptpay_name from required set
--- RPC: customer_reschedule_booking calls is_slot_bookable(... p_exclude_booking_id => p_booking_id)
--- RPC: create_booking_hold gains PAYMENT_NOT_CONFIGURED guard + slot-interval/lead-time/horizon checks
--- RPC: create_service/update_service gain scheduling-mode params; drop the 15-minute multiple rule
-
-ALTER TABLE local_service.shops
-  ADD COLUMN booking_enabled            boolean NOT NULL DEFAULT true,
-  ADD COLUMN weekly_closure_mode        text    NOT NULL DEFAULT 'STAFF_WEEKLY'
-       CHECK (weekly_closure_mode IN ('SHOP_WEEKLY','STAFF_WEEKLY')),
-  ADD COLUMN slot_interval_minutes      int     NOT NULL DEFAULT 30
-       CHECK (slot_interval_minutes IN (5,10,15,20,30,60)),
-  ADD COLUMN booking_lead_time_minutes  int     NOT NULL DEFAULT 0   CHECK (booking_lead_time_minutes >= 0),
-  ADD COLUMN booking_horizon_days       int     NOT NULL DEFAULT 60  CHECK (booking_horizon_days BETWEEN 1 AND 365),
-  ADD COLUMN reminder_offsets_minutes   int[]   NOT NULL DEFAULT '{1440,60}',
-  ADD COLUMN reminder_enabled           boolean NOT NULL DEFAULT true;
--- customer_cancel_before_hours / customer_reschedule_before_hours already exist (bk_a_v1)
-
-CREATE TABLE local_service.shop_weekly_closures (
-  shop_id    uuid NOT NULL REFERENCES local_service.shops(id) ON DELETE CASCADE,
-  day_of_week int NOT NULL CHECK (day_of_week BETWEEN 0 AND 6),
-  created_at timestamptz NOT NULL DEFAULT now(),
-  PRIMARY KEY (shop_id, day_of_week)
-);  -- anon: only via bounded availability projection; owner/admin RPC for writes
-
-ALTER TABLE local_service.services
-  ADD COLUMN scheduling_mode   text NOT NULL DEFAULT 'TIME_SLOT'
-       CHECK (scheduling_mode IN ('TIME_SLOT','DATE_RANGE')),
-  ADD COLUMN duration_unit     text NOT NULL DEFAULT 'minute'
-       CHECK (duration_unit IN ('minute','hour','day')),
-  ADD COLUMN duration_value    int  NOT NULL DEFAULT 30 CHECK (duration_value > 0),
-  ADD COLUMN requires_provider boolean NOT NULL DEFAULT true,
-  ADD COLUMN skip_closed_days  boolean NOT NULL DEFAULT false,
-  ADD COLUMN max_concurrent_date_range_jobs int NOT NULL DEFAULT 1 CHECK (max_concurrent_date_range_jobs >= 1);
--- duration_minutes kept in sync (generated or RPC) for TIME_SLOT; NULL for DATE_RANGE
-
-ALTER TABLE local_service.bookings
-  ADD COLUMN booking_start_date date,
-  ADD COLUMN booking_end_date   date;  -- DATE_RANGE only; start/end timestamptz NULL for those
-
--- new: is_slot_bookable / is_service_bookable / get_bookable_slots / get_shop_readiness
--- open item: keep shop_holidays(staff_id=X) for staff time-off, or split to staff_time_off
-```
-
-Every forward migration ships a tested `*_rollback` (SEC-RB-1).
+All product-local, all with behaviour-preserving defaults for existing rows, no shared
+surface touched. Every forward migration ships a tested `*_rollback` (SEC-RB-1).
 
 ---
 
@@ -204,23 +250,28 @@ downstream pilot), **not** on the code. Required before any R4 item or R7 accept
 Needs a product-local WSTERA LAB forward migration → only after House returns platform
 isolation PASS **and** BK01 re-proves Junction A PASS (R7):
 
-- `shops` columns: `booking_enabled`, `weekly_closure_mode`, `slot_interval_minutes`,
-  `booking_lead_time_minutes`, `booking_horizon_days`, `reminder_offsets_minutes`,
-  `reminder_enabled`.
+- `shops` columns: `booking_enabled`, `weekly_closure_mode`, `slot_interval_minutes`
+  (`BETWEEN 1 AND 1440`), `booking_lead_time_minutes`, `booking_horizon_days`,
+  `reminder_offsets_minutes`, `reminder_enabled`.
+- `shops` default changes: `require_deposit` → `false` (new shops), `default_deposit_amount`
+  → `NULL` (existing rows unchanged).
 - `shop_weekly_closures` table.
-- `services` columns: `scheduling_mode`, `duration_unit`, `duration_value`,
-  `requires_provider`, `skip_closed_days`, `max_concurrent_date_range_jobs`.
-- `bookings` columns: `booking_start_date`, `booking_end_date`.
 - RPC split: `update_shop_profile` / `update_shop_payment`; `provision_owner_shop` change.
-- New RPCs: `is_slot_bookable`, `is_service_bookable`, `get_bookable_slots`,
+- New RPCs: `is_slot_bookable` (TIME_SLOT, `staff_id` resource param), `get_bookable_slots`,
   `get_shop_readiness`.
-- `create_booking_hold`: `PAYMENT_NOT_CONFIGURED` guard, slot-interval/lead-time/horizon
-  checks, `DATE_RANGE` branch, call the shared primitive.
+- `create_booking_hold`: `PAYMENT_NOT_CONFIGURED` guard, slot-alignment/lead-time/horizon
+  checks, call the shared primitive.
 - `customer_reschedule_booking`: collision check via the shared primitive (KMO-X1).
-- `create_service` / `update_service`: scheduling-mode params, drop the 15-minute rule.
+- `create_service` / `update_service`: **drop the 15-minute-multiple duration rule**
+  (no scheduling-mode params — DATE_RANGE deferred).
 - Defaults for HC-04, HC-05, HC-06, HC-11, HC-14, HC-15, HC-18, HC-20, HC-21, HC-23, HC-26
   becoming configurable.
 - All pgTAP / concurrency / rollback tests from R6.
+
+**DEFERRED (not blocked — pending Booking ↔ Order boundary decision, AMENDMENT 1 A3):**
+`services.scheduling_mode` / `duration_unit` / `skip_closed_days` /
+`max_concurrent_date_range_jobs`, `bookings.booking_start_date` / `booking_end_date`,
+`is_service_bookable`, the DATE_RANGE availability walk. Design of record kept in R5 §2–§6.
 
 Also still blocked (brief §3): Order/Claim live integration, any PS01/MT01/shared change.
 
@@ -228,22 +279,24 @@ Also still blocked (brief §3): Order/Claim live integration, any PS01/MT01/shar
 
 ## 9. READY to implement the moment Junction A passes (R7 order)
 
-1. Forward migration 1 — `shops` booking-config columns + `shop_weekly_closures`
-   (+ rollback). Prove LAB isolation, PS01/MT01/shared signatures unchanged.
-2. Forward migration 2 — `services` scheduling-model columns + `bookings` date columns
-   (+ rollback).
-3. `is_slot_bookable` / `is_service_bookable` / `get_bookable_slots` primitive; repoint
+1. Forward migration 1 — `shops` booking-config columns + `require_deposit`/`default_deposit_amount`
+   default changes + `shop_weekly_closures` (+ rollback). Prove LAB isolation, PS01/MT01/shared
+   signatures unchanged.
+2. Forward migration 2 — `create_service`/`update_service` drop the 15-minute duration rule
+   (+ rollback). (No `services` schema columns — DATE_RANGE deferred.)
+3. `is_slot_bookable` (TIME_SLOT) / `get_bookable_slots` primitive; repoint
    `create_booking_hold` and `customer_reschedule_booking` at it (closes KMO-X1, KMO-X2).
 4. `update_shop_profile` / `update_shop_payment` split; `provision_owner_shop` change
    (closes KMO-06); `create_booking_hold` `PAYMENT_NOT_CONFIGURED` guard (closes KMO-X3
    server half).
 5. `get_shop_readiness` RPC.
 6. Admin Profile/Payment tab split + booking-config tab + `SHOP_WEEKLY` UI (co-lands with 4).
-7. Consumer `DATE_RANGE` date-range picker.
-8. Run the full R6 matrix (pgTAP + concurrency + browser E2E + rollback) on LAB.
-9. R8 — sync verified fixes to KMO downstream, pilot round 2, real-device E2E.
+7. Run the full R6 matrix (pgTAP + concurrency + browser E2E + rollback) on LAB.
+8. R8 — sync verified fixes to KMO downstream, pilot round 2, real-device E2E.
 
-R4 items 1–8 can land **before** step 1 (source only) once a browser-proof target is
+(DATE_RANGE consumer picker is out — deferred with the DATE_RANGE feature.)
+
+R4's 9 items can land **before** step 1 (source only) once a browser-proof target is
 available.
 
 ---
