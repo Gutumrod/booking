@@ -155,10 +155,11 @@ export default function AdminDashboard() {
   const [serviceName, setServiceName] = useState('');
   const [serviceDesc, setServiceDesc] = useState('');
   // Held as strings while editing so a field can be cleared to empty (KMO-08);
-  // parsed and validated at save via commitNumericField.
+  // parsed and validated at save via commitNumericField. Deposit starts empty --
+  // the merchant must set it explicitly, never an invented seed (Codex F4).
   const [serviceDuration, setServiceDuration] = useState('45');
   const [servicePrice, setServicePrice] = useState('350');
-  const [serviceDeposit, setServiceDeposit] = useState('100');
+  const [serviceDeposit, setServiceDeposit] = useState('');
 
   // Filter Bookings by Date View
   const [bookingFilter, setBookingFilter] = useState<'today' | 'upcoming' | 'all'>('all');
@@ -167,6 +168,8 @@ export default function AdminDashboard() {
   const [promptpayNumber, setPromptpayNumber] = useState('');
   const [promptpayName, setPromptpayName] = useState('');
   const [lineOaId, setLineOaId] = useState('');
+  const [requireDeposit, setRequireDeposit] = useState(true);
+  const [defaultDepositAmount, setDefaultDepositAmount] = useState<number | null>(null);
 
   // Special Holidays
   const [specialHolidayDate, setSpecialHolidayDate] = useState('');
@@ -195,6 +198,9 @@ export default function AdminDashboard() {
     shopName: shopName === tCommon('loading') ? '' : shopName,
     shopPhone,
     promptpayNumber,
+    promptpayName,
+    requireDeposit,
+    defaultDepositAmount,
     services,
     staff: staffList,
     schedules,
@@ -231,6 +237,8 @@ export default function AdminDashboard() {
       setShopAddress(data.shop.address);
       setPromptpayNumber(data.shop.promptpayNumber);
       setPromptpayName(data.shop.promptpayName);
+      setRequireDeposit(data.shop.requireDeposit);
+      setDefaultDepositAmount(data.shop.defaultDepositAmount);
       setLineOaId(data.shop.lineOaId);
       setServices(data.services);
       setStaffList(data.staff);
@@ -262,6 +270,8 @@ export default function AdminDashboard() {
         setShopAddress(data.shop.address);
         setPromptpayNumber(data.shop.promptpayNumber);
         setPromptpayName(data.shop.promptpayName);
+        setRequireDeposit(data.shop.requireDeposit);
+        setDefaultDepositAmount(data.shop.defaultDepositAmount);
         setLineOaId(data.shop.lineOaId);
         setServices(data.services);
         setStaffList(data.staff);
@@ -591,7 +601,7 @@ export default function AdminDashboard() {
     setServiceDesc('');
     setServiceDuration('45');
     setServicePrice('350');
-    setServiceDeposit('100');
+    setServiceDeposit(''); // no invented seed -- the merchant sets this (Codex F4)
     setShowServiceForm(true);
   };
 
@@ -601,7 +611,7 @@ export default function AdminDashboard() {
     setServiceDesc(sv.description);
     setServiceDuration(String(sv.duration));
     setServicePrice(String(sv.price));
-    setServiceDeposit(String(sv.deposit));
+    setServiceDeposit(sv.deposit == null ? '' : String(sv.deposit)); // preserve null vs explicit 0
     setShowServiceForm(true);
   };
 
@@ -609,9 +619,17 @@ export default function AdminDashboard() {
     e.preventDefault();
     if (!shopId || !serviceName.trim()) return;
 
-    const durationParsed = commitNumericField(serviceDuration, { min: 5, integer: true });
+    const durationParsed = commitNumericField(serviceDuration, { min: 1, integer: true });
     const priceParsed = commitNumericField(servicePrice, { min: 0 });
     const depositParsed = commitNumericField(serviceDeposit, { min: 0 });
+    if (depositParsed.error === 'required') {
+      // The merchant must choose a deposit. The pre-R7 create_service /
+      // update_service RPC (p_deposit_amount NUMERIC) rejects NULL, so a truly
+      // "unset" deposit cannot be persisted yet -- that is BLOCKED_R7. Do not
+      // substitute 0 or a seed value.
+      setManagementError(t('depositMustBeSet'));
+      return;
+    }
     if (durationParsed.error || priceParsed.error || depositParsed.error) {
       setManagementError(t('numericFieldInvalid'));
       return;
@@ -625,14 +643,11 @@ export default function AdminDashboard() {
       return;
     }
 
-    // R7 (HC-09): create_service / update_service still reject a duration that is
-    // not a positive multiple of 15 minutes. Mirror that here so the merchant gets
-    // a clear message instead of a raw RPC error. Relax once the server rule is
-    // removed and free-minute durations are allowed.
-    if (duration % 15 !== 0) {
-      setManagementError(t('durationInvalidMultiple'));
-      return;
-    }
+    // Duration is any positive integer minute on the client (Amendment A1). The
+    // pre-R7 create_service / update_service RPC still rejects non-multiples of
+    // 15; that server compatibility limitation is surfaced transparently in the
+    // catch below. Removing the RPC rule and proving arbitrary minutes is
+    // BLOCKED_R7.
 
     const input = {
       name: serviceName.trim(),
@@ -655,7 +670,12 @@ export default function AdminDashboard() {
       setEditingService(null);
       await loadDashboardBookings(false);
     } catch (error) {
-      setManagementError(error instanceof Error ? error.message : t('saveServiceFailed'));
+      const message = error instanceof Error ? error.message : t('saveServiceFailed');
+      // Translate only the exact known pre-R7 server limitation into a
+      // transparent compatibility message; surface everything else raw.
+      setManagementError(
+        message.includes('multiple of 15 minutes') ? t('durationServerLimit') : message,
+      );
     } finally {
       setMutatingResourceId(null);
     }
@@ -1467,7 +1487,7 @@ export default function AdminDashboard() {
                       <input
                         required
                         type="number"
-                        min={5}
+                        min={1}
                         step={5}
                         value={serviceDuration}
                         onChange={(e) => setServiceDuration(e.target.value)}
@@ -1538,7 +1558,7 @@ export default function AdminDashboard() {
                     <div className="flex items-center justify-between text-xs border-t border-slate-800/80 pt-3">
                       <div className="flex items-center gap-3">
                         <span className="text-slate-400 flex items-center gap-1"><Clock className="w-3.5 h-3.5 text-slate-500" /> {t('durationMinutes', { minutes: sv.duration })}</span>
-                        <span className="text-amber-400 font-semibold">{t('depositPrefix')}฿{sv.deposit}</span>
+                        <span className="text-amber-400 font-semibold">{t('depositPrefix')}{sv.deposit == null ? t('depositNotSet') : `฿${sv.deposit}`}</span>
                       </div>
 
                       <div className="flex items-center gap-2">

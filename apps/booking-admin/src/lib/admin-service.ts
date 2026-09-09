@@ -43,6 +43,10 @@ export interface DashboardShop {
   promptpayName: string;
   lineOaId: string;
   role: 'owner' | 'admin' | 'staff';
+  // Current deposit policy, needed for honest client readiness (Codex F3).
+  requireDeposit: boolean;
+  // null = not configured; never coerced to 0 (Amendment B1).
+  defaultDepositAmount: number | null;
 }
 
 export interface DashboardService {
@@ -51,7 +55,9 @@ export interface DashboardService {
   description: string;
   duration: number;
   price: number;
-  deposit: number;
+  // null = the merchant has not set a per-service deposit; distinct from an
+  // explicit 0 (Codex F4).
+  deposit: number | null;
   isActive: boolean;
 }
 
@@ -159,6 +165,8 @@ interface RawShop {
   promptpay_number: string | null;
   promptpay_name: string | null;
   line_oa_id: string | null;
+  require_deposit: boolean | null;
+  default_deposit_amount: number | string | null;
 }
 
 interface RawStaff {
@@ -221,7 +229,7 @@ export async function fetchAdminDashboardData(): Promise<AdminDashboardData> {
   const [shopResult, bookingsResult, servicesResult, staffResult, schedulesResult, holidaysResult, subscriptionResult] = await Promise.all([
     supabase
       .from('shops')
-      .select('id, name, slug, phone, address, promptpay_number, promptpay_name, line_oa_id')
+      .select('id, name, slug, phone, address, promptpay_number, promptpay_name, line_oa_id, require_deposit, default_deposit_amount')
       .eq('id', membership.shop_id)
       .single(),
     supabase
@@ -346,6 +354,8 @@ export async function fetchAdminDashboardData(): Promise<AdminDashboardData> {
       promptpayName: rawShop.promptpay_name ?? '',
       lineOaId: rawShop.line_oa_id ?? '',
       role: membership.role as DashboardShop['role'],
+      requireDeposit: rawShop.require_deposit ?? true,
+      defaultDepositAmount: rawShop.default_deposit_amount == null ? null : Number(rawShop.default_deposit_amount),
     },
     bookings,
     services: ((servicesResult.data ?? []) as unknown as RawService[]).map((service) => ({
@@ -354,7 +364,7 @@ export async function fetchAdminDashboardData(): Promise<AdminDashboardData> {
       description: service.description ?? '',
       duration: service.duration_minutes,
       price: toAmount(service.price),
-      deposit: toAmount(service.deposit_amount),
+      deposit: service.deposit_amount == null ? null : toAmount(service.deposit_amount),
       isActive: service.is_active,
     })),
     staff: dashboardStaff,

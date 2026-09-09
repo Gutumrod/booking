@@ -38,3 +38,20 @@ test('commit reuses the parse rules', () => {
   assert.equal(commitNumericField('12.5', { integer: true }).error, 'not-integer');
   assert.equal(commitNumericField('-1', { min: 0 }).error, 'below-min');
 });
+
+// Service duration: any positive integer minute is valid on the client
+// (Amendment A1 / Codex F5). The multiple-of-15 rule is NOT a client constraint;
+// the pre-R7 RPC rejection is surfaced separately.
+test('duration client validation accepts any positive integer minute', () => {
+  const rules = { min: 1, integer: true };
+  for (const raw of ['1', '5', '15', '37', '90']) {
+    assert.deepEqual(commitNumericField(raw, rules), { value: Number(raw), error: null }, `duration ${raw}`);
+  }
+});
+
+test('duration client validation still rejects 0 and fractional', () => {
+  const rules = { min: 1, integer: true };
+  assert.equal(commitNumericField('0', rules).error, 'below-min');
+  assert.equal(commitNumericField('12.5', rules).error, 'not-integer');
+  assert.equal(commitNumericField('', rules).error, 'required');
+});

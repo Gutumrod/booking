@@ -319,8 +319,10 @@
     "saveServiceFailed": "Failed to save service",
     "toggleServiceFailed": "Failed to change service status",
     "depositExceedsPrice": "Deposit must not be greater than the service price",
-    "durationInvalidMultiple": "For now, service duration must be a multiple of 15 minutes (free-minute durations are coming soon)",
-    "numericFieldInvalid": "Please enter valid numbers for duration, price and deposit"
+    "durationServerLimit": "Saved durations must currently be a multiple of 15 minutes. Free-minute durations are a pending backend change (R7); the value was not saved.",
+    "numericFieldInvalid": "Please enter valid numbers for duration, price and deposit",
+    "depositMustBeSet": "Enter the deposit amount for this service (use 0 for no deposit). A blank deposit cannot be saved yet.",
+    "depositNotSet": "not set"
   },
   "tickets": {
     "backToDashboard": "Back to main dashboard",
