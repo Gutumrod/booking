@@ -17,6 +17,7 @@ import { LanguageToggle } from '@/components/language-toggle';
 import { QRCodeSVG } from 'qrcode.react';
 import { resolveBookingPageState, type BookingPageState } from '../../../lib/booking-state';
 import { resolvePaymentInstruction, preHoldServiceDeposit, isServicePaymentBlocked } from '../../../lib/payment-instruction';
+import { loadBookingRoute, createRequestGate } from '../../../lib/booking-route-load';
 
 const CENTRAL_LINE_OA_ID = process.env.NEXT_PUBLIC_CENTRAL_LINE_OA_ID || 'central_booking_oa';
 
@@ -89,10 +90,17 @@ function BookingStatusScreen({
 }
 
 export default function BookingPage() {
-  const t = useTranslations('booking');
-  const tc = useTranslations('common');
   const params = useParams();
   const slug = (params?.slug as string) || 'good-cuts-barber';
+  // Remount per slug (Codex NEW-F11): every route-scoped state -- shop,
+  // resources, selected service/staff, step, hold, slip, success, countdown and
+  // error -- starts fresh for a new slug instead of leaking from the old one.
+  return <BookingRoute key={slug} slug={slug} />;
+}
+
+function BookingRoute({ slug }: { slug: string }) {
+  const t = useTranslations('booking');
+  const tc = useTranslations('common');
 
   const [shop, setShop] = useState<Shop | null>(null);
   const [services, setServices] = useState<Service[]>([]);
@@ -125,44 +133,27 @@ export default function BookingPage() {
   // if the hold window becomes merchant-configurable later.
   const [timeLeft, setTimeLeft] = useState<number>(0);
 
-  // Fetch shop, services, staff from Supabase
+  // Load one complete snapshot for this slug (lib/booking-route-load): a no-row
+  // shop is always SHOP_NOT_FOUND, any query error is LOAD_ERROR, and the
+  // request gate drops a late response once the route changed or unmounted.
+  const [requestGate] = useState(createRequestGate);
   useEffect(() => {
-    async function loadData() {
-      setIsLoadingShop(true);
-      setLoadError(false);
-      try {
-        const shopData = await getShopBySlug(slug);
-        if (shopData) {
-          setShop(shopData);
-          // Do not request booking resources for a shop that the public profile
-          // explicitly marks as unavailable. The server-side RPC remains the
-          // enforcement boundary; this only keeps the customer flow truthful.
-          if (shopData.is_accepting_online_bookings === false) {
-            return;
-          }
-          const [servicesData, staffData, availabilityData] = await Promise.all([
-            getShopServices(shopData.id),
-            getShopStaff(shopData.id),
-            getShopAvailability(shopData.id),
-          ]);
-          setServices(servicesData);
-          setStaffList(staffData);
-          setStaffSchedules(availabilityData.schedules);
-          setShopHolidays(availabilityData.holidays);
-          if (servicesData.length > 0) setSelectedService(servicesData[0]);
-        }
-      } catch (error) {
-        console.error('Error loading booking page data:', error);
-        // Any shop/service/staff/availability query error throws (lib/load-result)
-        // and lands here as LOAD_ERROR; getShopBySlug returns null without
-        // throwing only for a genuinely missing shop.
-        setLoadError(true);
-      } finally {
+    // isLoadingShop starts true: this component instance only ever serves one slug.
+    const isCurrent = requestGate.start();
+    void loadBookingRoute(slug, { getShopBySlug, getShopServices, getShopStaff, getShopAvailability })
+      .then((data) => {
+        if (!isCurrent()) return;
+        setShop(data.shop);
+        setServices(data.services);
+        setStaffList(data.staff);
+        setStaffSchedules(data.schedules);
+        setShopHolidays(data.holidays);
+        setLoadError(data.loadError);
+        setSelectedService(data.services[0] ?? null);
         setIsLoadingShop(false);
-      }
-    }
-    loadData();
-  }, [slug]);
+      });
+    return () => requestGate.cancel();
+  }, [slug, requestGate]);
 
   useEffect(() => {
     return () => {
