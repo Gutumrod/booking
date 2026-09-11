@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { resolveBookingPageState } from '../apps/booking-consumer/src/lib/booking-state.ts';
+import { isServicePaymentBlocked } from '../apps/booking-consumer/src/lib/payment-instruction.ts';
 
 const base = {
   isLoading: false,
@@ -9,10 +10,7 @@ const base = {
   serviceCount: 1,
   staffCount: 1,
   scheduleCount: 1,
-  requireDeposit: false,
-  promptpayNumber: null,
-  promptpayName: null,
-  everyServiceNeedsDeposit: false,
+  everyServicePaymentBlocked: false,
 };
 
 test('OK when everything is present and no deposit needed', () => {
@@ -46,52 +44,97 @@ test('partial configuration is reported in precedence order', () => {
   );
 });
 
-// --- F6: payment-incomplete state ---
+// --- F6 / R2-4: selected-service-aware payment gate ---
+//
+// The page computes `everyServicePaymentBlocked` as services.every(gate) and
+// refuses createBookingHold when gate(selectedService) is true. This helper
+// mirrors that wiring so the precedence is testable without React.
 
-const depositShop = {
-  ...base,
-  requireDeposit: true,
-  everyServiceNeedsDeposit: true,
-  promptpayNumber: null,
-  promptpayName: null,
-};
+type Svc = { deposit_amount: number | null };
+const unconfigured = { promptpayNumber: null, promptpayName: null };
+const configured = { promptpayNumber: '0812345678', promptpayName: 'Shop Co' };
 
-test('deposit-required shop with no payment setup is PAYMENT_NOT_CONFIGURED', () => {
-  assert.equal(resolveBookingPageState(depositShop), 'PAYMENT_NOT_CONFIGURED');
-  assert.equal(
-    resolveBookingPageState({ ...depositShop, promptpayNumber: '0812345678', promptpayName: null }),
-    'PAYMENT_NOT_CONFIGURED',
-  );
-  assert.equal(
-    resolveBookingPageState({ ...depositShop, promptpayNumber: null, promptpayName: 'Shop Co' }),
-    'PAYMENT_NOT_CONFIGURED',
-  );
+function evaluate(opts: {
+  requireDeposit: boolean;
+  identity: { promptpayNumber: string | null; promptpayName: string | null };
+  services: Svc[];
+  selected: Svc;
+}) {
+  const gate = (s: Svc) => isServicePaymentBlocked({
+    requireDeposit: opts.requireDeposit,
+    serviceDepositAmount: s.deposit_amount,
+    ...opts.identity,
+  });
+  return {
+    pageState: resolveBookingPageState({
+      ...base,
+      serviceCount: opts.services.length,
+      everyServicePaymentBlocked: opts.services.length > 0 && opts.services.every(gate),
+    }),
+    holdAllowed: !gate(opts.selected),
+  };
+}
+
+const positive = { deposit_amount: 200 };
+const zero = { deposit_amount: 0 };
+const unset = { deposit_amount: null };
+
+test('mixed services: selected positive-deposit service is blocked before hold; page stays usable', () => {
+  for (const other of [zero, unset]) {
+    const r = evaluate({ requireDeposit: true, identity: unconfigured, services: [positive, other], selected: positive });
+    assert.equal(r.pageState, 'OK', 'other bookable service keeps the page usable');
+    assert.equal(r.holdAllowed, false, 'selected positive-deposit service must not reach createBookingHold');
+  }
 });
 
-test('deposit-required shop with complete payment setup is OK', () => {
-  assert.equal(
-    resolveBookingPageState({ ...depositShop, promptpayNumber: '0812345678', promptpayName: 'Shop Co' }),
-    'OK',
-  );
+test('mixed services: selecting the explicit-zero service is allowed', () => {
+  const r = evaluate({ requireDeposit: true, identity: unconfigured, services: [positive, zero], selected: zero });
+  assert.equal(r.pageState, 'OK');
+  assert.equal(r.holdAllowed, true);
 });
 
-test('no-deposit shop is never payment-blocked even without PromptPay', () => {
-  assert.equal(resolveBookingPageState({ ...base, requireDeposit: false, promptpayNumber: null, promptpayName: null }), 'OK');
+test('unset service deposit is not guessed; post-hold gate stays authoritative (BLOCKED_R7)', () => {
+  const r = evaluate({ requireDeposit: true, identity: unconfigured, services: [unset], selected: unset });
+  assert.equal(r.pageState, 'OK');
+  assert.equal(r.holdAllowed, true);
 });
 
-test('shop with a no-deposit / explicit-zero service path is not page-blocked', () => {
-  // require_deposit true but not every service needs a deposit -> proceed; F1 guards the rest
-  assert.equal(
-    resolveBookingPageState({ ...depositShop, everyServiceNeedsDeposit: false }),
-    'OK',
-  );
+test('no-deposit shop is never blocked, even with positive service amounts and no PromptPay', () => {
+  const r = evaluate({ requireDeposit: false, identity: unconfigured, services: [positive], selected: positive });
+  assert.equal(r.pageState, 'OK');
+  assert.equal(r.holdAllowed, true);
 });
 
-test('load / not-found / disabled still win over payment state', () => {
-  assert.equal(resolveBookingPageState({ ...depositShop, loadError: true }), 'LOAD_ERROR');
-  assert.equal(resolveBookingPageState({ ...depositShop, shop: null }), 'SHOP_NOT_FOUND');
+test('every service positive-deposit with no identity -> page PAYMENT_NOT_CONFIGURED', () => {
+  const r = evaluate({ requireDeposit: true, identity: unconfigured, services: [positive, { deposit_amount: 50 }], selected: positive });
+  assert.equal(r.pageState, 'PAYMENT_NOT_CONFIGURED');
+  assert.equal(r.holdAllowed, false);
+});
+
+test('partial or malformed identity still blocks a positive-deposit service', () => {
+  for (const identity of [
+    { promptpayNumber: '0812345678', promptpayName: null },
+    { promptpayNumber: null, promptpayName: 'Shop Co' },
+    { promptpayNumber: 'not-a-number', promptpayName: 'Shop Co' },
+  ]) {
+    assert.equal(evaluate({ requireDeposit: true, identity, services: [positive], selected: positive }).holdAllowed, false);
+  }
+});
+
+test('complete identity lets a positive-deposit service proceed', () => {
+  const r = evaluate({ requireDeposit: true, identity: configured, services: [positive], selected: positive });
+  assert.equal(r.pageState, 'OK');
+  assert.equal(r.holdAllowed, true);
+});
+
+test('load / not-found / disabled / empty-config still win over payment state', () => {
+  const blocked = { ...base, everyServicePaymentBlocked: true };
+  assert.equal(resolveBookingPageState({ ...blocked, loadError: true }), 'LOAD_ERROR');
+  assert.equal(resolveBookingPageState({ ...blocked, shop: null }), 'SHOP_NOT_FOUND');
   assert.equal(
-    resolveBookingPageState({ ...depositShop, shop: { is_accepting_online_bookings: false } }),
+    resolveBookingPageState({ ...blocked, shop: { is_accepting_online_bookings: false } }),
     'BOOKING_DISABLED',
   );
+  assert.equal(resolveBookingPageState({ ...blocked, staffCount: 0 }), 'NO_STAFF');
+  assert.equal(resolveBookingPageState(blocked), 'PAYMENT_NOT_CONFIGURED');
 });

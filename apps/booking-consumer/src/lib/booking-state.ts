@@ -28,23 +28,14 @@ export interface BookingStateInput {
   serviceCount: number;
   staffCount: number;
   scheduleCount: number;
-  /** shop.require_deposit (public contract field). */
-  requireDeposit: boolean;
-  promptpayNumber: string | null | undefined;
-  /** shop.promptpay_name -- not a derived value. */
-  promptpayName: string | null | undefined;
   /**
-   * True only when EVERY active service resolves to a positive deposit, i.e. the
-   * shop offers no no-deposit booking path. Computed by the caller from the
-   * server's own resolution rule (explicit service amount, else shop default).
-   * A shop with any explicit-zero or no-deposit service is NOT payment-blocked
-   * at the page level -- F1's post-hold guard handles those attempts.
+   * True only when EVERY active service is blocked by the per-service payment
+   * gate (`isServicePaymentBlocked` in payment-instruction.ts), i.e. the shop
+   * offers no bookable path at all. A shop with any no-deposit, explicit-zero or
+   * unset-deposit service is NOT page-blocked; the page applies the same gate
+   * to the selected service before any hold is created (Codex R2-4 / F6).
    */
-  everyServiceNeedsDeposit: boolean;
-}
-
-function nonEmpty(value: string | null | undefined): boolean {
-  return typeof value === 'string' && value.trim() !== '';
+  everyServicePaymentBlocked: boolean;
 }
 
 export function resolveBookingPageState(input: BookingStateInput): BookingPageState {
@@ -55,12 +46,6 @@ export function resolveBookingPageState(input: BookingStateInput): BookingPageSt
   if (input.serviceCount === 0) return 'NO_SERVICES';
   if (input.staffCount === 0) return 'NO_STAFF';
   if (input.scheduleCount === 0) return 'NO_SCHEDULE';
-  if (
-    input.requireDeposit
-    && input.everyServiceNeedsDeposit
-    && !(nonEmpty(input.promptpayNumber) && nonEmpty(input.promptpayName))
-  ) {
-    return 'PAYMENT_NOT_CONFIGURED';
-  }
+  if (input.everyServicePaymentBlocked) return 'PAYMENT_NOT_CONFIGURED';
   return 'OK';
 }

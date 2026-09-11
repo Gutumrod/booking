@@ -16,7 +16,7 @@ import {
 import { LanguageToggle } from '@/components/language-toggle';
 import { QRCodeSVG } from 'qrcode.react';
 import { resolveBookingPageState, type BookingPageState } from '../../../lib/booking-state';
-import { resolvePaymentInstruction, preHoldServiceDeposit } from '../../../lib/payment-instruction';
+import { resolvePaymentInstruction, preHoldServiceDeposit, isServicePaymentBlocked } from '../../../lib/payment-instruction';
 
 const CENTRAL_LINE_OA_ID = process.env.NEXT_PUBLIC_CENTRAL_LINE_OA_ID || 'central_booking_oa';
 
@@ -191,13 +191,18 @@ export default function BookingPage() {
   const shopPhoneHref = shop?.phone?.trim()
     ? `tel:${shop.phone.replace(/-/g, '')}`
     : undefined;
-  // Mirrors the server's own deposit-required rule without deriving a displayed
-  // amount: a service needs a deposit only when it carries an explicit positive
-  // amount. Shops relying on a shop-level default are not page-blocked here --
-  // the post-hold guard below catches those attempts.
-  const everyServiceNeedsDeposit =
-    services.length > 0
-    && services.every((s) => typeof s.deposit_amount === 'number' && s.deposit_amount > 0);
+  // Pre-hold payment gate per service (Codex R2-4 / F6): an explicit positive
+  // service deposit with incomplete/invalid PromptPay identity is blocked before
+  // any hold. Explicit-zero and no-deposit services are never blocked; an unset
+  // service deposit resolves server-side (BLOCKED_R7), so the post-hold
+  // resolvePaymentInstruction guard in handleCreateHold stays authoritative.
+  const isServiceBlocked = (service: Service) => isServicePaymentBlocked({
+    requireDeposit: shop?.require_deposit === true,
+    serviceDepositAmount: service.deposit_amount,
+    promptpayNumber,
+    promptpayName,
+  });
+  const selectedServicePaymentBlocked = selectedService !== null && isServiceBlocked(selectedService);
   const pageState = resolveBookingPageState({
     isLoading: isLoadingShop,
     loadError,
@@ -205,10 +210,7 @@ export default function BookingPage() {
     serviceCount: services.length,
     staffCount: staffList.length,
     scheduleCount: staffSchedules.length,
-    requireDeposit: shop?.require_deposit === true,
-    promptpayNumber,
-    promptpayName,
-    everyServiceNeedsDeposit,
+    everyServicePaymentBlocked: services.length > 0 && services.every(isServiceBlocked),
   });
   // Post-hold payment instruction: ok only when a format-valid recipient number
   // + configured account name + a positive server amount all hold and the QR
@@ -303,6 +305,11 @@ export default function BookingPage() {
   const handleCreateHold = async () => {
     if (shop?.is_accepting_online_bookings === false) {
       setErrorMessage(t('errors.shopBlocked'));
+      return;
+    }
+    // Never create a payment-awaiting hold the customer cannot pay (R2-4 / F6).
+    if (selectedServicePaymentBlocked) {
+      setErrorMessage(t('errors.paymentNotConfigured'));
       return;
     }
     if (!shop || !selectedService || !customerName.trim() || !customerPhone.trim()) {
@@ -578,8 +585,15 @@ export default function BookingPage() {
                   ))}
                 </div>
 
+                {selectedServicePaymentBlocked && (
+                  <div role="alert" className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 text-xs text-amber-300 flex items-center gap-2">
+                    <QrCode className="w-4 h-4 text-amber-400 flex-shrink-0" />
+                    <span>{t('errors.paymentNotConfigured')}</span>
+                  </div>
+                )}
+
                 <button
-                  disabled={!selectedService}
+                  disabled={!selectedService || selectedServicePaymentBlocked}
                   onClick={() => setStep(2)}
                   className="w-full bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-950 py-3.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-emerald-950/40 transition-all mt-6"
                 >

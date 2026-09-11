@@ -142,3 +142,31 @@ export function preHoldServiceDeposit(serviceDepositAmount: number | null | unde
     ? serviceDepositAmount
     : null;
 }
+
+// --- pre-hold gate for the selected service (Codex F6 / R2-4) ---
+//
+// A deposit-required shop blocks a specific service before any hold is created
+// when that service carries an explicit positive deposit and the PromptPay
+// identity is incomplete or invalid.
+//   - require_deposit=false        -> never blocked (no deposit step at all).
+//   - explicit 0 on the service    -> never blocked (explicit no deposit).
+//   - unset (null) on the service  -> not blocked here: the server resolves it
+//     from the shop default, which the consumer must not read or guess. That
+//     runtime boundary is BLOCKED_R7 (server PAYMENT_NOT_CONFIGURED); the
+//     post-hold `resolvePaymentInstruction` gate stays authoritative meanwhile.
+
+export interface ServicePaymentGateInput {
+  /** shop.require_deposit (public contract field). */
+  requireDeposit: boolean;
+  /** the service's own deposit_amount; null = unset. */
+  serviceDepositAmount: number | null | undefined;
+  promptpayNumber: string | null | undefined;
+  promptpayName: string | null | undefined;
+}
+
+export function isServicePaymentBlocked(input: ServicePaymentGateInput): boolean {
+  if (!input.requireDeposit) return false;
+  const deposit = preHoldServiceDeposit(input.serviceDepositAmount);
+  if (deposit === null || deposit <= 0) return false;
+  return !isPromptPayIdentityComplete(input.promptpayNumber, input.promptpayName);
+}
