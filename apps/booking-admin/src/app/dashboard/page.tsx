@@ -756,7 +756,7 @@ export default function AdminDashboard() {
                 {t('tabTickets')}
               </Link>}
             </nav>
-            <PreviewCustomerPageLink />
+            <PreviewCustomerPageLink activeShopId={shopId} />
             <LanguageToggle />
           </div>
         </div>

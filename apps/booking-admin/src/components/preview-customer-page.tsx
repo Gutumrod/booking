@@ -1,25 +1,29 @@
 'use client';
 
 // "Preview customer page" action shared by every /dashboard route header
-// (R4-5 / Codex NEW-F9). The shop slug is loaded once by the dashboard layout
-// and provided here, so the action exists on every dashboard tab and ticket
-// page at every breakpoint (icon-only with an accessible label on small
-// screens). Never gated on readiness, public_booking, payment or R7 truth.
+// (R4-5 / Codex NEW-F9). The dashboard layout resolves the canonical selected
+// shop (lib/shop-selection, NEW-F12) once and provides its id + slug here, so
+// the action exists on every dashboard tab and ticket page at every breakpoint
+// (icon-only with an accessible label on small screens). Each page passes the
+// shop id of the data it loaded; on any mismatch the action is hidden rather
+// than pointing at another tenant. Never gated on readiness, public_booking,
+// payment or R7 truth.
 
 import { createContext, useContext } from 'react';
 import { useTranslations } from 'next-intl';
 import { Eye } from 'lucide-react';
-import { customerPageUrl } from '@/lib/customer-page-url';
+import { tenantPreviewUrl, type SelectedShopIdentity } from '@/lib/customer-page-url';
 
-const ShopSlugContext = createContext<string | null>(null);
+const SelectedShopContext = createContext<SelectedShopIdentity>({ shopId: null, slug: null });
 
-export function ShopSlugProvider({ slug, children }: { slug: string | null; children: React.ReactNode }) {
-  return <ShopSlugContext.Provider value={slug}>{children}</ShopSlugContext.Provider>;
+export function ShopSlugProvider({ shopId, slug, children }: SelectedShopIdentity & { children: React.ReactNode }) {
+  return <SelectedShopContext.Provider value={{ shopId, slug }}>{children}</SelectedShopContext.Provider>;
 }
 
-export function PreviewCustomerPageLink() {
+/** activeShopId: shop id of the data this page loaded ('' / undefined while loading). */
+export function PreviewCustomerPageLink({ activeShopId }: { activeShopId?: string | null }) {
   const t = useTranslations('dashboard');
-  const href = customerPageUrl(useContext(ShopSlugContext));
+  const href = tenantPreviewUrl(useContext(SelectedShopContext), activeShopId);
   if (!href) return null;
   return (
     <a

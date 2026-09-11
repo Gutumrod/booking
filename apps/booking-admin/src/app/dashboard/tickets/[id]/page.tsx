@@ -379,7 +379,7 @@ export default function TicketDetailPage() {
             </Link>
             <div className="h-6 w-48 bg-slate-800 rounded animate-pulse" />
             <div className="flex items-center gap-2">
-              <PreviewCustomerPageLink />
+              <PreviewCustomerPageLink activeShopId={shopId} />
               <LanguageToggle />
             </div>
           </div>
@@ -408,7 +408,7 @@ export default function TicketDetailPage() {
               <h1 className="font-bold text-lg text-white">{t('detailTitle')}</h1>
             </div>
             <div className="flex items-center gap-2">
-              <PreviewCustomerPageLink />
+              <PreviewCustomerPageLink activeShopId={shopId} />
               <LanguageToggle />
             </div>
           </div>
@@ -515,7 +515,7 @@ export default function TicketDetailPage() {
               {t('newTicketNow')}
             </Link>
             <div className="flex items-center gap-2">
-              <PreviewCustomerPageLink />
+              <PreviewCustomerPageLink activeShopId={shopId} />
               <LanguageToggle />
             </div>
           </div>

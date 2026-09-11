@@ -1,6 +1,7 @@
 'use server';
 
 import { createClient } from './supabase/server';
+import { selectActiveMembership } from './shop-selection';
 import {
   canTransition,
   getTransitionError,
@@ -148,12 +149,8 @@ export async function getCurrentShopMembership(): Promise<{ shopId: string; role
     throw new Error('เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่');
   }
 
-  const { data: membership, error: membershipError } = await supabase
-    .from('shop_users')
-    .select('shop_id, role')
-    .eq('user_id', authData.user.id)
-    .limit(1)
-    .single();
+  // Canonical V1 selected shop, shared with the layout Preview and dashboard data (NEW-F12).
+  const { data: membership, error: membershipError } = await selectActiveMembership(supabase, authData.user.id);
 
   if (membershipError || !membership) {
     throw new Error(membershipError?.message || 'ไม่พบสิทธิ์ร้านค้าของบัญชีนี้');

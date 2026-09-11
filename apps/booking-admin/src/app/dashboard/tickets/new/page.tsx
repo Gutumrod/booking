@@ -235,7 +235,7 @@ export default function NewTicketIntakePage() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <PreviewCustomerPageLink />
+            <PreviewCustomerPageLink activeShopId={shopId} />
             <LanguageToggle />
           </div>
         </div>

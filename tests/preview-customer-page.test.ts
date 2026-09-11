@@ -16,7 +16,7 @@ test('customerPageUrl only yields a URL for a real slug (no fake URL or #)', () 
 // visible at every breakpoint, fed by the layout's slug, never readiness-gated.
 test('dashboard layout provides the shop slug to every dashboard route', () => {
   const layout = read('app/dashboard/layout.tsx');
-  assert.match(layout, /<ShopSlugProvider slug=\{shop\?\.slug \?\? null\}>/);
+  assert.match(layout, /<ShopSlugProvider shopId=\{membership\.shop_id\} slug=\{shop\?\.slug \?\? null\}>/);
   assert.match(layout, /\{children\}\s*<\/ShopSlugProvider>/);
 });
 
@@ -28,7 +28,7 @@ test('every dashboard route header renders the Preview action', () => {
     'app/dashboard/tickets/[id]/page.tsx',
   ]) {
     const src = read(rel);
-    const previews = src.match(/<PreviewCustomerPageLink \/>/g) ?? [];
+    const previews = src.match(/<PreviewCustomerPageLink activeShopId=\{shopId\} \/>/g) ?? [];
     const toggles = src.match(/<LanguageToggle \/>/g) ?? [];
     assert.ok(previews.length > 0, `${rel} must render Preview`);
     assert.equal(previews.length, toggles.length, `${rel}: Preview beside every header LanguageToggle`);
@@ -42,7 +42,7 @@ test('Preview link is visible on small screens with an accessible label', () => 
   assert.doesNotMatch(anchorClass, /(^|\s)hidden(\s|$)/, 'anchor itself must not be hidden at any breakpoint');
   assert.match(anchor, /aria-label=\{t\('previewCustomerPage'\)\}/);
   assert.match(anchor, /title=\{t\('previewCustomerPage'\)\}/);
-  assert.match(src, /customerPageUrl\(useContext\(ShopSlugContext\)\)/);
+  assert.match(src, /tenantPreviewUrl\(useContext\(SelectedShopContext\), activeShopId\)/);
   const code = src.replace(/^\s*\/\/.*$/gm, '');
   assert.doesNotMatch(code, /readiness|public_booking|blocked_r7|payment/i, 'Preview is not gated on readiness/payment/R7');
 });

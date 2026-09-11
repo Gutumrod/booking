@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { createClient } from '@/lib/supabase/server';
+import { selectActiveMembership } from '@/lib/shop-selection';
 import { resolveMonthlyPlan } from '@/lib/commercial-contract';
 
 function getStripeClient(): Stripe {
@@ -24,12 +25,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
   }
 
-  const { data: membership, error: membershipError } = await supabase
-    .from('shop_users')
-    .select('shop_id, role')
-    .eq('user_id', authData.user.id)
-    .limit(1)
-    .single();
+  // Canonical V1 selected shop -- the same shop the dashboard shows (NEW-F12).
+  const { data: membership, error: membershipError } = await selectActiveMembership(supabase, authData.user.id);
 
   if (membershipError || !membership || membership.role !== 'owner') {
     return NextResponse.json({ error: 'Owner role required' }, { status: 403 });

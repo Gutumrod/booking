@@ -260,7 +260,7 @@ export default function TicketsHistoryPage() {
               {t('newTicketBtn')}
             </Link>
 
-            <PreviewCustomerPageLink />
+            <PreviewCustomerPageLink activeShopId={shopId} />
 
             <LanguageToggle />
           </div>
