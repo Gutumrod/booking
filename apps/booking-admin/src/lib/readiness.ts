@@ -4,13 +4,15 @@
 // Derived from data the dashboard already loads; never stored, never blocks the
 // "Preview customer page" action.
 //
-// Payment readiness is policy-aware:
-//   - a shop that collects no deposit (require_deposit=false, or no service/shop
-//     amount is configured) needs no PromptPay onboarding -> ready;
-//   - a shop that can collect a deposit is ready only with a complete PromptPay
-//     number AND account-holder name AND a resolvable amount (shop default or a
-//     per-service amount).
-// `null` is never treated as `0`.
+// Payment readiness is policy-aware (Amendment B1, R4 spec R4-5, Codex R2-2):
+//   - require_deposit=false -> ready; no PromptPay onboarding needed;
+//   - require_deposit=true -> every active service (or, with none, the shop
+//     default) must resolve to a configured amount using the server rule
+//     "explicit service amount, else shop default". Any unresolvable (NULL)
+//     amount -> attention: NULL is "not set", never 0 and never a pass;
+//   - all resolved amounts explicitly 0 -> ready (explicit no deposit);
+//   - any positive resolved amount -> ready only with a format-valid PromptPay
+//     number AND a configured account-holder name.
 //
 // The public-booking-enabled capability is server-owned and not available from
 // the current admin source; it is reported as BLOCKED_R7, not guessed.
@@ -41,16 +43,31 @@ export interface ReadinessInput {
   schedules: ReadonlyArray<{ days: ReadonlyArray<{ isWorkingDay: boolean }> }>;
 }
 
-/** Whether the shop can actually collect a deposit from any bookable service. */
-export function depositIsCollectable(input: ReadinessInput): boolean {
-  if (!input.requireDeposit) return false;
-  if (input.defaultDepositAmount != null && input.defaultDepositAmount > 0) return true;
-  return input.services.some((s) => s.isActive && s.deposit != null && s.deposit > 0);
+/**
+ * PromptPay recipient format contract: 10-digit mobile starting with 0, or a
+ * 13-digit ID. Mirrors isValidPromptPayRecipient in
+ * apps/booking-consumer/src/lib/payment-instruction.ts (apps are isolated, so
+ * the rule is repeated here; keep the two in sync).
+ */
+export function isValidPromptPayRecipient(recipient: string): boolean {
+  const digits = recipient.replace(/\D/g, '');
+  return /^0\d{9}$/.test(digits) || /^\d{13}$/.test(digits);
+}
+
+function configuredAmount(value: number | null): number | null {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null;
 }
 
 function paymentStatus(input: ReadinessInput): ReadinessStatus {
-  if (!depositIsCollectable(input)) return 'ready';
-  const hasIdentity = input.promptpayNumber.trim() !== '' && input.promptpayName.trim() !== '';
+  if (!input.requireDeposit) return 'ready';
+  const shopDefault = configuredAmount(input.defaultDepositAmount);
+  const active = input.services.filter((s) => s.isActive);
+  const amounts = active.length > 0
+    ? active.map((s) => (s.deposit != null ? configuredAmount(s.deposit) : shopDefault))
+    : [shopDefault];
+  if (amounts.some((a) => a === null)) return 'attention';
+  if (amounts.every((a) => a === 0)) return 'ready';
+  const hasIdentity = isValidPromptPayRecipient(input.promptpayNumber) && input.promptpayName.trim() !== '';
   return hasIdentity ? 'ready' : 'attention';
 }
 
