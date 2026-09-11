@@ -33,7 +33,7 @@ import {
 } from '@/lib/admin-service';
 import { LanguageToggle } from '@/components/language-toggle';
 import { commitNumericField } from '@/lib/numeric-field';
-import { computeReadiness, isShopReady, type ReadinessKey } from '@/lib/readiness';
+import { computeReadiness, isShopReady, needsMerchantAttention, type ReadinessKey } from '@/lib/readiness';
 import { TimeField } from '@/components/time-field';
 import { mergeServerSchedules } from '@/lib/schedule-merge';
 import { 
@@ -205,7 +205,8 @@ export default function AdminDashboard() {
     staff: staffList,
     schedules,
   });
-  const readinessTabFor: Record<ReadinessKey, typeof activeTab> = {
+  // public_booking has no merchant tab: it is blocked_r7 (server-owned truth).
+  const readinessTabFor: Partial<Record<ReadinessKey, typeof activeTab>> = {
     profile: 'services',
     services: 'services',
     staff: 'staff',
@@ -218,6 +219,7 @@ export default function AdminDashboard() {
     staff: t('readiness_staff'),
     schedule: t('readiness_schedule'),
     payment: t('readiness_payment'),
+    public_booking: t('readiness_public_booking'),
   };
 
   // Stable callback is required by the initial-load effect below.
@@ -818,16 +820,35 @@ export default function AdminDashboard() {
                   {t('readinessTitle')}
                 </h2>
                 <p className="text-[11px] text-slate-400">
-                  {isShopReady(readinessRows) ? t('readinessAllSet') : t('readinessSubtitle')}
+                  {isShopReady(readinessRows)
+                    ? t('readinessAllSet')
+                    : needsMerchantAttention(readinessRows)
+                      ? t('readinessSubtitle')
+                      : t('readinessMerchantDoneBlockedR7')}
                 </p>
               </div>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-              {readinessRows.map((row) => (
+              {readinessRows.map((row) => row.status === 'blocked_r7' ? (
+                <div
+                  key={row.key}
+                  role="status"
+                  title={t('readinessBlockedR7Hint')}
+                  className="flex items-center justify-between gap-2 rounded-xl border border-dashed border-slate-600 bg-slate-800/60 px-3 py-2 text-xs font-medium text-slate-300"
+                >
+                  <span>{readinessLabel[row.key]}</span>
+                  <span className="flex-shrink-0 rounded-md border border-slate-600 px-1.5 py-0.5 text-[10px] font-bold uppercase text-slate-400">
+                    {t('readinessBlockedR7')}
+                  </span>
+                </div>
+              ) : (
                 <button
                   key={row.key}
                   type="button"
-                  onClick={() => setActiveTab(readinessTabFor[row.key])}
+                  onClick={() => {
+                    const tab = readinessTabFor[row.key];
+                    if (tab) setActiveTab(tab);
+                  }}
                   className={`flex items-center justify-between gap-2 rounded-xl border px-3 py-2 text-xs font-medium transition-all ${
                     row.ok
                       ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'

@@ -14,12 +14,15 @@
 //   - any positive resolved amount -> ready only with a format-valid PromptPay
 //     number AND a configured account-holder name.
 //
-// The public-booking-enabled capability is server-owned and not available from
-// the current admin source; it is reported as BLOCKED_R7, not guessed.
+// The public_booking capability (booking enabled and not billing-blocked, R3 §5)
+// is server-owned and not available from the current admin source. It is always
+// returned as an explicit `blocked_r7` row -- never inferred as ready and never
+// omitted -- so isShopReady() cannot claim full readiness until the R7
+// get_shop_readiness RPC supplies that truth (Codex R2-3 / NEW-F7).
 //
 // Pure and framework-free for unit testing from `tests/`.
 
-export type ReadinessKey = 'profile' | 'services' | 'staff' | 'schedule' | 'payment';
+export type ReadinessKey = 'profile' | 'services' | 'staff' | 'schedule' | 'payment' | 'public_booking';
 
 export type ReadinessStatus = 'ready' | 'attention' | 'blocked_r7';
 
@@ -84,11 +87,17 @@ export function computeReadiness(input: ReadinessInput): ReadinessRow[] {
       status: input.schedules.some((sch) => sch.days.some((d) => d.isWorkingDay)) ? 'ready' : 'attention',
     },
     { key: 'payment', status: paymentStatus(input) },
+    { key: 'public_booking', status: 'blocked_r7' },
   ];
   return rows.map((r) => ({ ...r, ok: r.status === 'ready' }));
 }
 
-/** A no-deposit shop with everything else set is fully ready. */
+/** True only when every row is ready -- never while a row is blocked_r7. */
 export function isShopReady(rows: ReadinessRow[]): boolean {
   return rows.every((r) => r.status === 'ready');
+}
+
+/** True when some row needs merchant action (blocked_r7 is not merchant-fixable). */
+export function needsMerchantAttention(rows: ReadinessRow[]): boolean {
+  return rows.some((r) => r.status === 'attention');
 }

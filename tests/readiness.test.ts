@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { computeReadiness, isShopReady, isValidPromptPayRecipient } from '../apps/booking-admin/src/lib/readiness.ts';
+import { computeReadiness, isShopReady, isValidPromptPayRecipient, needsMerchantAttention } from '../apps/booking-admin/src/lib/readiness.ts';
 
 const noDepositShop = {
   shopName: 'Good Cuts',
@@ -25,6 +25,30 @@ const depositShop = {
 
 type Input = Parameters<typeof computeReadiness>[0];
 const payment = (input: Input) => computeReadiness(input).find((r) => r.key === 'payment')!.status;
+
+// R2-3 / NEW-F7: six capability rows; public_booking is explicit blocked_r7.
+test('readiness has six rows in contract order, public_booking explicitly blocked_r7', () => {
+  const rows = computeReadiness(depositShop);
+  assert.deepEqual(rows.map((r) => r.key), ['profile', 'services', 'staff', 'schedule', 'payment', 'public_booking']);
+  const pb = rows.find((r) => r.key === 'public_booking')!;
+  assert.equal(pb.status, 'blocked_r7');
+  assert.equal(pb.ok, false);
+});
+
+test('a fully configured shop is never reported fully ready while public_booking is blocked_r7', () => {
+  for (const shop of [noDepositShop, depositShop]) {
+    const rows = computeReadiness(shop);
+    assert.ok(rows.filter((r) => r.key !== 'public_booking').every((r) => r.status === 'ready'));
+    assert.equal(isShopReady(rows), false);
+    assert.equal(needsMerchantAttention(rows), false, 'blocked_r7 is not merchant attention');
+  }
+});
+
+test('merchant attention is distinct from blocked_r7', () => {
+  const rows = computeReadiness({ ...depositShop, promptpayNumber: '' });
+  assert.equal(needsMerchantAttention(rows), true);
+  assert.equal(rows.find((r) => r.key === 'public_booking')!.status, 'blocked_r7');
+});
 
 test('no-deposit shop is payment-ready without any PromptPay onboarding', () => {
   assert.equal(payment(noDepositShop), 'ready');
@@ -103,7 +127,7 @@ test('isValidPromptPayRecipient mirrors the consumer format contract', () => {
 test('missing profile phone', () => {
   const rows = computeReadiness({ ...noDepositShop, shopPhone: '  ' });
   assert.equal(rows.find((r) => r.key === 'profile')!.status, 'attention');
-  assert.equal(isShopReady(rows), false);
+  assert.equal(needsMerchantAttention(rows), true);
 });
 
 test('no active service / staff / working day', () => {
