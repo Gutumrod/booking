@@ -1,8 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import {
   parseNumericField,
   commitNumericField,
+  DURATION_RULES,
+  DURATION_INPUT_PROPS,
+  nativeNumberInputAccepts,
 } from '../apps/booking-admin/src/lib/numeric-field.ts';
 
 test('empty string is allowed while editing, rejected on commit', () => {
@@ -54,4 +58,29 @@ test('duration client validation still rejects 0 and fractional', () => {
   assert.equal(commitNumericField('0', rules).error, 'below-min');
   assert.equal(commitNumericField('12.5', rules).error, 'not-integer');
   assert.equal(commitNumericField('', rules).error, 'required');
+});
+
+// NEW-F10: the native <input> contract must not block values the commit guard
+// accepts. Every positive integer minute must pass BOTH the native constraint
+// check and the commit guard.
+test('duration input contract lets every positive integer reach the commit guard', () => {
+  assert.equal(DURATION_INPUT_PROPS.min, 1);
+  assert.equal(DURATION_INPUT_PROPS.step, 1);
+  for (let minutes = 1; minutes <= 600; minutes += 1) {
+    assert.ok(nativeNumberInputAccepts(minutes, DURATION_INPUT_PROPS), `native input must accept ${minutes}`);
+    assert.equal(commitNumericField(String(minutes), DURATION_RULES).error, null, `commit guard must accept ${minutes}`);
+  }
+  assert.equal(nativeNumberInputAccepts(0, DURATION_INPUT_PROPS), false);
+  // regression evidence: the old step={5} contract blocked these before the guard
+  for (const minutes of [2, 37, 90]) {
+    assert.equal(nativeNumberInputAccepts(minutes, { min: 1, step: 5 }), false, `step 5 blocks ${minutes}`);
+  }
+});
+
+test('dashboard duration input uses the shared contract, no five-minute step', () => {
+  const src = readFileSync(new URL('../apps/booking-admin/src/app/dashboard/page.tsx', import.meta.url), 'utf8');
+  assert.match(src, /\{\.\.\.DURATION_INPUT_PROPS\}/);
+  assert.match(src, /commitNumericField\(serviceDuration, DURATION_RULES\)/);
+  assert.doesNotMatch(src, /step=\{5\}/);
+  assert.doesNotMatch(src, /% ?15/);
 });

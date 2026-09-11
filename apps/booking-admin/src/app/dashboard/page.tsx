@@ -32,7 +32,7 @@ import {
   type DashboardSubscription,
 } from '@/lib/admin-service';
 import { LanguageToggle } from '@/components/language-toggle';
-import { commitNumericField } from '@/lib/numeric-field';
+import { commitNumericField, DURATION_INPUT_PROPS, DURATION_RULES } from '@/lib/numeric-field';
 import { computeReadiness, isShopReady, needsMerchantAttention, type ReadinessKey } from '@/lib/readiness';
 import { TimeField } from '@/components/time-field';
 import { mergeServerSchedules } from '@/lib/schedule-merge';
@@ -621,7 +621,7 @@ export default function AdminDashboard() {
     e.preventDefault();
     if (!shopId || !serviceName.trim()) return;
 
-    const durationParsed = commitNumericField(serviceDuration, { min: 1, integer: true });
+    const durationParsed = commitNumericField(serviceDuration, DURATION_RULES);
     const priceParsed = commitNumericField(servicePrice, { min: 0 });
     const depositParsed = commitNumericField(serviceDeposit, { min: 0 });
     if (depositParsed.error === 'required') {
@@ -1507,9 +1507,7 @@ export default function AdminDashboard() {
                       <label className="text-slate-300 block mb-1 font-semibold">{t('serviceDurationLabel')}</label>
                       <input
                         required
-                        type="number"
-                        min={1}
-                        step={5}
+                        {...DURATION_INPUT_PROPS}
                         value={serviceDuration}
                         onChange={(e) => setServiceDuration(e.target.value)}
                         className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 font-mono text-white focus:outline-none focus:border-emerald-500"

@@ -52,3 +52,24 @@ export function commitNumericField(raw: string, rules: NumericFieldRules = {}): 
   if (raw.trim() === '') return { value: null, error: 'required' };
   return parseNumericField(raw, rules);
 }
+
+// --- service duration contract (R4-9 / Amendment A1 / Codex F5, NEW-F10) ---
+//
+// Any positive integer minute is valid on the client. The native input must not
+// add a stricter rule: `step={5}` made the browser block e.g. 37 as a step
+// mismatch before the commit guard ever ran. The pre-R7 server multiple-of-15
+// rule is surfaced separately as a transparent error, never enforced here.
+
+export const DURATION_RULES = { min: 1, integer: true } as const satisfies NumericFieldRules;
+
+/** Spread onto the duration <input>; step 1 so every positive integer is submittable. */
+export const DURATION_INPUT_PROPS = { type: 'number', min: 1, step: 1, inputMode: 'numeric' } as const;
+
+/**
+ * Mirror of the HTML number-input constraint check (rangeUnderflow +
+ * stepMismatch, step base = min) -- true when the browser would let the form
+ * submit this value.
+ */
+export function nativeNumberInputAccepts(value: number, props: { min: number; step: number }): boolean {
+  return value >= props.min && Number.isInteger((value - props.min) / props.step);
+}
