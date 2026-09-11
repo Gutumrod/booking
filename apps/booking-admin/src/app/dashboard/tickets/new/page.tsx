@@ -20,6 +20,7 @@ import {
 } from '@/lib/ticket-domain';
 import { useTicketLabels } from '@/i18n/ticket-i18n';
 import { LanguageToggle } from '@/components/language-toggle';
+import { PreviewCustomerPageLink } from '@/components/preview-customer-page';
 import {
   ArrowLeft,
   Calendar,
@@ -233,7 +234,10 @@ export default function NewTicketIntakePage() {
               </p>
             </div>
           </div>
-          <LanguageToggle />
+          <div className="flex items-center gap-2">
+            <PreviewCustomerPageLink />
+            <LanguageToggle />
+          </div>
         </div>
       </header>
 

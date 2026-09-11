@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { signOut } from './actions';
+import { ShopSlugProvider } from '@/components/preview-customer-page';
 
 export default async function DashboardLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const supabase = await createClient();
@@ -25,14 +26,22 @@ export default async function DashboardLayout({ children }: Readonly<{ children:
     redirect('/register?resume=1');
   }
 
+  // Slug for the Preview action on every dashboard route (NEW-F9). A failed
+  // read renders no Preview rather than a fake URL; it never blocks the dashboard.
+  const { data: shop } = await supabase
+    .from('shops')
+    .select('slug')
+    .eq('id', membership.shop_id)
+    .maybeSingle();
+
   return (
-    <>
+    <ShopSlugProvider slug={shop?.slug ?? null}>
       <form action={signOut} className="fixed right-4 top-4 z-[100]">
         <button className="rounded-lg border border-slate-700 bg-slate-900/95 px-3 py-2 text-xs font-semibold text-slate-300 shadow-lg hover:bg-slate-800">
           ออกจากระบบ
         </button>
       </form>
       {children}
-    </>
+    </ShopSlugProvider>
   );
 }

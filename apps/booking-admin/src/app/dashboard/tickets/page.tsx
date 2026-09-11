@@ -21,6 +21,7 @@ import {
 } from '@/lib/ticket-domain';
 import { useFormatDateTime, useTicketLabels } from '@/i18n/ticket-i18n';
 import { LanguageToggle } from '@/components/language-toggle';
+import { PreviewCustomerPageLink } from '@/components/preview-customer-page';
 import {
   Search,
   Plus,
@@ -258,6 +259,8 @@ export default function TicketsHistoryPage() {
               <Plus className="w-4 h-4" />
               {t('newTicketBtn')}
             </Link>
+
+            <PreviewCustomerPageLink />
 
             <LanguageToggle />
           </div>

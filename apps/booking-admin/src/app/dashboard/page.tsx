@@ -32,6 +32,8 @@ import {
   type DashboardSubscription,
 } from '@/lib/admin-service';
 import { LanguageToggle } from '@/components/language-toggle';
+import { PreviewCustomerPageLink } from '@/components/preview-customer-page';
+import { BOOKING_SITE_URL, customerPageUrl } from '@/lib/customer-page-url';
 import { commitNumericField, DURATION_INPUT_PROPS, DURATION_RULES } from '@/lib/numeric-field';
 import { computeReadiness, isShopReady, needsMerchantAttention, type ReadinessKey } from '@/lib/readiness';
 import { TimeField } from '@/components/time-field';
@@ -48,8 +50,6 @@ type Booking = DashboardBooking;
 
 type StaffMember = DashboardStaff;
 type ServiceItem = DashboardService;
-
-const BOOKING_SITE_URL = (process.env.NEXT_PUBLIC_BOOKING_SITE_URL || 'http://localhost:3000').replace(/\/$/, '');
 
 function getBangkokDateString() {
   const parts = new Intl.DateTimeFormat('en-US', {
@@ -711,8 +711,8 @@ export default function AdminDashboard() {
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
-            <nav className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs overflow-x-auto">
+          <div className="flex min-w-0 max-w-full items-center gap-3">
+            <nav className="flex min-w-0 items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs overflow-x-auto">
               <button
                 onClick={() => setActiveTab('bookings')}
                 className={`px-3 py-1.5 rounded-lg font-medium transition-all ${activeTab === 'bookings' ? 'bg-emerald-500 text-slate-950 font-bold' : 'text-slate-400 hover:text-white'}`}
@@ -756,18 +756,7 @@ export default function AdminDashboard() {
                 {t('tabTickets')}
               </Link>}
             </nav>
-            {shopSlug && (
-              <a
-                href={`${BOOKING_SITE_URL}/book/${shopSlug}`}
-                target="_blank"
-                rel="noreferrer"
-                className="hidden sm:flex items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs font-semibold text-emerald-400 hover:bg-slate-700"
-                title={t('previewCustomerPage')}
-              >
-                <Eye className="w-3.5 h-3.5" />
-                {t('previewCustomerPage')}
-              </a>
-            )}
+            <PreviewCustomerPageLink />
             <LanguageToggle />
           </div>
         </div>
@@ -904,15 +893,17 @@ export default function AdminDashboard() {
                   </button>
                 </div>
 
-                <a
-                  href={shopSlug ? `${BOOKING_SITE_URL}/book/${shopSlug}` : '#'}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="bg-slate-800 hover:bg-slate-700 text-xs text-emerald-400 px-3 py-2 rounded-xl flex items-center gap-1.5 border border-slate-700 font-medium"
-                >
-                  {t('customerBookingPage')}
-                  <ExternalLink className="w-3.5 h-3.5" />
-                </a>
+                {customerPageUrl(shopSlug) && (
+                  <a
+                    href={customerPageUrl(shopSlug) as string}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="bg-slate-800 hover:bg-slate-700 text-xs text-emerald-400 px-3 py-2 rounded-xl flex items-center gap-1.5 border border-slate-700 font-medium"
+                  >
+                    {t('customerBookingPage')}
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </a>
+                )}
               </div>
             </div>
 

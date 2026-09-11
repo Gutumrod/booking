@@ -26,6 +26,7 @@ import {
 } from '@/lib/ticket-domain';
 import { useFormatDateTime, useTicketLabels } from '@/i18n/ticket-i18n';
 import { LanguageToggle } from '@/components/language-toggle';
+import { PreviewCustomerPageLink } from '@/components/preview-customer-page';
 import {
   ArrowLeft,
   Clock,
@@ -377,7 +378,10 @@ export default function TicketDetailPage() {
               <ArrowLeft className="w-5 h-5" />
             </Link>
             <div className="h-6 w-48 bg-slate-800 rounded animate-pulse" />
-            <LanguageToggle />
+            <div className="flex items-center gap-2">
+              <PreviewCustomerPageLink />
+              <LanguageToggle />
+            </div>
           </div>
         </header>
         <main className="max-w-6xl mx-auto w-full px-6 py-20 flex-1 flex flex-col items-center justify-center gap-3">
@@ -403,7 +407,10 @@ export default function TicketDetailPage() {
               </Link>
               <h1 className="font-bold text-lg text-white">{t('detailTitle')}</h1>
             </div>
-            <LanguageToggle />
+            <div className="flex items-center gap-2">
+              <PreviewCustomerPageLink />
+              <LanguageToggle />
+            </div>
           </div>
         </header>
         <main className="max-w-6xl mx-auto w-full px-6 py-20 flex-1 flex flex-col items-center justify-center text-center">
@@ -507,7 +514,10 @@ export default function TicketDetailPage() {
               <Plus className="w-4 h-4 text-emerald-400" />
               {t('newTicketNow')}
             </Link>
-            <LanguageToggle />
+            <div className="flex items-center gap-2">
+              <PreviewCustomerPageLink />
+              <LanguageToggle />
+            </div>
           </div>
         </div>
       </header>
