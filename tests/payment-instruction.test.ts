@@ -3,6 +3,10 @@ import assert from 'node:assert/strict';
 import {
   resolvePaymentInstruction,
   preHoldServiceDeposit,
+  isValidPromptPayRecipient,
+  isPromptPayIdentityComplete,
+  createPromptPayPayload,
+  crc16CcittFalse,
 } from '../apps/booking-consumer/src/lib/payment-instruction.ts';
 
 const complete = {
@@ -11,13 +15,60 @@ const complete = {
   holdDepositAmount: 150,
 };
 
-test('complete tuple is ok', () => {
+test('complete tuple is ok and carries the encodable QR payload', () => {
   assert.deepEqual(resolvePaymentInstruction(complete), {
     ok: true,
     number: '0812345678',
     name: 'Good Cuts Co Ltd',
     amount: 150,
+    payload: createPromptPayPayload({ recipient: '0812345678', amount: 150 }),
   });
+});
+
+test('13-digit ID and dashed mobile recipients are valid', () => {
+  const id = resolvePaymentInstruction({ ...complete, promptpayNumber: '1234567890123' });
+  assert.equal(id.ok, true);
+  const dashed = resolvePaymentInstruction({ ...complete, promptpayNumber: '081-234-5678' });
+  assert.equal(dashed.ok, true);
+  if (dashed.ok) assert.equal(crc16CcittFalse(dashed.payload.slice(0, -4)), dashed.payload.slice(-4));
+});
+
+// R2-1: a non-empty string is not a PromptPay recipient.
+test('malformed non-empty recipient fails closed with no usable number or payload', () => {
+  for (const bad of ['not-a-number', '12345', '081234567', '08123456789', '1812345678', '123456789012', 'abc0812345678x9']) {
+    assert.equal(isValidPromptPayRecipient(bad), false, `${bad} must be invalid`);
+    const r = resolvePaymentInstruction({ ...complete, promptpayNumber: bad });
+    assert.equal(r.ok, false, `${bad} must not be ok`);
+    assert.equal(r.number, null);
+    assert.equal(r.payload, null);
+  }
+});
+
+test('amount beyond the PromptPay field limit fails closed (no payload, not ok)', () => {
+  const r = resolvePaymentInstruction({ ...complete, holdDepositAmount: 1_000_000_000 });
+  assert.equal(r.ok, false);
+  assert.equal(r.payload, null);
+});
+
+test('ok is true only when the QR payload encodes -- every ok instruction is payable', () => {
+  const numbers = [null, '', '  ', 'not-a-number', '0812345678', '1234567890123'];
+  const names = [null, '', 'Shop Co'];
+  const amounts = [null, 0, -1, Number.NaN, 150, 1_000_000_000];
+  for (const promptpayNumber of numbers) for (const promptpayName of names) for (const holdDepositAmount of amounts) {
+    const r = resolvePaymentInstruction({ promptpayNumber, promptpayName, holdDepositAmount });
+    if (r.ok) {
+      assert.equal(r.payload, createPromptPayPayload({ recipient: r.number, amount: r.amount }));
+    } else {
+      assert.equal(r.payload, null);
+    }
+  }
+});
+
+test('identity is complete only with a format-valid number and a configured name', () => {
+  assert.equal(isPromptPayIdentityComplete('0812345678', 'Shop Co'), true);
+  assert.equal(isPromptPayIdentityComplete('not-a-number', 'Shop Co'), false);
+  assert.equal(isPromptPayIdentityComplete('0812345678', '   '), false);
+  assert.equal(isPromptPayIdentityComplete(null, 'Shop Co'), false);
 });
 
 test('missing number fails closed', () => {

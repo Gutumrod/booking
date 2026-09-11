@@ -15,7 +15,6 @@ import {
 } from '../../../lib/booking-service';
 import { LanguageToggle } from '@/components/language-toggle';
 import { QRCodeSVG } from 'qrcode.react';
-import { createPromptPayPayload } from '../../../lib/promptpay';
 import { resolveBookingPageState, type BookingPageState } from '../../../lib/booking-state';
 import { resolvePaymentInstruction, preHoldServiceDeposit } from '../../../lib/payment-instruction';
 
@@ -211,28 +210,21 @@ export default function BookingPage() {
     promptpayName,
     everyServiceNeedsDeposit,
   });
-  // Post-hold payment instruction: shown only when number + configured account
-  // name + a positive server amount are all present.
+  // Post-hold payment instruction: ok only when a format-valid recipient number
+  // + configured account name + a positive server amount all hold and the QR
+  // payload encodes (Codex R2-1). Every payment control below is gated on it.
   const paymentInstruction = resolvePaymentInstruction({
     promptpayNumber,
     promptpayName,
     holdDepositAmount: holdResult?.deposit_amount,
   });
-  const promptpayPayload = ((): string | null => {
-    if (!paymentInstruction.ok) return null;
-    try {
-      return createPromptPayPayload({ recipient: paymentInstruction.number, amount: paymentInstruction.amount });
-    } catch {
-      return null;
-    }
-  })();
 
   const handleCopyPromptpay = () => {
-    if (!promptpayNumber) return;
+    if (!paymentInstruction.ok) return;
     setCopiedPromptpay(true);
     if (navigator.clipboard?.writeText) {
       void navigator.clipboard
-        .writeText(promptpayNumber.replace(/-/g, ''))
+        .writeText(paymentInstruction.number.replace(/-/g, ''))
         .catch((error) => console.error('Error copying PromptPay number:', error));
     }
     setTimeout(() => setCopiedPromptpay(false), 2000);
@@ -240,12 +232,12 @@ export default function BookingPage() {
 
   const handleSaveQr = () => {
     const svg = qrContainerRef.current?.querySelector('svg');
-    if (!svg) return;
+    if (!paymentInstruction.ok || !svg) return;
     setSavedQrNotice(true);
     const qrData = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg.outerHTML)}`;
     const link = document.createElement('a');
     link.href = qrData;
-    link.download = `PromptPay-QR-Deposit-${paymentInstruction.amount ?? ''}THB.svg`;
+    link.download = `PromptPay-QR-Deposit-${paymentInstruction.amount}THB.svg`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -776,7 +768,7 @@ export default function BookingPage() {
                   
                   <div className="pt-2">
                     <div ref={qrContainerRef} className="w-44 h-44 bg-white rounded-2xl p-2 mx-auto mb-2 flex items-center justify-center border border-slate-300 shadow-xl" aria-label={t('step3.promptpayQrAlt')}>
-                      {promptpayPayload ? <QRCodeSVG value={promptpayPayload} size={160} level="M" /> : <AlertTriangle className="w-10 h-10 text-rose-500" />}
+                      <QRCodeSVG value={paymentInstruction.payload} size={160} level="M" />
                     </div>
                     <button
                       type="button"

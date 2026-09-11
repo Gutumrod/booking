@@ -4,7 +4,7 @@ import test from 'node:test';
 import {
   crc16CcittFalse,
   createPromptPayPayload,
-} from '../apps/booking-consumer/src/lib/promptpay.ts';
+} from '../apps/booking-consumer/src/lib/payment-instruction.ts';
 
 test('implements the published CRC-16/CCITT-FALSE check vector', () => {
   assert.equal(crc16CcittFalse('123456789'), '29B1');
