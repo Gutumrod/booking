@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { rowOrNull, rowsOrThrow } from './load-result';
 
 export interface Shop {
   id: string;
@@ -90,45 +91,35 @@ export async function getShopBySlug(slug: string): Promise<Shop | null> {
   // active shops -- unauthenticated clients can no longer select(*) on the
   // shops table itself, which used to also return subscription_status,
   // trial_ends_at, owner_name, etc.
-  const { data, error } = await supabase
+  // maybeSingle(): no row -> { data: null, error: null } (SHOP_NOT_FOUND); a
+  // query/network error throws so the page shows LOAD_ERROR (Codex R2-5).
+  const result = await supabase
     .from('shop_public_profile')
     .select('id, name, slug, phone, address, line_oa_id, promptpay_number, promptpay_name, require_deposit, is_accepting_online_bookings')
     .eq('slug', slug)
-    .single();
+    .maybeSingle();
 
-  if (error || !data) {
-    console.error('Error fetching shop by slug:', error);
-    return null;
-  }
-  return data as Shop;
+  return rowOrNull(result, 'shop') as Shop | null;
 }
 
 export async function getShopServices(shopId: string): Promise<Service[]> {
-  const { data, error } = await supabase
+  const result = await supabase
     .from('services')
     .select('id, shop_id, name, description, duration_minutes, price, deposit_amount')
     .eq('shop_id', shopId)
     .eq('is_active', true);
 
-  if (error) {
-    console.error('Error fetching shop services:', error);
-    return [];
-  }
-  return (data || []) as Service[];
+  return rowsOrThrow(result, 'shop services') as Service[];
 }
 
 export async function getShopStaff(shopId: string): Promise<Staff[]> {
-  const { data, error } = await supabase
+  const result = await supabase
     .from('staff')
     .select('id, shop_id, name, nickname')
     .eq('shop_id', shopId)
     .eq('is_active', true);
 
-  if (error) {
-    console.error('Error fetching shop staff:', error);
-    return [];
-  }
-  return (data || []) as Staff[];
+  return rowsOrThrow(result, 'shop staff') as Staff[];
 }
 
 export async function getShopAvailability(shopId: string): Promise<ShopAvailability> {

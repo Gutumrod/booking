@@ -153,8 +153,9 @@ export default function BookingPage() {
         }
       } catch (error) {
         console.error('Error loading booking page data:', error);
-        // A thrown fetch is a runtime failure, distinct from a genuinely missing
-        // shop (getShopBySlug returns null without throwing for that).
+        // Any shop/service/staff/availability query error throws (lib/load-result)
+        // and lands here as LOAD_ERROR; getShopBySlug returns null without
+        // throwing only for a genuinely missing shop.
         setLoadError(true);
       } finally {
         setIsLoadingShop(false);
