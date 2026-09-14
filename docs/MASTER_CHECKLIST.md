@@ -19,20 +19,32 @@
 - [x] owner authorizes commit/push
 
 ## BK-A implementation blockers from approved V1 contract
-- [ ] private deposit-slip storage/read path
-- [ ] auth-user→staff mapping and staff self-scope
-- [ ] annual UI/copy removed; monthly billing truth reconciled
-- [ ] legacy paid booking quota wall retired/remediated
-- [ ] merchant-owned LINE OA secret/config boundary
-- [ ] confirmation + reminder automation evidence
-- [ ] Pro automatic slip verification + cost/allowance/failure policy
-- [ ] controlled PromptPay QR generation
-- [ ] customer self-reschedule/cancel atomic flow
-- [ ] completion/no-show operational actions + analytics
-- [ ] owner CSV export + deletion/account-closure request path
-- [ ] platform-admin/support privileged audit verification
-- [ ] unsupported absolute public copy (including `ปลอดภัย 100%`) removed or replaced using `SHIPPED-VERIFIED` evidence
-- [ ] commercial UI/copy reconciled with PD-002/PD-003/PD-008: no annual offer, no legacy 100/500 paid wall, and no provisional price presented as final
+
+> **Sync note (2026-09-14, Commander):** the 14 items below are marked CLOSED per
+> `feature/bk01-real-shop-hardening-r4:docs/CURRENT_STATUS.md` ("BK-A V1 Contract Remediation
+> is CLOSED at the current baseline" / `CONT04_PASS`), citing
+> `docs/audit/BK-A-IMPLEMENTATION-EVIDENCE-2026-08-29.md`,
+> `docs/audit/CONT04-CLOSURE-EVIDENCE-2026-09-06.md` and
+> `docs/audit/INDEPENDENT_REVIEW_CODEX_BK-A_2026-08-29.md` (all present on that branch).
+> **This checklist update is a docs-only sync, not an independent re-verification by
+> Commander** per the Independent Verification policy — nobody but the branch's own
+> implementer/reviewer pair has attested this. None of it is merged to `main`; `main`'s
+> code/DB is still pre-BK-A.
+
+- [x] private deposit-slip storage/read path
+- [x] auth-user→staff mapping and staff self-scope
+- [x] annual UI/copy removed; monthly billing truth reconciled
+- [x] legacy paid booking quota wall retired/remediated
+- [x] merchant-owned LINE OA secret/config boundary
+- [x] confirmation + reminder automation evidence
+- [x] Pro automatic slip verification + cost/allowance/failure policy
+- [x] controlled PromptPay QR generation
+- [x] customer self-reschedule/cancel atomic flow
+- [x] completion/no-show operational actions + analytics
+- [x] owner CSV export + deletion/account-closure request path
+- [x] platform-admin/support privileged audit verification
+- [x] unsupported absolute public copy (including `ปลอดภัย 100%`) removed or replaced using `SHIPPED-VERIFIED` evidence
+- [x] commercial UI/copy reconciled with PD-002/PD-003/PD-008: no annual offer, no legacy 100/500 paid wall, and no provisional price presented as final
 
 ## BK-C/BK-D downstream commercial and public-launch gates
 - [ ] final Basic/Pro public prices approved by owner
