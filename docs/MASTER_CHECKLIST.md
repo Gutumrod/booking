@@ -1,6 +1,6 @@
 # BK01 Master Checklist
 
-**Status:** BK-0 governance checklist — 2026-08-28
+**Status:** BK-0 governance checklist retained; current R4 execution checkpoint updated 2026-09-22
 
 ## BK-0 documentation lock
 - [x] baseline branch/commit recorded (`main @ e99615d`)
@@ -95,3 +95,22 @@ BK-SR-02 / BK-B is CLOSED. BK-SR-03 staging/external-system rehearsal is next; t
 - [ ] final public marketing claims limited to `SHIPPED-VERIFIED` evidence
 - [ ] support hours and customer-facing SLA wording approved, if any is offered
 - [ ] all BK-A technical and release gates PASS before public V1
+
+## R4 real-shop hardening checkpoint — 2026-09-22
+- [x] R4 source remediation completed through NEW-F18 at `3b3a3338de029a058aa5763c806be42f8a5205ca`
+- [x] independent Codex R9 = `SOURCE_REVIEW_PASS / BROWSER_PROOF_RESUME`
+- [x] fresh source gates: tests 118/118; lint 0 errors / 12 warnings; Admin + Consumer build/typecheck PASS
+- [x] NEW-F18 Services/Staff runtime path proven on KMO
+- [x] KMO availability 42501 root cause isolated to missing anon SELECT on `shop_id` predicates
+- [x] reviewed narrow public payload-column repair applied without business-data mutation
+- [ ] controlled anon SELECT repair on `staff_schedules.shop_id`
+- [ ] controlled anon SELECT repair on `shop_holidays.shop_id`
+- [ ] Consumer desktop/mobile browser acceptance after privilege repair
+- [ ] authorized positive-flow staff/schedule fixture
+- [ ] positive `service -> staff -> date -> slot -> hold/create` E2E proof
+- [ ] Admin desktop/mobile R4 acceptance matrix
+- [ ] R4 CLOSED with real behavioral evidence
+
+**Current verdict:** `BROWSER_PROOF_PARTIAL / KMO_RUNTIME_AND_FIXTURE_BLOCKED`.
+
+**Hard boundary:** no Junction A retry, LAB/shared-runtime mutation, runtime R7, formal Junction B, Order-live or Claim-live work before durable `HOUSE-A PASS`.

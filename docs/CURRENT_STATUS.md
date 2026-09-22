@@ -1,11 +1,34 @@
-# Current Status - 2026-09-06
+# Current Status - 2026-09-22
 
 **Product:** Booking by WSTERA (BK01)
-**Repository branch:** `feature/bk-a-v1-contract-remediation`
-**Current release code checkpoint:** `dba74bd` - BK-SR-03 LINE remediation code. Current evidence checkpoint: `3ee8368`; full LINE matrix + live reminder acceptance PASS, and Cloudflare rollback/redeploy proof PASS.
-**Portfolio mode:** BUILD-TO-SELL / active Booking V1 release track
+**Repository branch:** `feature/bk01-real-shop-hardening-r4`
+**Canonical source checkpoint:** `3b3a3338de029a058aa5763c806be42f8a5205ca`
+**Current source gate:** `SOURCE_REVIEW_PASS / BROWSER_PROOF_RESUME`
+**Current browser gate:** `BROWSER_PROOF_PARTIAL / KMO_RUNTIME_AND_FIXTURE_BLOCKED`
+**Portfolio mode:** BUILD-TO-SELL / active Booking V1 real-shop hardening track
 
-## Verified Current State
+## 2026-09-22 Current Execution Override
+
+This section supersedes older execution-status statements below where they conflict; historical closure evidence remains valid for the checkpoint it describes.
+
+- R4 source remediation/re-review is complete through NEW-F18 at `3b3a333...`.
+- Codex R9 independently returned `SOURCE_REVIEW_PASS / BROWSER_PROOF_RESUME` at that exact SHA.
+- Fresh R9 verification: tests 118/118 PASS; lint 0 errors / 12 warnings; Admin and Consumer builds PASS; both typechecks PASS; diff/secret/protected-scope checks PASS.
+- Real KMO runtime proof closed the former Services/Staff `is_active` 42501 path: shop profile 200, services 200 with 2 rows, staff 200 with 0 rows.
+- Remaining public availability 42501 is proven KMO downstream privilege drift: anon lacks SELECT on predicate column `shop_id` for `staff_schedules` and `shop_holidays`.
+- The approved narrow public payload-column repair was applied on KMO without business-data mutation; the final two-column `shop_id` repair was safety-blocked by managed tooling and was NOT executed.
+- KMO currently returns zero public staff rows. Positive customer `service -> staff -> date -> slot -> hold/create` proof therefore requires an authorized real or isolated fixture and was not fabricated.
+- Admin browser/mobile acceptance remains owed. R4 is NOT CLOSED.
+- Do not retry Junction A, mutate LAB/shared runtime, start runtime R7, formal Junction B, Order-live or Claim-live work until durable `HOUSE-A PASS`.
+
+Durable current evidence:
+- `docs/audit/r4-2026-09-22/REPORT-CODEX-BK01-R4-SOURCE-RE-REVIEW-R9-2026-09-22.md`
+- `docs/audit/r4-2026-09-22/REPORT-BK01-R4-BROWSER-PROOF-START-2026-09-22.md`
+- `docs/audit/r4-2026-09-22/REPORT-BK01-R4-BROWSER-PROOF-PARTIAL-2026-09-22.md`
+- `docs/daily/2026-09-22.md`
+- `docs/handoffs/HANDOFF-BK01-R4-EOD-2026-09-22.md`
+
+## Verified Historical / Prior Closed State
 
 Booking Stage 4 migration-history reconciliation is CLOSED at `836943a` and must not be repeated.
 

@@ -8,6 +8,20 @@ only with browser/mobile proof on an approved target
 **Branch:** `docs/bk01-real-shop-hardening`
 **Consumes:** R0 (KMO-02, KMO-03, KMO-05, KMO-08, KMO-09, KMO-X4), R1 (HC-01, HC-09, HC-16, HC-19), R3 (§5, §7)
 
+## Execution status override — 2026-09-22
+
+The specification below remains the locked R4 contract; this block records current execution evidence without rewriting historical design text.
+
+- Canonical source: `feature/bk01-real-shop-hardening-r4 @ 3b3a3338de029a058aa5763c806be42f8a5205ca`.
+- Independent source verdict: `SOURCE_REVIEW_PASS / BROWSER_PROOF_RESUME` after NEW-F18.
+- Fresh gates: tests 118/118 PASS; lint 0 errors / 12 warnings; Admin + Consumer builds PASS; both typechecks PASS.
+- NEW-F18 Services/Staff runtime proof is PASS against KMO.
+- Browser/mobile acceptance remains partial because KMO availability reads still lack anon SELECT on `shop_id` for `staff_schedules` and `shop_holidays`.
+- Positive customer hold/create proof is blocked by KMO public `staff = 0` until an authorized fixture exists.
+- Admin browser/mobile behavioral proof remains owed.
+- Therefore R4 is **NOT CLOSED**. Current disposition: `BROWSER_PROOF_PARTIAL / KMO_RUNTIME_AND_FIXTURE_BLOCKED`.
+- Evidence: `docs/audit/r4-2026-09-22/` and `docs/daily/2026-09-22.md`.
+
 ## Scope and constraint
 
 R4 covers UX defects fixable in `apps/**` source without a WSTERA LAB migration. Per brief

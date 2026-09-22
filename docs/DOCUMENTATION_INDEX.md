@@ -1,6 +1,6 @@
 # BK01 Documentation Index & Authority Order
 
-**Status:** LOCKED — 2026-08-28
+**Status:** Authority order LOCKED — 2026-08-28; current execution pointers updated 2026-09-22
 
 ## Authority order
 When documents disagree, use this order:
@@ -52,3 +52,15 @@ Historical documents may describe behavior that was true at a prior commit/envir
 5. rerun documentation audit before merge.
 
 No implementation phase may introduce a new externally visible entitlement, role capability, money state or privacy boundary without documentation/traceability change first.
+
+## Current execution pointers — 2026-09-22
+For current implementation/gate status, read these before older phase reports:
+- `CURRENT_STATUS.md` — canonical execution snapshot and hard boundaries
+- `daily/2026-09-22.md` — end-of-day verified work log
+- `handoffs/HANDOFF-BK01-R4-EOD-2026-09-22.md` — exact resume order
+- `architecture/R4-UX-REMEDIATION-SPEC-2026-09-09.md` — locked R4 contract plus current execution override
+- `audit/r4-2026-09-22/REPORT-CODEX-BK01-R4-SOURCE-RE-REVIEW-R9-2026-09-22.md` — latest independent source verdict
+- `audit/r4-2026-09-22/REPORT-BK01-R4-BROWSER-PROOF-START-2026-09-22.md` — browser discovery evidence
+- `audit/r4-2026-09-22/REPORT-BK01-R4-BROWSER-PROOF-PARTIAL-2026-09-22.md` — latest browser/runtime disposition
+
+These execution records do not override owner/product decisions or numbered SSOT contracts. They supersede older execution-status wording only where a later verified checkpoint exists.
