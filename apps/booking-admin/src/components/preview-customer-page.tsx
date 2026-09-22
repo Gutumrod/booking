@@ -16,14 +16,18 @@ import { tenantPreviewUrl, type SelectedShopIdentity } from '@/lib/customer-page
 
 const SelectedShopContext = createContext<SelectedShopIdentity>({ shopId: null, slug: null });
 
+export function useSelectedShopIdentity(): SelectedShopIdentity {
+  return useContext(SelectedShopContext);
+}
+
 export function ShopSlugProvider({ shopId, slug, children }: SelectedShopIdentity & { children: React.ReactNode }) {
   return <SelectedShopContext.Provider value={{ shopId, slug }}>{children}</SelectedShopContext.Provider>;
 }
 
-/** activeShopId: shop id of the data this page loaded ('' / undefined while loading). */
+/** activeShopId: exact shop id of the data this page has resolved; unknown/pending fails closed. */
 export function PreviewCustomerPageLink({ activeShopId }: { activeShopId?: string | null }) {
   const t = useTranslations('dashboard');
-  const href = tenantPreviewUrl(useContext(SelectedShopContext), activeShopId);
+  const href = tenantPreviewUrl(useSelectedShopIdentity(), activeShopId);
   if (!href) return null;
   return (
     <a

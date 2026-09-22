@@ -24,8 +24,16 @@ export interface SelectedShopIdentity {
  * loaded data for a different shop -- Preview must never point at a tenant
  * other than the one whose data is on screen.
  */
+export function isExactShopIdentityMatch(
+  layoutShopId: string | null | undefined,
+  pageShopId: string | null | undefined,
+): boolean {
+  const layout = typeof layoutShopId === 'string' ? layoutShopId.trim() : '';
+  const page = typeof pageShopId === 'string' ? pageShopId.trim() : '';
+  return Boolean(layout && page && layout === page);
+}
+
 export function tenantPreviewUrl(identity: SelectedShopIdentity, activeShopId?: string | null): string | null {
-  if (!identity.shopId) return null;
-  if (activeShopId && activeShopId !== identity.shopId) return null;
+  if (!isExactShopIdentityMatch(identity.shopId, activeShopId)) return null;
   return customerPageUrl(identity.slug);
 }

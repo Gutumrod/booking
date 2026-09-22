@@ -42,7 +42,7 @@ test('Preview link is visible on small screens with an accessible label', () => 
   assert.doesNotMatch(anchorClass, /(^|\s)hidden(\s|$)/, 'anchor itself must not be hidden at any breakpoint');
   assert.match(anchor, /aria-label=\{t\('previewCustomerPage'\)\}/);
   assert.match(anchor, /title=\{t\('previewCustomerPage'\)\}/);
-  assert.match(src, /tenantPreviewUrl\(useContext\(SelectedShopContext\), activeShopId\)/);
+  assert.match(src, /tenantPreviewUrl\(useSelectedShopIdentity\(\), activeShopId\)/);
   const code = src.replace(/^\s*\/\/.*$/gm, '');
   assert.doesNotMatch(code, /readiness|public_booking|blocked_r7|payment/i, 'Preview is not gated on readiness/payment/R7');
 });
@@ -51,4 +51,16 @@ test('dashboard page no longer hides Preview or links to #', () => {
   const src = read('app/dashboard/page.tsx');
   assert.doesNotMatch(src, /hidden sm:flex/);
   assert.doesNotMatch(src, /: '#'/);
+});
+
+test('ticket routes keep Preview non-actionable until their page shop identity resolves', () => {
+  for (const rel of [
+    'app/dashboard/tickets/page.tsx',
+    'app/dashboard/tickets/new/page.tsx',
+    'app/dashboard/tickets/[id]/page.tsx',
+  ]) {
+    const src = read(rel);
+    assert.match(src, /const \[shopId, setShopId\] = useState<string>\(''\)/);
+    assert.match(src, /<PreviewCustomerPageLink activeShopId=\{shopId\} \/>/);
+  }
 });

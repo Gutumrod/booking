@@ -103,13 +103,14 @@ test('layout, dashboard data, ticket data and billing all use the canonical sele
   assert.match(read('app/dashboard/page.tsx'), /customerPageUrl\(shopSlug\)/);
 });
 
-test('Preview fails closed on a tenant mismatch or missing identity/slug', () => {
+test('Preview fails closed until the exact page tenant identity is resolved', () => {
   const identity = { shopId: 'shop-a', slug: 'good-cuts' };
   const url = `${BOOKING_SITE_URL}/book/good-cuts`;
-  assert.equal(tenantPreviewUrl(identity), url);
-  assert.equal(tenantPreviewUrl(identity, ''), url, 'page data still loading');
+  assert.equal(tenantPreviewUrl(identity), null, 'undefined page identity is pending');
+  assert.equal(tenantPreviewUrl(identity, null), null, 'null page identity is pending');
+  assert.equal(tenantPreviewUrl(identity, ''), null, 'empty page identity is pending');
   assert.equal(tenantPreviewUrl(identity, 'shop-a'), url);
   assert.equal(tenantPreviewUrl(identity, 'shop-b'), null, 'never preview another tenant');
-  assert.equal(tenantPreviewUrl({ shopId: null, slug: 'good-cuts' }), null);
-  assert.equal(tenantPreviewUrl({ shopId: 'shop-a', slug: null }), null, 'failed slug read hides Preview');
+  assert.equal(tenantPreviewUrl({ shopId: null, slug: 'good-cuts' }, 'shop-a'), null);
+  assert.equal(tenantPreviewUrl({ shopId: 'shop-a', slug: null }, 'shop-a'), null, 'failed slug read hides Preview');
 });

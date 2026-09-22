@@ -32,8 +32,9 @@ import {
   type DashboardSubscription,
 } from '@/lib/admin-service';
 import { LanguageToggle } from '@/components/language-toggle';
-import { PreviewCustomerPageLink } from '@/components/preview-customer-page';
-import { BOOKING_SITE_URL, customerPageUrl } from '@/lib/customer-page-url';
+import { PreviewCustomerPageLink, useSelectedShopIdentity } from '@/components/preview-customer-page';
+import { BOOKING_SITE_URL, customerPageUrl, isExactShopIdentityMatch } from '@/lib/customer-page-url';
+import { createLatestRequestGate } from '@/lib/latest-request-gate';
 import { commitNumericField, DURATION_INPUT_PROPS, DURATION_RULES } from '@/lib/numeric-field';
 import { computeReadiness, isShopReady, needsMerchantAttention, type ReadinessKey } from '@/lib/readiness';
 import { TimeField } from '@/components/time-field';
@@ -109,6 +110,8 @@ export default function AdminDashboard() {
   const t = useTranslations('dashboard');
   const tCommon = useTranslations('common');
   const locale = useLocale();
+  const layoutShopIdentity = useSelectedShopIdentity();
+  const dashboardRequestGateRef = useRef(createLatestRequestGate());
   const DAY_NAMES = t.raw('dayNames') as string[];
 
   const [activeTab, setActiveTab] = useState<'bookings' | 'schedules' | 'services' | 'staff' | 'settings' | 'billing'>('bookings');
@@ -222,14 +225,29 @@ export default function AdminDashboard() {
     public_booking: t('readiness_public_booking'),
   };
 
-  // Stable callback is required by the initial-load effect below.
+  // Every initial/retry/post-mutation reload shares one latest-request-wins gate.
+  // Clearing shopId while a request is pending keeps Preview fail-closed.
   const loadDashboardBookings = useCallback(async (showLoading = true) => {
+    const requestGate = dashboardRequestGateRef.current;
+    const requestToken = requestGate.begin();
     if (showLoading) setIsBookingsLoading(true);
+    setShopId('');
     setBookingError('');
     setManagementError('');
 
     try {
       const data = await fetchAdminDashboardData();
+      if (!requestGate.isCurrent(requestToken)) return;
+
+      // Layout and page data are independent requests. Never apply a snapshot
+      // unless both resolve to the exact same canonical selected shop.
+      if (!isExactShopIdentityMatch(layoutShopIdentity.shopId, data.shop.id)) {
+        const message = t('loadFailed');
+        setBookingError(message);
+        setManagementError(message);
+        return;
+      }
+
       setBookings(data.bookings);
       setShopName(data.shop.name);
       setShopSlug(data.shop.slug);
@@ -249,53 +267,28 @@ export default function AdminDashboard() {
       setSubscription(data.subscription);
       setBillingLoadError(data.subscriptionError ?? '');
     } catch (error) {
+      if (!requestGate.isCurrent(requestToken)) return;
       const message = error instanceof Error ? error.message : t('loadFailed');
       setBookingError(message);
       setManagementError(message);
     } finally {
-      if (showLoading) setIsBookingsLoading(false);
+      if (requestGate.isCurrent(requestToken) && showLoading) setIsBookingsLoading(false);
     }
-  }, [t]);
+  }, [layoutShopIdentity.shopId, t]);
 
   useEffect(() => {
     let isCurrent = true;
+    const requestGate = dashboardRequestGateRef.current;
 
-    fetchAdminDashboardData()
-      .then((data) => {
-        if (!isCurrent) return;
-        setBookings(data.bookings);
-        setShopName(data.shop.name);
-        setShopSlug(data.shop.slug);
-        setShopId(data.shop.id);
-        setShopRole(data.shop.role);
-        setShopPhone(data.shop.phone);
-        setShopAddress(data.shop.address);
-        setPromptpayNumber(data.shop.promptpayNumber);
-        setPromptpayName(data.shop.promptpayName);
-        setRequireDeposit(data.shop.requireDeposit);
-        setDefaultDepositAmount(data.shop.defaultDepositAmount);
-        setLineOaId(data.shop.lineOaId);
-        setServices(data.services);
-        setStaffList(data.staff);
-        setSchedules((prev) => mergeServerSchedules(prev, data.schedules, dirtyStaffIdsRef.current));
-        setHolidaysList(data.holidays);
-        setSubscription(data.subscription);
-        setBillingLoadError(data.subscriptionError ?? '');
-      })
-      .catch((error: unknown) => {
-        if (!isCurrent) return;
-        const message = error instanceof Error ? error.message : t('loadFailed');
-        setBookingError(message);
-        setManagementError(message);
-      })
-      .finally(() => {
-        if (isCurrent) setIsBookingsLoading(false);
-      });
+    queueMicrotask(() => {
+      if (isCurrent) void loadDashboardBookings(true);
+    });
 
     return () => {
       isCurrent = false;
+      requestGate.cancel();
     };
-  }, [t]);
+  }, [loadDashboardBookings]);
 
   // Warn before leaving with unsaved staff schedule edits (KMO-05).
   useEffect(() => {
