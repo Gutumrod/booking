@@ -103,21 +103,23 @@ export async function getShopBySlug(slug: string): Promise<Shop | null> {
 }
 
 export async function getShopServices(shopId: string): Promise<Service[]> {
+  // Public RLS is the active-row boundary. Do not filter on private policy
+  // columns such as is_active from the anonymous browser client (NEW-F18).
   const result = await supabase
     .from('services')
     .select('id, shop_id, name, description, duration_minutes, price, deposit_amount')
-    .eq('shop_id', shopId)
-    .eq('is_active', true);
+    .eq('shop_id', shopId);
 
   return rowsOrThrow(result, 'shop services') as Service[];
 }
 
 export async function getShopStaff(shopId: string): Promise<Staff[]> {
+  // Same contract as services: RLS exposes only active public rows. The browser
+  // needs no SELECT privilege on is_active and must not reference it in filters.
   const result = await supabase
     .from('staff')
     .select('id, shop_id, name, nickname')
-    .eq('shop_id', shopId)
-    .eq('is_active', true);
+    .eq('shop_id', shopId);
 
   return rowsOrThrow(result, 'shop staff') as Staff[];
 }

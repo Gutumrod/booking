@@ -35,6 +35,11 @@ test('public booking reads only approved service and staff columns', () => {
   assert.doesNotMatch(service, /\.from\('services'\)[\s\S]{0,80}\.select\('\*'\)/);
   assert.doesNotMatch(service, /\.from\('staff'\)[\s\S]{0,80}\.select\('\*'\)/);
   assert.match(service, /\.select\('id, shop_id, name, nickname'\)/);
+  assert.doesNotMatch(
+    service,
+    /\.from\('(services|staff)'\)[\s\S]{0,220}\.eq\('is_active',\s*true\)/,
+    'anonymous browser must rely on public RLS rather than filtering private is_active',
+  );
 });
 
 test('staff auth mapping is not client-readable', () => {
