@@ -33,7 +33,7 @@ import {
 } from '@/lib/admin-service';
 import { LanguageToggle } from '@/components/language-toggle';
 import { PreviewCustomerPageLink, useSelectedShopIdentity } from '@/components/preview-customer-page';
-import { BOOKING_SITE_URL, customerPageUrl, isExactShopIdentityMatch } from '@/lib/customer-page-url';
+import { customerPageUrl, isExactShopIdentityMatch } from '@/lib/customer-page-url';
 import { createLatestRequestGate } from '@/lib/latest-request-gate';
 import { commitNumericField, DURATION_INPUT_PROPS, DURATION_RULES } from '@/lib/numeric-field';
 import { computeReadiness, isShopReady, needsMerchantAttention, type ReadinessKey } from '@/lib/readiness';
@@ -112,6 +112,7 @@ export default function AdminDashboard() {
   const locale = useLocale();
   const layoutShopIdentity = useSelectedShopIdentity();
   const dashboardRequestGateRef = useRef(createLatestRequestGate());
+  const appliedShopIdRef = useRef('');
   const DAY_NAMES = t.raw('dayNames') as string[];
 
   const [activeTab, setActiveTab] = useState<'bookings' | 'schedules' | 'services' | 'staff' | 'settings' | 'billing'>('bookings');
@@ -136,6 +137,9 @@ export default function AdminDashboard() {
   const [bookingError, setBookingError] = useState('');
   const [mutatingBookingId, setMutatingBookingId] = useState<string | null>(null);
   const [shopId, setShopId] = useState('');
+  const [tenantSnapshotValid, setTenantSnapshotValid] = useState(false);
+  const tenantSnapshotReady =
+    tenantSnapshotValid && isExactShopIdentityMatch(layoutShopIdentity.shopId, shopId);
   const [shopRole, setShopRole] = useState<'owner' | 'admin' | 'staff'>('staff');
   const [managementError, setManagementError] = useState('');
   const [mutatingResourceId, setMutatingResourceId] = useState<string | null>(null);
@@ -149,6 +153,7 @@ export default function AdminDashboard() {
   const [shopPhone, setShopPhone] = useState('');
   const [shopAddress, setShopAddress] = useState('');
   const [shopSlug, setShopSlug] = useState('');
+  const dashboardCustomerUrl = tenantSnapshotReady ? customerPageUrl(shopSlug) : null;
   const [shopSettingsSaved, setShopSettingsSaved] = useState(false);
   const [copiedLinkNotice, setCopiedLinkNotice] = useState(false);
 
@@ -230,6 +235,22 @@ export default function AdminDashboard() {
   const loadDashboardBookings = useCallback(async (showLoading = true) => {
     const requestGate = dashboardRequestGateRef.current;
     const requestToken = requestGate.begin();
+    const previousAppliedShopId = appliedShopIdRef.current;
+    const tenantChanged = Boolean(previousAppliedShopId)
+      && !isExactShopIdentityMatch(layoutShopIdentity.shopId, previousAppliedShopId);
+
+    setTenantSnapshotValid(false);
+    if (tenantChanged) {
+      setActiveTab('bookings');
+      setSelectedSlipBooking(null);
+      setSignedSlipUrl(null);
+      setCancelBookingTarget(null);
+      setCancelReason('');
+      setShowServiceForm(false);
+      setEditingService(null);
+      setSelectedScheduleDays({});
+      setDirty(new Set());
+    }
     if (showLoading) setIsBookingsLoading(true);
     setShopId('');
     setBookingError('');
@@ -248,6 +269,8 @@ export default function AdminDashboard() {
         return;
       }
 
+      appliedShopIdRef.current = data.shop.id;
+      setTenantSnapshotValid(true);
       setBookings(data.bookings);
       setShopName(data.shop.name);
       setShopSlug(data.shop.slug);
@@ -302,6 +325,7 @@ export default function AdminDashboard() {
   }, [dirtyStaffIds]);
 
   const handleApproveSlip = async (bookingId: string) => {
+    if (!tenantSnapshotReady) return;
     setMutatingBookingId(bookingId);
     setBookingError('');
     try {
@@ -316,6 +340,7 @@ export default function AdminDashboard() {
   };
 
   const handleRejectSlip = async (bookingId: string) => {
+    if (!tenantSnapshotReady) return;
     setMutatingBookingId(bookingId);
     setBookingError('');
     try {
@@ -330,7 +355,7 @@ export default function AdminDashboard() {
   };
 
   const handleConfirmCancellation = async () => {
-    if (!cancelBookingTarget || !cancelReason.trim()) return;
+    if (!tenantSnapshotReady || !cancelBookingTarget || !cancelReason.trim()) return;
 
     setMutatingBookingId(cancelBookingTarget.id);
     setBookingError('');
@@ -347,7 +372,7 @@ export default function AdminDashboard() {
   };
 
   const handleBookingOutcome = async (bookingId: string, outcome: 'completed' | 'no_show') => {
-    if (shopRole === 'staff') return;
+    if (!tenantSnapshotReady || shopRole === 'staff') return;
     setMutatingBookingId(bookingId);
     setBookingError('');
     try {
@@ -361,7 +386,7 @@ export default function AdminDashboard() {
   };
 
   const handleDataExport = async () => {
-    if (!shopId || shopRole !== 'owner') return;
+    if (!tenantSnapshotReady || !shopId || shopRole !== 'owner') return;
     setMutatingResourceId('data-export');
     setManagementError('');
     try {
@@ -386,7 +411,7 @@ export default function AdminDashboard() {
   };
 
   const handleAccountClosure = async () => {
-    if (!shopId || shopRole !== 'owner') return;
+    if (!tenantSnapshotReady || !shopId || shopRole !== 'owner') return;
     const reason = window.prompt(t('closureReasonPrompt'))?.trim();
     if (!reason) return;
     setMutatingResourceId('account-closure');
@@ -402,7 +427,7 @@ export default function AdminDashboard() {
   };
 
   const handleUpgrade = async (plan: 'basic_490' | 'pro_990') => {
-    if (shopRole !== 'owner') return;
+    if (!tenantSnapshotReady || shopRole !== 'owner') return;
 
     setMutatingResourceId(`checkout-${plan}`);
     setManagementError('');
@@ -416,7 +441,7 @@ export default function AdminDashboard() {
   };
 
   const handleManageBilling = async () => {
-    if (shopRole !== 'owner') return;
+    if (!tenantSnapshotReady || shopRole !== 'owner') return;
 
     setMutatingResourceId('billing-portal');
     setManagementError('');
@@ -431,7 +456,7 @@ export default function AdminDashboard() {
 
   const handleSaveShopSettings = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!shopId || shopRole !== 'owner') return;
+    if (!tenantSnapshotReady || !shopId || shopRole !== 'owner') return;
 
     setMutatingResourceId('shop-settings');
     setManagementError('');
@@ -455,15 +480,15 @@ export default function AdminDashboard() {
   };
 
   const handleCopyShopLink = () => {
-    const fullUrl = `${BOOKING_SITE_URL}/book/${shopSlug}`;
-    navigator.clipboard.writeText(fullUrl);
+    if (!tenantSnapshotReady || !dashboardCustomerUrl) return;
+    navigator.clipboard.writeText(dashboardCustomerUrl);
     setCopiedLinkNotice(true);
     setTimeout(() => setCopiedLinkNotice(false), 2000);
   };
 
   const handleAddStaff = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!shopId || !newStaffName.trim()) return;
+    if (!tenantSnapshotReady || !shopId || !newStaffName.trim()) return;
 
     setMutatingResourceId('staff-new');
     setManagementError('');
@@ -480,6 +505,7 @@ export default function AdminDashboard() {
   };
 
   const toggleStaffActive = async (staffMember: StaffMember) => {
+    if (!tenantSnapshotReady) return;
     setMutatingResourceId(staffMember.id);
     setManagementError('');
     try {
@@ -493,7 +519,7 @@ export default function AdminDashboard() {
   };
 
   const handleLinkStaffUser = async (staffMember: StaffMember) => {
-    if (shopRole !== 'owner') return;
+    if (!tenantSnapshotReady || shopRole !== 'owner') return;
     const email = window.prompt(t('staffEmailPrompt'))?.trim();
     if (!email) return;
     setMutatingResourceId(`link-${staffMember.id}`);
@@ -510,7 +536,7 @@ export default function AdminDashboard() {
 
   const handleAddHoliday = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!shopId || !specialHolidayDate) return;
+    if (!tenantSnapshotReady || !shopId || !specialHolidayDate) return;
     setMutatingResourceId('holiday-new');
     setManagementError('');
     try {
@@ -526,6 +552,7 @@ export default function AdminDashboard() {
   };
 
   const handleDeleteHoliday = async (holidayId: string) => {
+    if (!tenantSnapshotReady) return;
     setMutatingResourceId(holidayId);
     setManagementError('');
     try {
@@ -559,6 +586,7 @@ export default function AdminDashboard() {
   // bug -- it overwrote other cards' unsaved edits). The in-memory `days` is
   // exactly what was saved.
   const handleSaveSchedule = async (schedule: DashboardStaffSchedule) => {
+    if (!tenantSnapshotReady) return;
     setMutatingResourceId(schedule.staffId);
     setManagementError('');
     try {
@@ -572,6 +600,7 @@ export default function AdminDashboard() {
   };
 
   const handleSaveAllSchedules = async () => {
+    if (!tenantSnapshotReady) return;
     const targets = schedules.filter((s) => dirtyStaffIdsRef.current.has(s.staffId));
     if (targets.length === 0) return;
     setMutatingResourceId('schedules-all');
@@ -612,7 +641,7 @@ export default function AdminDashboard() {
 
   const handleSaveService = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!shopId || !serviceName.trim()) return;
+    if (!tenantSnapshotReady || !shopId || !serviceName.trim()) return;
 
     const durationParsed = commitNumericField(serviceDuration, DURATION_RULES);
     const priceParsed = commitNumericField(servicePrice, { min: 0 });
@@ -677,6 +706,7 @@ export default function AdminDashboard() {
   };
 
   const handleToggleService = async (service: ServiceItem) => {
+    if (!tenantSnapshotReady) return;
     setMutatingResourceId(service.id);
     setManagementError('');
     try {
@@ -699,12 +729,13 @@ export default function AdminDashboard() {
               Q
             </div>
             <div>
-              <h1 className="font-bold text-base text-white">{t('shopNameDashboard', { shopName })}</h1>
-              <p className="text-[11px] text-slate-400">{t('phonePrefix')}{shopPhone || '-'}</p>
+              <h1 className="font-bold text-base text-white">{t('shopNameDashboard', { shopName: tenantSnapshotReady ? shopName : tCommon('loading') })}</h1>
+              <p className="text-[11px] text-slate-400">{t('phonePrefix')}{tenantSnapshotReady ? (shopPhone || '-') : '-'}</p>
             </div>
           </div>
 
           <div className="flex min-w-0 max-w-full items-center gap-3">
+            {tenantSnapshotReady && (
             <nav className="flex min-w-0 items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs overflow-x-auto">
               <button
                 onClick={() => setActiveTab('bookings')}
@@ -749,6 +780,7 @@ export default function AdminDashboard() {
                 {t('tabTickets')}
               </Link>}
             </nav>
+            )}
             <PreviewCustomerPageLink activeShopId={shopId} />
             <LanguageToggle />
           </div>
@@ -757,6 +789,24 @@ export default function AdminDashboard() {
 
       {/* Main Content Area */}
       <main className="max-w-6xl mx-auto w-full px-6 py-8 flex-1">
+        {!tenantSnapshotReady ? (
+          <div className="mx-auto max-w-xl rounded-2xl border border-slate-800 bg-slate-900 p-6 text-center shadow-xl">
+            <AlertCircle className="mx-auto mb-3 h-6 w-6 text-amber-400" />
+            <p className="text-sm font-semibold text-white">
+              {bookingError || managementError || tCommon('loading')}
+            </p>
+            {(bookingError || managementError) && (
+              <button
+                type="button"
+                onClick={() => void loadDashboardBookings(true)}
+                className="mt-4 rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-xs font-bold text-white hover:bg-slate-700"
+              >
+                {t('retry')}
+              </button>
+            )}
+          </div>
+        ) : (
+          <>
         {/* KPI Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4">
@@ -886,9 +936,9 @@ export default function AdminDashboard() {
                   </button>
                 </div>
 
-                {customerPageUrl(shopSlug) && (
+                {dashboardCustomerUrl && (
                   <a
-                    href={customerPageUrl(shopSlug) as string}
+                    href={dashboardCustomerUrl}
                     target="_blank"
                     rel="noreferrer"
                     className="bg-slate-800 hover:bg-slate-700 text-xs text-emerald-400 px-3 py-2 rounded-xl flex items-center gap-1.5 border border-slate-700 font-medium"
@@ -1421,7 +1471,7 @@ export default function AdminDashboard() {
                   <Globe className="w-4 h-4 text-emerald-400 flex-shrink-0" />
                   <span className="text-slate-400">{t('shopLinkLabel')}</span>
                   <span className="font-mono text-emerald-400 font-bold bg-slate-900 px-2 py-0.5 rounded border border-slate-800">
-                    {BOOKING_SITE_URL}/book/{shopSlug}
+                    {dashboardCustomerUrl ?? '-'}
                   </span>
                 </div>
                 <button
@@ -1868,10 +1918,12 @@ export default function AdminDashboard() {
             </div>
           </div>
         )}
+          </>
+        )}
       </main>
 
       {/* SLIP VERIFICATION MODAL */}
-      {selectedSlipBooking && (
+      {tenantSnapshotReady && selectedSlipBooking && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-sm w-full p-6 space-y-4 shadow-2xl animate-fade-in relative">
             {/* Top Right Close Button */}
@@ -1933,7 +1985,7 @@ export default function AdminDashboard() {
         </div>
       )}
 
-      {cancelBookingTarget && (
+      {tenantSnapshotReady && cancelBookingTarget && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl animate-fade-in">
             <div>
