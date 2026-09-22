@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
 import {
@@ -313,10 +313,21 @@ export default function AdminDashboard() {
     }
   }, [layoutShopIdentity.shopId, t]);
 
-  useEffect(() => {
-    let isCurrent = true;
+  // Commit-synchronous authority boundary (NEW-F17): when React commits a
+  // different layout tenant, stale callbacks must lose authority before any
+  // passive effect or promise continuation can mint a request generation.
+  useLayoutEffect(() => {
     const requestGate = dashboardRequestGateRef.current;
     currentLayoutShopIdRef.current = layoutShopIdentity.shopId;
+
+    return () => {
+      currentLayoutShopIdRef.current = null;
+      requestGate.cancel();
+    };
+  }, [layoutShopIdentity.shopId]);
+
+  useEffect(() => {
+    let isCurrent = true;
 
     queueMicrotask(() => {
       if (isCurrent) void loadDashboardBookings(true);
@@ -324,10 +335,8 @@ export default function AdminDashboard() {
 
     return () => {
       isCurrent = false;
-      currentLayoutShopIdRef.current = null;
-      requestGate.cancel();
     };
-  }, [layoutShopIdentity.shopId, loadDashboardBookings]);
+  }, [loadDashboardBookings]);
 
   // Warn before leaving with unsaved staff schedule edits (KMO-05).
   useEffect(() => {

@@ -104,3 +104,48 @@ test('dashboard binds request authority to the current layout identity before an
   assert.match(src, /!requestGate\.isCurrent\(requestToken\)[\s\S]{0,120}currentLayoutShopIdRef\.current !== requestedLayoutShopId/);
   assert.match(src, /requestGate\.isCurrent\(requestToken\)[\s\S]{0,160}currentLayoutShopIdRef\.current === requestedLayoutShopId[\s\S]{0,120}showLoading/);
 });
+
+test('transition-gap authority synchronizes at layout-effect commit boundary', () => {
+  const gate = createLatestRequestGate();
+  let committedLayout: string | null = 'shop-a';
+
+  const beginForLayout = (capturedLayout: string | null) => {
+    if (committedLayout !== capturedLayout) return null;
+    return gate.begin();
+  };
+
+  const requestA = beginForLayout('shop-a');
+  assert.notEqual(requestA, null);
+
+  // Model React committing B before passive effects: layout-effect cleanup/setup
+  // is commit-synchronous, so authority changes before a stale promise can resume.
+  committedLayout = null;
+  gate.cancel();
+  committedLayout = 'shop-b';
+
+  const staleA = beginForLayout('shop-a');
+  assert.equal(staleA, null, 'stale A cannot mint authority in the commit-to-passive gap');
+
+  const requestB = beginForLayout('shop-b');
+  assert.notEqual(requestB, null);
+  assert.equal(gate.isCurrent(requestB as number), true);
+});
+
+test('dashboard uses layout effect, not passive effect, for layout authority synchronization', () => {
+  const src = readFileSync(new URL('../apps/booking-admin/src/app/dashboard/page.tsx', import.meta.url), 'utf8');
+
+  assert.match(src, /useLayoutEffect\(\(\) => \{/);
+  const layoutEffectStart = src.indexOf('useLayoutEffect(() => {');
+  const passiveEffectStart = src.indexOf('useEffect(() => {', layoutEffectStart);
+  const syncAssignment = src.indexOf('currentLayoutShopIdRef.current = layoutShopIdentity.shopId;', layoutEffectStart);
+  const cleanupNull = src.indexOf('currentLayoutShopIdRef.current = null;', layoutEffectStart);
+  const cleanupCancel = src.indexOf('requestGate.cancel();', layoutEffectStart);
+
+  assert.notEqual(layoutEffectStart, -1);
+  assert.notEqual(syncAssignment, -1);
+  assert.notEqual(cleanupNull, -1);
+  assert.notEqual(cleanupCancel, -1);
+  assert.ok(syncAssignment < passiveEffectStart, 'layout identity must synchronize before passive loader effect');
+  assert.ok(cleanupNull < passiveEffectStart, 'layout cleanup must be commit-synchronous');
+  assert.ok(cleanupCancel < passiveEffectStart, 'request cancellation must be commit-synchronous');
+});
