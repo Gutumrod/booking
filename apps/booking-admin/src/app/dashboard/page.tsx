@@ -112,6 +112,7 @@ export default function AdminDashboard() {
   const locale = useLocale();
   const layoutShopIdentity = useSelectedShopIdentity();
   const dashboardRequestGateRef = useRef(createLatestRequestGate());
+  const currentLayoutShopIdRef = useRef<string | null>(layoutShopIdentity.shopId);
   const appliedShopIdRef = useRef('');
   const DAY_NAMES = t.raw('dayNames') as string[];
 
@@ -233,6 +234,9 @@ export default function AdminDashboard() {
   // Every initial/retry/post-mutation reload shares one latest-request-wins gate.
   // Clearing shopId while a request is pending keeps Preview fail-closed.
   const loadDashboardBookings = useCallback(async (showLoading = true) => {
+    const requestedLayoutShopId = layoutShopIdentity.shopId;
+    if (currentLayoutShopIdRef.current !== requestedLayoutShopId) return;
+
     const requestGate = dashboardRequestGateRef.current;
     const requestToken = requestGate.begin();
     const previousAppliedShopId = appliedShopIdRef.current;
@@ -258,11 +262,14 @@ export default function AdminDashboard() {
 
     try {
       const data = await fetchAdminDashboardData();
-      if (!requestGate.isCurrent(requestToken)) return;
+      if (
+        !requestGate.isCurrent(requestToken)
+        || currentLayoutShopIdRef.current !== requestedLayoutShopId
+      ) return;
 
       // Layout and page data are independent requests. Never apply a snapshot
       // unless both resolve to the exact same canonical selected shop.
-      if (!isExactShopIdentityMatch(layoutShopIdentity.shopId, data.shop.id)) {
+      if (!isExactShopIdentityMatch(requestedLayoutShopId, data.shop.id)) {
         const message = t('loadFailed');
         setBookingError(message);
         setManagementError(message);
@@ -290,18 +297,26 @@ export default function AdminDashboard() {
       setSubscription(data.subscription);
       setBillingLoadError(data.subscriptionError ?? '');
     } catch (error) {
-      if (!requestGate.isCurrent(requestToken)) return;
+      if (
+        !requestGate.isCurrent(requestToken)
+        || currentLayoutShopIdRef.current !== requestedLayoutShopId
+      ) return;
       const message = error instanceof Error ? error.message : t('loadFailed');
       setBookingError(message);
       setManagementError(message);
     } finally {
-      if (requestGate.isCurrent(requestToken) && showLoading) setIsBookingsLoading(false);
+      if (
+        requestGate.isCurrent(requestToken)
+        && currentLayoutShopIdRef.current === requestedLayoutShopId
+        && showLoading
+      ) setIsBookingsLoading(false);
     }
   }, [layoutShopIdentity.shopId, t]);
 
   useEffect(() => {
     let isCurrent = true;
     const requestGate = dashboardRequestGateRef.current;
+    currentLayoutShopIdRef.current = layoutShopIdentity.shopId;
 
     queueMicrotask(() => {
       if (isCurrent) void loadDashboardBookings(true);
@@ -309,9 +324,10 @@ export default function AdminDashboard() {
 
     return () => {
       isCurrent = false;
+      currentLayoutShopIdRef.current = null;
       requestGate.cancel();
     };
-  }, [loadDashboardBookings]);
+  }, [layoutShopIdentity.shopId, loadDashboardBookings]);
 
   // Warn before leaving with unsaved staff schedule edits (KMO-05).
   useEffect(() => {

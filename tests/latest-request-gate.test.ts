@@ -26,8 +26,8 @@ test('dashboard routes every fetch through one guarded loader', () => {
   const directFetches = src.match(/fetchAdminDashboardData\(\)/g) ?? [];
   assert.equal(directFetches.length, 1, 'only the guarded loader may fetch dashboard data');
   assert.match(src, /const requestToken = requestGate\.begin\(\)/);
-  assert.match(src, /if \(!requestGate\.isCurrent\(requestToken\)\) return;/);
-  assert.match(src, /isExactShopIdentityMatch\(layoutShopIdentity\.shopId, data\.shop\.id\)/);
+  assert.match(src, /!requestGate\.isCurrent\(requestToken\)[\s\S]{0,120}currentLayoutShopIdRef\.current !== requestedLayoutShopId/);
+  assert.match(src, /isExactShopIdentityMatch\(requestedLayoutShopId, data\.shop\.id\)/);
   assert.match(src, /setShopId\(''\)/, 'pending reload must make Preview non-actionable');
 });
 
@@ -63,4 +63,44 @@ test('dashboard hides stale tenant truth and gates alternate actions during mism
     const body = src.slice(start, start + 240);
     assert.match(body, /if \(!tenantSnapshotReady/, `${guardedHandler} must fail closed`);
   }
+});
+
+test('stale tenant-A continuation cannot mint newer authority after layout B begins', () => {
+  const gate = createLatestRequestGate();
+  let currentLayout: string | null = 'shop-a';
+
+  const beginForLayout = (capturedLayout: string | null) => {
+    if (currentLayout !== capturedLayout) return null;
+    return gate.begin();
+  };
+
+  const requestA = beginForLayout('shop-a');
+  assert.notEqual(requestA, null);
+
+  currentLayout = null;
+  gate.cancel();
+  currentLayout = 'shop-b';
+  const requestB = beginForLayout('shop-b');
+  assert.notEqual(requestB, null);
+  assert.equal(gate.isCurrent(requestB as number), true);
+
+  const staleAReload = beginForLayout('shop-a');
+  assert.equal(staleAReload, null, 'stale A callback must return before begin()');
+  assert.equal(gate.isCurrent(requestB as number), true, 'B retains generation authority');
+});
+
+test('dashboard binds request authority to the current layout identity before and after fetch', () => {
+  const src = readFileSync(new URL('../apps/booking-admin/src/app/dashboard/page.tsx', import.meta.url), 'utf8');
+  const loaderStart = src.indexOf('const loadDashboardBookings = useCallback');
+  const begin = src.indexOf('const requestToken = requestGate.begin()', loaderStart);
+  const preAuthority = src.indexOf('currentLayoutShopIdRef.current !== requestedLayoutShopId', loaderStart);
+
+  assert.notEqual(loaderStart, -1);
+  assert.notEqual(preAuthority, -1);
+  assert.notEqual(begin, -1);
+  assert.ok(preAuthority < begin, 'layout authority check must happen before generation begin()');
+  assert.match(src, /currentLayoutShopIdRef\.current = layoutShopIdentity\.shopId;/);
+  assert.match(src, /currentLayoutShopIdRef\.current = null;[\s\S]{0,120}requestGate\.cancel\(\)/);
+  assert.match(src, /!requestGate\.isCurrent\(requestToken\)[\s\S]{0,120}currentLayoutShopIdRef\.current !== requestedLayoutShopId/);
+  assert.match(src, /requestGate\.isCurrent\(requestToken\)[\s\S]{0,160}currentLayoutShopIdRef\.current === requestedLayoutShopId[\s\S]{0,120}showLoading/);
 });
