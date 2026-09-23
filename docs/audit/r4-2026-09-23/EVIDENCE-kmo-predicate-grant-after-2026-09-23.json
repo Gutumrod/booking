@@ -1,0 +1,54 @@
+{
+  "captured_at_utc": "2026-09-23T05:35:13Z",
+  "project": "KMO-Booking (xfhpwxjywqgqefbncumm)",
+  "change_applied": "GRANT SELECT (shop_id) ON local_service.staff_schedules TO anon; GRANT SELECT (shop_id) ON local_service.shop_holidays TO anon;",
+  "anon_column_select_effective": {
+    "staff_schedules": [
+      "shop_id",
+      "staff_id",
+      "day_of_week",
+      "is_working_day",
+      "work_start",
+      "work_end",
+      "break_start",
+      "break_end"
+    ],
+    "shop_holidays": [
+      "shop_id",
+      "staff_id",
+      "holiday_date",
+      "reason"
+    ]
+  },
+  "verified": {
+    "anon_sched_shop_id": true,
+    "anon_hol_shop_id": true,
+    "anon_table_level_select": {
+      "staff_schedules": false,
+      "shop_holidays": false
+    },
+    "anon_write_privileges": {
+      "staff_schedules": {
+        "insert": false,
+        "update": false,
+        "delete": false
+      },
+      "shop_holidays": {
+        "insert": false,
+        "update": false,
+        "delete": false
+      }
+    },
+    "rls_enabled_unchanged": true,
+    "policies_unchanged": true,
+    "extra_columns_exposed": false,
+    "business_counts_unchanged": {
+      "services": 2,
+      "staff": 2,
+      "staff_active": 0,
+      "staff_schedules": 14,
+      "shop_holidays": 0,
+      "bookings": 0
+    }
+  }
+}

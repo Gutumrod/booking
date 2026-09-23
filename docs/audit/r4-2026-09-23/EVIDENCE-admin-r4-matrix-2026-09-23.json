@@ -1,0 +1,380 @@
+{
+  "capturedAt": "2026-09-23T08:16:37.674Z",
+  "results": {},
+  "viewports": {
+    "desktop": {
+      "R4-5_readiness": {
+        "snippet": "ความพร้อมรับจอง ตั้งค่าส่วนของร้านครบแล้ว สถานะเปิดรับจองออนไลน์ต้องยืนยันจากเซิร์ฟเวอร์ ยังตรวจจากหน้านี้ไม่ได้ โปรไฟล์ร้าน บริการ พนักงาน / ผู้ให้บริการ ตารางการจอง การรับเงิน (PromptPay) เปิดรับจองออนไลน์ รอตรวจจากเซิร์ฟเวอร์ ตารางจองคิวงาน & ตรวจสอบสลิป ดูคิวงานล่วงหน้า กรองคิวตามวัน และอนุมัติสลิปมัดจำจากลูกค้า คิวทั้งหมด (2) คิววันนี้ (2) คิวล่วงหน้า (0) หน้าจองลูกค้า รหัสคิว / ลูกค้า บริการที่เลือก พนักงาน"
+      },
+      "R4-5_preview": {
+        "opened": "http://127.0.0.1:3100/book/r4-test-fixture-20260923",
+        "tenantText": "กำลังโหลดข้อมูลร้านค้า..."
+      },
+      "R4-1_R4-2_fields": [
+        {
+          "i": 0,
+          "type": "text",
+          "val": "R4 TEST FIXTURE (syn",
+          "ph": null,
+          "inputmode": null,
+          "disabled": false
+        },
+        {
+          "i": 1,
+          "type": "text",
+          "val": "R4 synthetic fixture",
+          "ph": null,
+          "inputmode": null,
+          "disabled": false
+        },
+        {
+          "i": 2,
+          "type": "tel",
+          "val": "0000000000",
+          "ph": null,
+          "inputmode": null,
+          "disabled": false
+        }
+      ],
+      "R4-1_R4-2": {
+        "priceIdx": -1,
+        "depositIdx": -1,
+        "depositBefore": null
+      },
+      "R4-3_fields": [
+        {
+          "i": 1,
+          "type": "text",
+          "val": "08:00",
+          "ph": "HH:MM",
+          "inputmode": "numeric"
+        },
+        {
+          "i": 2,
+          "type": "text",
+          "val": "20:00",
+          "ph": "HH:MM",
+          "inputmode": "numeric"
+        },
+        {
+          "i": 3,
+          "type": "text",
+          "val": null,
+          "ph": "HH:MM",
+          "inputmode": "numeric"
+        },
+        {
+          "i": 4,
+          "type": "text",
+          "val": null,
+          "ph": "HH:MM",
+          "inputmode": "numeric"
+        },
+        {
+          "i": 6,
+          "type": "text",
+          "val": "08:00",
+          "ph": "HH:MM",
+          "inputmode": "numeric"
+        },
+        {
+          "i": 7,
+          "type": "text",
+          "val": "20:00",
+          "ph": "HH:MM",
+          "inputmode": "numeric"
+        },
+        {
+          "i": 8,
+          "type": "text",
+          "val": "12:00",
+          "ph": "HH:MM",
+          "inputmode": "numeric"
+        },
+        {
+          "i": 9,
+          "type": "text",
+          "val": "13:00",
+          "ph": "HH:MM",
+          "inputmode": "numeric"
+        }
+      ],
+      "R4-3": {
+        "numericInputs": 8,
+        "allNumericMode": true,
+        "typedDuringEdit": "93",
+        "afterBlur": "08:00",
+        "afterInvalid": "08:00",
+        "restored": "08:00"
+      },
+      "R4-4": {
+        "staffSections": 2,
+        "bBeforeSaveA": "10:00",
+        "bAfterSaveA": "10:00",
+        "bPreserved": true,
+        "bSaveText": "ออกจากระบบ Q R4 TEST FIXTURE (synthetic — delete after acceptance) Dashboard โทร: 0000000000 รายการคิวทั้งหมด เวลา & วันหยุดร้าน จัดการพนักงาน ข้อมูลร้าน & บริการ ตั้งค่า PromptPay/LINE แพ็กเกจชำระเงิน Tickets ดูตัวอย่างหน้าลูกค้า 🌐 EN คิวจองวันนี้ (2026-09-23) 2 รายการ คิวจองล่วงหน้าทั้งหมด 0 รายการ รอตรวจสลิปมัดจำ 0 รายการ ยอดมัดจำรวมที่โอนแล้ว ฿0.00 เวลาทำงาน & เวลาพักเที่ยงของพนักงานรายบุคคล บันทึกทั้งหมด (1) มีการแก้ตารางที่ยังไม่บันทึก กรุณาบันทึกแต่ละคน หรือกด \"บันทึกทั้งหมด\" Staff sched"
+      },
+      "R4-7_payment_tab": {
+        "snippet": "board โทร: 0000000000 รายการคิวทั้งหมด เวลา & วันหยุดร้าน จัดการพนักงาน ข้อมูลร้าน & บริการ ตั้งค่า PromptPay/LINE แพ็กเกจชำระเงิน Tickets ดูตัวอย่างหน้าลูกค้า 🌐 EN คิวจองวันนี้ (2026-09-23) 2 รายการ คิวจองล่วงหน้าทั้งหมด 0 รายการ รอตรวจสลิปมัดจำ 0 รายการ ยอดมัดจำรวมที่โอนแล้ว ฿0.00 ตั้งค่าช่องทางชำระเงินมัดจำ (PromptPay) & LINE OA กำหนดเลขบัญชี PromptPay รับเงินมัดจำของร้าน และ LINE OA ID ที่แสดงให้ลูกค้าเห็น บันทึกการตั้งค่า Staff schedule must stay within configured shop opening days and hours ตั้งค่า PromptPay รับเงินมัดจำ เลขพร้อมเพย์ร้านค้า * ชื่อบัญชีรับโอน * ตั้งค่า LINE Official Account (LINE OA) LINE O"
+      },
+      "R4-8_R4-9_booking_row": {
+        "snippet": "ออกจากระบบ Q R4 TEST FIXTURE (synthetic — delete after acceptance) Dashboard โทร: 0000000000 รายการคิวทั้งหมด เวลา & วันหยุดร้าน จัดการพนักงาน ข้อมูลร้าน & บริการ ตั้งค่า PromptPay/LINE แพ็กเกจชำระเงิน Tickets ดูตัวอย่างหน้าลูกค้า 🌐 EN คิวจองวันนี้ (2026-09-23) 2 รายการ คิวจองล่วงหน้าทั้งหมด 0 รายการ รอตรวจสลิปมัดจำ 0 รายการ ยอดมัดจำรวมที่โอนแล้ว ฿0.00 ความพร้อมรับจอง ตั้งค่าส่วนของร้านครบแล้ว สถานะเปิดรับจองออนไลน์ต้องยืนยันจากเซิร์ฟเวอร์ ยังตรวจจากหน้านี้ไม่ได้ โปรไฟล์ร้าน บริการ พนักงาน / ผู้ให้บริการ ตารางการจอง การรับเงิน (PromptPay) เปิดรับจองออนไลน์ รอตรวจจากเซิร์ฟเวอร์ ตารางจองคิวงาน & ตรวจสอบสลิป ดูคิวงานล่วงหน้า กรองคิวตามวัน และอนุมัติสลิปมัดจำจากลูกค้า คิวทั้งหมด (2) คิววันนี้ ("
+      },
+      "consoleErrors": [
+        "Failed to load resource: the server responded with a status of 400 ()",
+        "Failed to load resource: the server responded with a status of 400 ()"
+      ],
+      "dialogs": [],
+      "mutations": [
+        {
+          "path": "staff",
+          "status": 200,
+          "method": "GET",
+          "code": null,
+          "keys": null
+        },
+        {
+          "path": "services",
+          "status": 200,
+          "method": "GET",
+          "code": null,
+          "keys": null
+        },
+        {
+          "path": "shops",
+          "status": 200,
+          "method": "GET",
+          "code": null,
+          "keys": [
+            "id",
+            "name",
+            "slug",
+            "phone",
+            "address",
+            "promptpay_number",
+            "promptpay_name",
+            "line_oa_id"
+          ]
+        },
+        {
+          "path": "staff_schedules",
+          "status": 200,
+          "method": "GET",
+          "code": null,
+          "keys": null
+        },
+        {
+          "path": "rpc/upsert_staff_weekly_schedule",
+          "status": 400,
+          "method": "POST",
+          "code": "22023",
+          "keys": [
+            "code",
+            "details",
+            "hint",
+            "message"
+          ]
+        },
+        {
+          "path": "rpc/upsert_staff_weekly_schedule",
+          "status": 400,
+          "method": "POST",
+          "code": "22023",
+          "keys": [
+            "code",
+            "details",
+            "hint",
+            "message"
+          ]
+        }
+      ]
+    },
+    "mobile": {
+      "R4-5_readiness": {
+        "snippet": "ความพร้อมรับจอง ตั้งค่าส่วนของร้านครบแล้ว สถานะเปิดรับจองออนไลน์ต้องยืนยันจากเซิร์ฟเวอร์ ยังตรวจจากหน้านี้ไม่ได้ โปรไฟล์ร้าน บริการ พนักงาน / ผู้ให้บริการ ตารางการจอง การรับเงิน (PromptPay) เปิดรับจองออนไลน์ รอตรวจจากเซิร์ฟเวอร์ ตารางจองคิวงาน & ตรวจสอบสลิป ดูคิวงานล่วงหน้า กรองคิวตามวัน และอนุมัติสลิปมัดจำจากลูกค้า คิวทั้งหมด (2) คิววันนี้ (2) คิวล่วงหน้า (0) หน้าจองลูกค้า รหัสคิว / ลูกค้า บริการที่เลือก พนักงาน"
+      },
+      "R4-5_preview": {
+        "opened": null,
+        "note": "no popup event"
+      },
+      "R4-1_R4-2_fields": [
+        {
+          "i": 0,
+          "type": "text",
+          "val": "R4 TEST FIXTURE (syn",
+          "ph": null,
+          "inputmode": null,
+          "disabled": false
+        },
+        {
+          "i": 1,
+          "type": "text",
+          "val": "R4 synthetic fixture",
+          "ph": null,
+          "inputmode": null,
+          "disabled": false
+        },
+        {
+          "i": 2,
+          "type": "tel",
+          "val": "0000000000",
+          "ph": null,
+          "inputmode": null,
+          "disabled": false
+        }
+      ],
+      "R4-1_R4-2": {
+        "priceIdx": -1,
+        "depositIdx": -1,
+        "depositBefore": null
+      },
+      "R4-3_fields": [
+        {
+          "i": 1,
+          "type": "text",
+          "val": "08:00",
+          "ph": "HH:MM",
+          "inputmode": "numeric"
+        },
+        {
+          "i": 2,
+          "type": "text",
+          "val": "20:00",
+          "ph": "HH:MM",
+          "inputmode": "numeric"
+        },
+        {
+          "i": 3,
+          "type": "text",
+          "val": null,
+          "ph": "HH:MM",
+          "inputmode": "numeric"
+        },
+        {
+          "i": 4,
+          "type": "text",
+          "val": null,
+          "ph": "HH:MM",
+          "inputmode": "numeric"
+        },
+        {
+          "i": 6,
+          "type": "text",
+          "val": "08:00",
+          "ph": "HH:MM",
+          "inputmode": "numeric"
+        },
+        {
+          "i": 7,
+          "type": "text",
+          "val": "20:00",
+          "ph": "HH:MM",
+          "inputmode": "numeric"
+        },
+        {
+          "i": 8,
+          "type": "text",
+          "val": "12:00",
+          "ph": "HH:MM",
+          "inputmode": "numeric"
+        },
+        {
+          "i": 9,
+          "type": "text",
+          "val": "13:00",
+          "ph": "HH:MM",
+          "inputmode": "numeric"
+        }
+      ],
+      "R4-3": {
+        "numericInputs": 8,
+        "allNumericMode": true,
+        "typedDuringEdit": "93",
+        "afterBlur": "08:00",
+        "afterInvalid": "08:00",
+        "restored": "08:00"
+      },
+      "R4-4": {
+        "staffSections": 2,
+        "bBeforeSaveA": "10:00",
+        "bAfterSaveA": "10:00",
+        "bPreserved": true,
+        "bSaveText": "ออกจากระบบ Q R4 TEST FIXTURE (synthetic — delete after acceptance) Dashboard โทร: 0000000000 รายการคิวทั้งหมด เวลา & วันหยุดร้าน จัดการพนักงาน ข้อมูลร้าน & บริการ ตั้งค่า PromptPay/LINE แพ็กเกจชำระเงิน Tickets 🌐 EN คิวจองวันนี้ (2026-09-23) 2 รายการ คิวจองล่วงหน้าทั้งหมด 0 รายการ รอตรวจสลิปมัดจำ 0 รายการ ยอดมัดจำรวมที่โอนแล้ว ฿0.00 เวลาทำงาน & เวลาพักเที่ยงของพนักงานรายบุคคล บันทึกทั้งหมด (1) มีการแก้ตารางที่ยังไม่บันทึก กรุณาบันทึกแต่ละคน หรือกด \"บันทึกทั้งหมด\" Staff schedule must stay within "
+      },
+      "R4-7_payment_tab": {
+        "snippet": "board โทร: 0000000000 รายการคิวทั้งหมด เวลา & วันหยุดร้าน จัดการพนักงาน ข้อมูลร้าน & บริการ ตั้งค่า PromptPay/LINE แพ็กเกจชำระเงิน Tickets 🌐 EN คิวจองวันนี้ (2026-09-23) 2 รายการ คิวจองล่วงหน้าทั้งหมด 0 รายการ รอตรวจสลิปมัดจำ 0 รายการ ยอดมัดจำรวมที่โอนแล้ว ฿0.00 ตั้งค่าช่องทางชำระเงินมัดจำ (PromptPay) & LINE OA กำหนดเลขบัญชี PromptPay รับเงินมัดจำของร้าน และ LINE OA ID ที่แสดงให้ลูกค้าเห็น บันทึกการตั้งค่า Staff schedule must stay within configured shop opening days and hours ตั้งค่า PromptPay รับเงินมัดจำ เลขพร้อมเพย์ร้านค้า * ชื่อบัญชีรับโอน * ตั้งค่า LINE Official Account (LINE OA) LINE OA ID ร้านค้า / แฮนเดิ"
+      },
+      "R4-8_R4-9_booking_row": {
+        "snippet": "ออกจากระบบ Q R4 TEST FIXTURE (synthetic — delete after acceptance) Dashboard โทร: 0000000000 รายการคิวทั้งหมด เวลา & วันหยุดร้าน จัดการพนักงาน ข้อมูลร้าน & บริการ ตั้งค่า PromptPay/LINE แพ็กเกจชำระเงิน Tickets 🌐 EN คิวจองวันนี้ (2026-09-23) 2 รายการ คิวจองล่วงหน้าทั้งหมด 0 รายการ รอตรวจสลิปมัดจำ 0 รายการ ยอดมัดจำรวมที่โอนแล้ว ฿0.00 ความพร้อมรับจอง ตั้งค่าส่วนของร้านครบแล้ว สถานะเปิดรับจองออนไลน์ต้องยืนยันจากเซิร์ฟเวอร์ ยังตรวจจากหน้านี้ไม่ได้ โปรไฟล์ร้าน บริการ พนักงาน / ผู้ให้บริการ ตารางการจอง การรับเงิน (PromptPay) เปิดรับจองออนไลน์ รอตรวจจากเซิร์ฟเวอร์ ตารางจองคิวงาน & ตรวจสอบสลิป ดูคิวงานล่วงหน้า กรองคิวตามวัน และอนุมัติสลิปมัดจำจากลูกค้า คิวทั้งหมด (2) คิววันนี้ (2) คิวล่วงหน้า (0) หน"
+      },
+      "consoleErrors": [
+        "Failed to load resource: the server responded with a status of 400 ()",
+        "Failed to load resource: the server responded with a status of 400 ()"
+      ],
+      "dialogs": [],
+      "mutations": [
+        {
+          "path": "shops",
+          "status": 200,
+          "method": "GET",
+          "code": null,
+          "keys": [
+            "id",
+            "name",
+            "slug",
+            "phone",
+            "address",
+            "promptpay_number",
+            "promptpay_name",
+            "line_oa_id"
+          ]
+        },
+        {
+          "path": "staff_schedules",
+          "status": 200,
+          "method": "GET",
+          "code": null,
+          "keys": null
+        },
+        {
+          "path": "services",
+          "status": 200,
+          "method": "GET",
+          "code": null,
+          "keys": null
+        },
+        {
+          "path": "staff",
+          "status": 200,
+          "method": "GET",
+          "code": null,
+          "keys": null
+        },
+        {
+          "path": "rpc/upsert_staff_weekly_schedule",
+          "status": 400,
+          "method": "POST",
+          "code": "22023",
+          "keys": [
+            "code",
+            "details",
+            "hint",
+            "message"
+          ]
+        },
+        {
+          "path": "rpc/upsert_staff_weekly_schedule",
+          "status": 400,
+          "method": "POST",
+          "code": "22023",
+          "keys": [
+            "code",
+            "details",
+            "hint",
+            "message"
+          ]
+        }
+      ]
+    }
+  }
+}

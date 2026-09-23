@@ -1,0 +1,69 @@
+{
+  "capturedAt": "2026-09-23T08:29:54.524Z",
+  "durations": {
+    "visibleDurations": [
+      "R4 Dur 1min",
+      "R4 Dur 2min",
+      "R4 Dur 37min",
+      "R4 Dur 90min"
+    ],
+    "minutesShown": [
+      "30 นาที",
+      "1 นาที",
+      "2 นาที",
+      "37 นาที",
+      "90 นาที"
+    ],
+    "text": "🌐 EN Q R4 TEST FIXTURE (Synthetic — Delete After Acceptance) ระบบจองคิวออนไลน์ • ชำระมัดจำปลอดภัย โทร: 0000000000 1. เลือกบริการที่คุณต้องการ เลือกบริการเพื่อดูรายละเอียดระยะเวลาและค่ามัดจำ R4 Test Service 30min ฿500 synthetic R4 acceptance service 30 นาที มัดจำ ฿0 R4 Dur 1min ฿100 r4 duration probe 1 นาที มัดจำ ฿0 R4 Dur 2min ฿100 r4 duration probe 2 นาที มัดจำ ฿0 R4 Dur 37min ฿100 r4 duration probe 37 นาที มัดจำ ฿0 R4 Dur 90min ฿100 r4 duration probe 90 นาที มัดจำ ฿0 ถัดไป: เลือกพนักงาน & วันเวลา Powered by Local Service Booking SaaS"
+  },
+  "duration1min": {
+    "rpc": [
+      {
+        "fn": "create_booking_hold",
+        "status": 200,
+        "body": "{\"booking_id\" : \"debe9fc8-4a66-45cb-9c72-ce6fdf7ebdf6\", \"booking_code\" : \"BK-7DUEUJ\", \"link_token\" : \"702165937C\", \"status\" : \"confirmed\", \"deposit_status\" : \"not_required\", \"deposit_amount\" : 0.00, \"total_price\" : 100.0"
+      }
+    ],
+    "text": "🌐 EN Q R4 TEST FIXTURE (Synthetic — Delete After Acceptance) ระบบจองคิวออนไลน์ • ชำระมัดจำปลอดภัย โทร: 0000000000 ยืนยันคิวเรียบร้อย รหัสการจอง: BK-7DUEUJ สถานะคิวจอง ยืนยันแล้ว บริการ: R4 Dur 1min พนักงาน: ไม่ระบุพนักงาน (สุ่มช่าง) เวลานัด: 2026-09-23 @ 09:30 น. ยอดมัดจำ: ไม่ต้องชำระมัดจำ เบอร์สายตรงร้านค้า: 0000000000 รับแจ้งเตือนผ่านไลน์ เพื่อไม่พลาดคิวของท่าน กดผูกบัญชี LINE กลาง (@@kmo-build-placeholder) เลื่อนหรือยกเลิกคิวนี้ โทรสอบถามทางร้านกรณีฉุกเฉิน (0000000000) Powered by Local Service Booking SaaS"
+  },
+  "mobileHold": {
+    "paymentText": "🌐 EN Q R4-STATE-DEPOSIT-HOLD (Synthetic R4 State Fixture) ระบบจองคิวออนไลน์ • ชำระมัดจำปลอดภัย 0000000002 3. ชำระมัดจำ PromptPay & ยืนยัน สแกน QR Code โอนมัดจำเพื่อล็อกคิวงานอัตโนมัติ กรุณาโอนมัดจำภายใน 14:55 นาที รหัสจองคิวชั่วคราว: BK-V2D9QQ PromptPay QR บันทึกรูป QR Code ยอดเงินมัดจำล็อกคิว ฿500.00 ชื่อบัญชี: R4 Synthetic PromptPay เลขพร้อมเพย์: 0000000000 คัดลอกเลข แนบสลิปการโอนมัดจำ * คลิกเพื่ออัปโหลดสลิปเงินมัดจำ รองรับไฟล์ JPG, PNG หรือ WebP ย้อนกลับ ยืนยันการโอนเงินมัดจำ Powered by Local Service Booking SaaS",
+    "rpc_create_booking_hold": {
+      "status": 200,
+      "raw": {
+        "booking_id": "a81f326d-66e4-4570-ba4c-986adff93dff",
+        "booking_code": "BK-V2D9QQ",
+        "link_token": "85DFC78B90",
+        "status": "hold",
+        "deposit_status": "awaiting",
+        "deposit_amount": 500,
+        "total_price": 800,
+        "expires_at": "2026-09-23T08:46:21.84481+00:00",
+        "staff_id": "5e4e97fd-018b-46cd-bcb7-90f598f5c2e9"
+      }
+    },
+    "qrCount": 1,
+    "amounts": [
+      "฿500"
+    ],
+    "countdown": {
+      "first": "14:55",
+      "after10s": "14:43",
+      "changed": true
+    },
+    "holdRpc": {
+      "status": 200,
+      "raw": {
+        "booking_id": "a81f326d-66e4-4570-ba4c-986adff93dff",
+        "booking_code": "BK-V2D9QQ",
+        "link_token": "85DFC78B90",
+        "status": "hold",
+        "deposit_status": "awaiting",
+        "deposit_amount": 500,
+        "total_price": 800,
+        "expires_at": "2026-09-23T08:46:21.84481+00:00",
+        "staff_id": "5e4e97fd-018b-46cd-bcb7-90f598f5c2e9"
+      }
+    }
+  }
+}

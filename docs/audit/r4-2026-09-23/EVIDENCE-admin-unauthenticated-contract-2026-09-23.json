@@ -1,0 +1,92 @@
+{
+  "base": "http://localhost:3101",
+  "capturedAt": "2026-09-23T05:44:29.671Z",
+  "viewports": {
+    "desktop": {
+      "login": {
+        "status": 200,
+        "url": "http://localhost:3101/login",
+        "text": "🌐 EN เข้าสู่ระบบ สำหรับเจ้าของร้านค้าและผู้ดูแลระบบ ใช้อีเมลและรหัสผ่านที่ลงทะเบียนไว้ อีเมล รหัสผ่าน เข้าสู่ระบบ ลืมรหัสผ่าน สมัครร้านค้าใหม่",
+        "inputCount": 2,
+        "fields": [
+          {
+            "type": "email",
+            "name": null,
+            "id": null,
+            "placeholder": null,
+            "autocomplete": "email"
+          },
+          {
+            "type": "password",
+            "name": null,
+            "id": null,
+            "placeholder": null,
+            "autocomplete": "current-password"
+          }
+        ],
+        "title": "Create Next App"
+      },
+      "dashboardUnauthenticated": {
+        "status": 200,
+        "url": "http://localhost:3101/login?next=/dashboard",
+        "redirectedToLogin": true,
+        "text": "🌐 EN เข้าสู่ระบบ สำหรับเจ้าของร้านค้าและผู้ดูแลระบบ ใช้อีเมลและรหัสผ่านที่ลงทะเบียนไว้ อีเมล รหัสผ่าน เข้าสู่ระบบ ลืมรหัสผ่าน สมัครร้านค้าใหม่"
+      },
+      "register": {
+        "status": 200,
+        "url": "http://localhost:3101/register",
+        "redirectedToLogin": false,
+        "text": "🌐 EN Local Service Booking SaaS สมัครสมาชิกร้านค้า & เปิดระบบจองคิว เริ่มต้นรับจองคิวออนไลน์ ล็อกคิวด้วยมัดจำ PromptPay QR และยิงแจ้งเตือน LINE ให้อัตโนมัติ 1 ข้อมูลร้านค้า 2 เลือกแพ็กเกจ 3 ตั้งค่า PromptPay ข้อมูลร้านค้าและบัญชีเจ้าของร้าน (Step 1/3) ชื่อร้านค้า (Shop Name) * URL สลักลิงก์ร้านค้า "
+      },
+      "root": {
+        "status": 200,
+        "url": "http://localhost:3101/",
+        "redirectedToLogin": false
+      },
+      "consoleErrors": []
+    },
+    "mobile": {
+      "login": {
+        "status": 200,
+        "url": "http://localhost:3101/login",
+        "text": "🌐 EN เข้าสู่ระบบ สำหรับเจ้าของร้านค้าและผู้ดูแลระบบ ใช้อีเมลและรหัสผ่านที่ลงทะเบียนไว้ อีเมล รหัสผ่าน เข้าสู่ระบบ ลืมรหัสผ่าน สมัครร้านค้าใหม่",
+        "inputCount": 2,
+        "fields": [
+          {
+            "type": "email",
+            "name": null,
+            "id": null,
+            "placeholder": null,
+            "autocomplete": "email"
+          },
+          {
+            "type": "password",
+            "name": null,
+            "id": null,
+            "placeholder": null,
+            "autocomplete": "current-password"
+          }
+        ],
+        "title": "Create Next App"
+      },
+      "dashboardUnauthenticated": {
+        "status": 200,
+        "url": "http://localhost:3101/login?next=/dashboard",
+        "redirectedToLogin": true,
+        "text": "🌐 EN เข้าสู่ระบบ สำหรับเจ้าของร้านค้าและผู้ดูแลระบบ ใช้อีเมลและรหัสผ่านที่ลงทะเบียนไว้ อีเมล รหัสผ่าน เข้าสู่ระบบ ลืมรหัสผ่าน สมัครร้านค้าใหม่"
+      },
+      "register": {
+        "status": 200,
+        "url": "http://localhost:3101/register",
+        "redirectedToLogin": false,
+        "text": "🌐 EN Local Service Booking SaaS สมัครสมาชิกร้านค้า & เปิดระบบจองคิว เริ่มต้นรับจองคิวออนไลน์ ล็อกคิวด้วยมัดจำ PromptPay QR และยิงแจ้งเตือน LINE ให้อัตโนมัติ 1 2 3 ข้อมูลร้านค้าและบัญชีเจ้าของร้าน (Step 1/3) ชื่อร้านค้า (Shop Name) * URL สลักลิงก์ร้านค้า (Shop URL Slug) * แก้ไขได้ (ใช้ตัวอักษร a-z, "
+      },
+      "root": {
+        "status": 200,
+        "url": "http://localhost:3101/",
+        "redirectedToLogin": false
+      },
+      "consoleErrors": []
+    }
+  }
+}

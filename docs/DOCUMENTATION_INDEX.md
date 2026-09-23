@@ -53,14 +53,21 @@ Historical documents may describe behavior that was true at a prior commit/envir
 
 No implementation phase may introduce a new externally visible entitlement, role capability, money state or privacy boundary without documentation/traceability change first.
 
-## Current execution pointers — 2026-09-22
+## Current execution pointers — 2026-09-23
 For current implementation/gate status, read these before older phase reports:
 - `CURRENT_STATUS.md` — canonical execution snapshot and hard boundaries
+- `daily/2026-09-23.md` — current verified work log including the R4 closure update
+- `audit/r4-2026-09-23/REPORT-BK01-R4-CLOSURE-2026-09-23.md` — **R4 closure report**: closure gate, Owner-approved fixture/test-admin lifecycle, R4-1…R4-9, consumer matrix, cross-cutting, positive E2E, cleanup residue proof
+- `audit/r4-2026-09-23/EVIDENCE-INDEX-2026-09-23.json` — evidence inventory with sha256
+- `audit/r4-2026-09-23/REPORT-BK01-R4-RESUME-2026-09-23.md` — earlier resume report (privilege repair + first consumer pass)
+- `handoffs/BRIEF-BK01-R4-CLOSE-LONG-RUN-2026-09-23.md` — governing brief for the R4 close long-run
+- `architecture/R4-UX-REMEDIATION-SPEC-2026-09-09.md` — locked R4 contract plus execution-status overrides
+
+## Current execution pointers — 2026-09-22 (retained)
 - `daily/2026-09-22.md` — end-of-day verified work log
 - `handoffs/HANDOFF-BK01-R4-EOD-2026-09-22.md` — exact resume order
-- `architecture/R4-UX-REMEDIATION-SPEC-2026-09-09.md` — locked R4 contract plus current execution override
-- `audit/r4-2026-09-22/REPORT-CODEX-BK01-R4-SOURCE-RE-REVIEW-R9-2026-09-22.md` — latest independent source verdict
+- `audit/r4-2026-09-22/REPORT-CODEX-BK01-R4-SOURCE-RE-REVIEW-R9-2026-09-22.md` — independent source verdict still current
 - `audit/r4-2026-09-22/REPORT-BK01-R4-BROWSER-PROOF-START-2026-09-22.md` — browser discovery evidence
-- `audit/r4-2026-09-22/REPORT-BK01-R4-BROWSER-PROOF-PARTIAL-2026-09-22.md` — latest browser/runtime disposition
+- `audit/r4-2026-09-22/REPORT-BK01-R4-BROWSER-PROOF-PARTIAL-2026-09-22.md` — prior browser/runtime disposition
 
 These execution records do not override owner/product decisions or numbered SSOT contracts. They supersede older execution-status wording only where a later verified checkpoint exists.

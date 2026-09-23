@@ -1,0 +1,117 @@
+{
+  "capturedAt": "2026-09-23T08:32:01.334Z",
+  "desktop": {
+    "tenant1": "🌐 EN Q R4 TEST FIXTURE (Synthetic — Delete After Acceptance) ระบบจองคิวออนไลน์ • ชำระมัดจำปลอดภัย โทร: 0000000000 1. เล",
+    "tenant2": "🌐 EN Q KMO RACKBARCUSTOM ระบบจองคิวออนไลน์ • ชำระมัดจำปลอดภัย โทร: 0625893189 ยังไม่มีพนักงานรับจอง ร้านนี้ยังไม่ได้ตั้",
+    "tenant3": "🌐 EN Q R4-STATE-NO-SERVICES (Synthetic R4 State Fixture) ระบบจองคิวออนไลน์ • ชำระมัดจำปลอดภัย โทร: 0000000002 ยังไม่มีบ",
+    "profileReads": [
+      {
+        "slug": "r4-test-fixture-20260923",
+        "status": 200,
+        "rows": 1
+      },
+      {
+        "slug": "r4-test-fixture-20260923",
+        "status": 200,
+        "rows": 1
+      },
+      {
+        "slug": "kmo-rackbarcustom",
+        "status": 200,
+        "rows": 1
+      },
+      {
+        "slug": "kmo-rackbarcustom",
+        "status": 200,
+        "rows": 1
+      },
+      {
+        "slug": "r4-state-no-services",
+        "status": 200,
+        "rows": 1
+      },
+      {
+        "slug": "r4-state-no-services",
+        "status": 200,
+        "rows": 1
+      },
+      {
+        "slug": "r4-test-fixture-20260923",
+        "status": 200,
+        "rows": null
+      },
+      {
+        "slug": "r4-state-no-services",
+        "status": 200,
+        "rows": null
+      },
+      {
+        "slug": "r4-test-fixture-20260923",
+        "status": 200,
+        "rows": 1
+      },
+      {
+        "slug": "r4-test-fixture-20260923",
+        "status": 200,
+        "rows": 1
+      }
+    ],
+    "noCrossTenantLeak": true,
+    "staleFinal": {
+      "matchesLastSlug": true,
+      "text": "🌐 EN Q R4 TEST FIXTURE (Synthetic — Delete After Acceptance) ระบบจองคิวออนไลน์ • ชำระมัดจำปลอดภัย โทร: 0000000000 1. เลือกบริการที่คุณต้องการ เลือกบริการเพื่อด"
+    }
+  },
+  "mobile": {
+    "tenant1": "🌐 EN Q R4 TEST FIXTURE (Synthetic — Delete After Acceptance) ระบบจองคิวออนไลน์ • ชำระมัดจำปลอดภัย 0000000000 1. เลือกบร",
+    "tenant2": "🌐 EN Q KMO RACKBARCUSTOM ระบบจองคิวออนไลน์ • ชำระมัดจำปลอดภัย 0625893189 ยังไม่มีพนักงานรับจอง ร้านนี้ยังไม่ได้ตั้งค่าผ",
+    "tenant3": "🌐 EN Q R4-STATE-NO-SERVICES (Synthetic R4 State Fixture) ระบบจองคิวออนไลน์ • ชำระมัดจำปลอดภัย 0000000002 ยังไม่มีบริการ",
+    "profileReads": [
+      {
+        "slug": "r4-test-fixture-20260923",
+        "status": 200,
+        "rows": 1
+      },
+      {
+        "slug": "r4-test-fixture-20260923",
+        "status": 200,
+        "rows": 1
+      },
+      {
+        "slug": "kmo-rackbarcustom",
+        "status": 200,
+        "rows": 1
+      },
+      {
+        "slug": "kmo-rackbarcustom",
+        "status": 200,
+        "rows": 1
+      },
+      {
+        "slug": "r4-state-no-services",
+        "status": 200,
+        "rows": 1
+      },
+      {
+        "slug": "r4-state-no-services",
+        "status": 200,
+        "rows": 1
+      },
+      {
+        "slug": "r4-test-fixture-20260923",
+        "status": 200,
+        "rows": 1
+      },
+      {
+        "slug": "r4-test-fixture-20260923",
+        "status": 200,
+        "rows": 1
+      }
+    ],
+    "noCrossTenantLeak": true,
+    "staleFinal": {
+      "matchesLastSlug": true,
+      "text": "🌐 EN Q R4 TEST FIXTURE (Synthetic — Delete After Acceptance) ระบบจองคิวออนไลน์ • ชำระมัดจำปลอดภัย 0000000000 1. เลือกบริการที่คุณต้องการ เลือกบริการเพื่อดูรายล"
+    }
+  }
+}

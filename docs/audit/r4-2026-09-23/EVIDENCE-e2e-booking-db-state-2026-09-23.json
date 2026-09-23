@@ -1,0 +1,87 @@
+{
+  "captured_at_utc": "2026-09-23T08:14:38.344717Z",
+  "fixture_shop_id": "0d1ac9c7-1ab9-45e6-99ce-ec603ee73faa",
+  "state": {
+    "fixture_bookings": [
+      {
+        "booking_code": "BK-QHJGJG",
+        "status": "confirmed",
+        "deposit_status": "not_required",
+        "d": "2026-09-23",
+        "s": "09:00:00",
+        "e": "09:30:00",
+        "staff_linked": true,
+        "total_price": 500,
+        "deposit_amount": 0,
+        "expires": null,
+        "customer": "R4 Synthetic Customer"
+      },
+      {
+        "booking_code": "BK-WMUUTR",
+        "status": "confirmed",
+        "deposit_status": "not_required",
+        "d": "2026-09-23",
+        "s": "09:00:00",
+        "e": "09:30:00",
+        "staff_linked": true,
+        "total_price": 500,
+        "deposit_amount": 0,
+        "expires": null,
+        "customer": "R4 Synthetic Customer"
+      }
+    ],
+    "fixture_notif_logs": [
+      {
+        "event_type": "booking_created",
+        "recipient_type": "customer",
+        "status": "pending",
+        "sent": null
+      },
+      {
+        "event_type": "reminder_24h",
+        "recipient_type": "customer",
+        "status": "pending",
+        "sent": null
+      },
+      {
+        "event_type": "booking_created",
+        "recipient_type": "customer",
+        "status": "pending",
+        "sent": null
+      },
+      {
+        "event_type": "reminder_24h",
+        "recipient_type": "customer",
+        "status": "pending",
+        "sent": null
+      }
+    ],
+    "fixture_customers": [
+      {
+        "name": "R4 Synthetic Customer",
+        "phone": "0800000000"
+      }
+    ],
+    "real_kmo": {
+      "slug": "kmo-rackbarcustom",
+      "bookings": 0,
+      "notif": 0,
+      "staff_rows": 2,
+      "staff_active": 0,
+      "services": 2,
+      "schedule": 14,
+      "holidays": 0,
+      "shop_users": 1,
+      "require_deposit": true,
+      "default_deposit": 500
+    },
+    "totals": {
+      "shops": 3,
+      "bookings": 2,
+      "customers": 1,
+      "staff": 5,
+      "services": 4,
+      "notif_logs": 4
+    }
+  }
+}

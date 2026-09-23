@@ -1,0 +1,51 @@
+{
+  "captured_at_utc": "2026-09-23T08:32:42.564602Z",
+  "kmo_fingerprint": {
+    "shops_md5": "404cc0fcc86beb4b0bfc047d79f68e61",
+    "staff_md5": "06065b46bcd5d13474530827339522b4",
+    "services_md5": "12bd84ade437641b37ccaa13e2fcaf0a",
+    "sched_md5": "db115ed30fed02555e69bd178961e873",
+    "shop_users_md5": "ac84735a010086d2bcdb3a303621f5f8",
+    "weekly_md5": "04eec3cef8bc1a5bbdf7b096843d08b0"
+  },
+  "inventory": {
+    "fixture_shops": [
+      {
+        "slug": "r4-test-fixture-deposit-20260923",
+        "id": "ca57d085-4d07-4af4-b04d-0ca3e5cc44cf"
+      },
+      {
+        "slug": "r4-test-fixture-20260923",
+        "id": "0d1ac9c7-1ab9-45e6-99ce-ec603ee73faa"
+      },
+      {
+        "slug": "r4-state-no-schedule",
+        "id": "27c6d725-f7e5-4479-bfdd-fd707b536b5f"
+      },
+      {
+        "slug": "r4-state-no-services",
+        "id": "387b37a3-53e3-4aef-86ae-455707ce4d3a"
+      },
+      {
+        "slug": "r4-state-no-slot",
+        "id": "afc8dba3-71b6-4eed-a497-6ef499efc49d"
+      },
+      {
+        "slug": "r4-state-deposit-hold",
+        "id": "33142823-e8f7-42b6-a8bf-bfc8b9e3c052"
+      }
+    ],
+    "fixture_services": 9,
+    "duration_services": 4,
+    "fixture_bookings": 5,
+    "fixture_customers": 2,
+    "fixture_notif": 6,
+    "fixture_sched": 36,
+    "fixture_staff": 7,
+    "fixture_members": 6,
+    "fixture_subs": 6,
+    "fixture_weekly": 42,
+    "fixture_auth_users": 1,
+    "all_shops": 7
+  }
+}

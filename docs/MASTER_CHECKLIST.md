@@ -114,3 +114,28 @@ BK-SR-02 / BK-B is CLOSED. BK-SR-03 staging/external-system rehearsal is next; t
 **Current verdict:** `BROWSER_PROOF_PARTIAL / KMO_RUNTIME_AND_FIXTURE_BLOCKED`.
 
 **Hard boundary:** no Junction A retry, LAB/shared-runtime mutation, runtime R7, formal Junction B, Order-live or Claim-live work before durable `HOUSE-A PASS`.
+
+## R4 resume checkpoint — 2026-09-23
+- [x] preflight/baseline freeze at `021d242` (delta from `3b3a333` = docs/evidence only) → `R4_RUNTIME_BASELINE_LOCKED`
+- [x] canonical R4 source ran locally for consumer 3100 and admin 3101 without source/env/lockfile change
+- [x] live pre-state re-measured; anon `shop_id` SELECT on both availability tables confirmed still false
+- [x] controlled anon SELECT repair applied on `staff_schedules.shop_id` and `shop_holidays.shop_id` only
+- [x] post-repair privilege boundary verified: no table-wide SELECT, no write privilege, no extra column, policies identical, business data unchanged
+- [x] Consumer desktop/mobile browser acceptance after privilege repair → `KMO_AVAILABILITY_DRIFT_CLOSED`, truthful `NO_STAFF`
+- [x] truthful-state separation proven: `LOAD_ERROR` under authorization failure vs `NO_STAFF` with zero rows, same revision/tenant
+- [x] consumer negative-state matrix: `NO_STAFF`, `SHOP_NOT_FOUND` (KMO), `BOOKING_DISABLED`, `SHOP_NOT_FOUND` (wstera-lab)
+- [x] Admin unauthenticated contract browser proof (login 200, `/dashboard` → `/login?next=/dashboard`)
+- [x] mandatory gates on final checkpoint: tests 118/118; lint 0 errors/12 warnings; both builds PASS; both typechecks PASS; diff/secret/protected-scope PASS
+- [x] `NO_SERVICES` / `NO_SCHEDULE` / `NO_SLOT_FOR_DATE` / `PAYMENT_NOT_CONFIGURED` browser states — proven on purpose-built isolated fixture tenants
+- [x] Admin authenticated R4 desktop/mobile matrix (R4-1 … R4-9) — executed against the Owner-authorized synthetic fixture
+- [x] authorized positive-flow staff/schedule fixture — Owner-approved isolated fixture created, used, then removed
+- [x] positive `service -> staff -> date -> slot -> hold/create` E2E proof (desktop + mobile, DB-confirmed)
+- [x] cross-cutting regression browser pass (no cross-tenant leak, route transition, stale/out-of-order, dirty-state, payment/readiness truth)
+- [x] fixture + temporary test admin cleanup with residue 0 and real-KMO fingerprint unchanged
+- [x] R4 CLOSED with real behavioral evidence
+
+**Current verdict (2026-09-23):** `R4 CLOSED`.
+
+**Owner decisions required:** none outstanding for R4 acceptance. Remaining operational step: Claude reviews the verified diff and commit/pushes under `claude-owns-git-commits`, then HEAD = origin and the worktree must be clean.
+
+**Evidence:** `docs/audit/r4-2026-09-23/REPORT-BK01-R4-CLOSURE-2026-09-23.md` (+ `EVIDENCE-INDEX-2026-09-23.json`) and `docs/daily/2026-09-23.md`.

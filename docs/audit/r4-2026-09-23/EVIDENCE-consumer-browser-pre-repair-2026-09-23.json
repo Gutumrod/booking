@@ -1,0 +1,101 @@
+{
+  "base": "http://127.0.0.1:3100",
+  "slug": "kmo-rackbarcustom",
+  "capturedAt": "2026-09-23T05:33:44.607Z",
+  "viewports": {
+    "desktop": {
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "httpStatus": 200,
+      "url": "http://127.0.0.1:3100/book/kmo-rackbarcustom",
+      "title": "Create Next App",
+      "htmlLang": "th",
+      "visibleText": "กำลังโหลดข้อมูลร้านค้า...",
+      "visibleTextLength": 25,
+      "stepperHits": 0,
+      "buttons": [],
+      "restCalls": [],
+      "pageErrors": [],
+      "consoleErrors": [
+        {
+          "type": "error",
+          "text": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+        },
+        {
+          "type": "error",
+          "text": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+        },
+        {
+          "type": "error",
+          "text": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+        },
+        {
+          "type": "error",
+          "text": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+        },
+        {
+          "type": "error",
+          "text": "WebSocket connection to 'ws://127.0.0.1:3100/_next/hmr?id=ZwVAgJLYf8oap9iuOc1P7' failed: Error during WebSocket handshake: net::ERR_INVALID_HTTP_RESPONSE"
+        },
+        {
+          "type": "error",
+          "text": "WebSocket connection to 'ws://127.0.0.1:3100/_next/hmr?id=ZwVAgJLYf8oap9iuOc1P7' failed: Error during WebSocket handshake: net::ERR_INVALID_HTTP_RESPONSE"
+        },
+        {
+          "type": "error",
+          "text": "WebSocket connection to 'ws://127.0.0.1:3100/_next/hmr?id=ZwVAgJLYf8oap9iuOc1P7' failed: Error during WebSocket handshake: net::ERR_INVALID_HTTP_RESPONSE"
+        }
+      ],
+      "screenshot": "D:/AI-Workspace/runtime/browser-tools/out-pre-repair-desktop.png"
+    },
+    "mobile": {
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "httpStatus": 200,
+      "url": "http://127.0.0.1:3100/book/kmo-rackbarcustom",
+      "title": "Create Next App",
+      "htmlLang": "th",
+      "visibleText": "กำลังโหลดข้อมูลร้านค้า...",
+      "visibleTextLength": 25,
+      "stepperHits": 0,
+      "buttons": [],
+      "restCalls": [],
+      "pageErrors": [],
+      "consoleErrors": [
+        {
+          "type": "error",
+          "text": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+        },
+        {
+          "type": "error",
+          "text": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+        },
+        {
+          "type": "error",
+          "text": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+        },
+        {
+          "type": "error",
+          "text": "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+        },
+        {
+          "type": "error",
+          "text": "WebSocket connection to 'ws://127.0.0.1:3100/_next/hmr?id=4wyp9iE3NEqrHqc24-sPd' failed: Error during WebSocket handshake: net::ERR_INVALID_HTTP_RESPONSE"
+        },
+        {
+          "type": "error",
+          "text": "WebSocket connection to 'ws://127.0.0.1:3100/_next/hmr?id=4wyp9iE3NEqrHqc24-sPd' failed: Error during WebSocket handshake: net::ERR_INVALID_HTTP_RESPONSE"
+        },
+        {
+          "type": "error",
+          "text": "WebSocket connection to 'ws://127.0.0.1:3100/_next/hmr?id=4wyp9iE3NEqrHqc24-sPd' failed: Error during WebSocket handshake: net::ERR_INVALID_HTTP_RESPONSE"
+        }
+      ],
+      "screenshot": "D:/AI-Workspace/runtime/browser-tools/out-pre-repair-mobile.png"
+    }
+  }
+}

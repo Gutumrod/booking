@@ -1,0 +1,127 @@
+{
+  "base": "http://localhost:3100",
+  "slug": "r4-test-fixture-20260923",
+  "capturedAt": "2026-09-23T08:12:42.706Z",
+  "viewports": {
+    "desktop": {
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "nextEnabledAfterSlot": true,
+      "steps": [
+        {
+          "label": "2-staff-date",
+          "url": "http://localhost:3100/book/r4-test-fixture-20260923",
+          "text": "🌐 EN Q R4 TEST FIXTURE (Synthetic — Delete After Acceptance) ระบบจองคิวออนไลน์ • ชำระมัดจำปลอดภัย โทร: 0000000000 2. เลือกพนักงาน & นัดหมายวันเวลา บริการที่เลือก: R4 Test Service 30min ข้อมูลผู้จอง (สำหรับยืนยันสล็อต) ชื่อผู้จอง * เบอร์โทรศัพท์ * เลือกพนักงานให้บริการ ไม่ระบุช่าง (ช่างคนไหนก็ได้) R4T R4TB เลือกวันที่ เลือกรอบเวลาที่ว่าง 09:00 น. ว่าง 09:30 น. ว่าง 10:00 น. ว่าง 10:30 น. ว่าง 11:00 น. ว่าง 11:30 น. ว่าง 12:00 น. ว่าง 13:00 น. ว่าง 13:30 น. ว่าง 14:00 น. ว่าง 14:30 น. ว่าง 15:00 น. ว่าง 15:30 น. ว่าง 16:00 น. ว่าง 16:30 น. ว่าง 17:00 น. ว่าง 17:30 น. ว่าง 18:00 น. ว่าง 18:30 น. ว่าง 19:00 น. ว่าง ย้อนกลับ ถัดไป: ชำระมัดจำ Powered by Local Service Booking SaaS"
+        },
+        {
+          "label": "2b-slot-picked",
+          "url": "http://localhost:3100/book/r4-test-fixture-20260923",
+          "text": "🌐 EN Q R4 TEST FIXTURE (Synthetic — Delete After Acceptance) ระบบจองคิวออนไลน์ • ชำระมัดจำปลอดภัย โทร: 0000000000 2. เลือกพนักงาน & นัดหมายวันเวลา บริการที่เลือก: R4 Test Service 30min ข้อมูลผู้จอง (สำหรับยืนยันสล็อต) ชื่อผู้จอง * เบอร์โทรศัพท์ * เลือกพนักงานให้บริการ ไม่ระบุช่าง (ช่างคนไหนก็ได้) R4T R4TB เลือกวันที่ เลือกรอบเวลาที่ว่าง 09:00 น. ว่าง 09:30 น. ว่าง 10:00 น. ว่าง 10:30 น. ว่าง 11:00 น. ว่าง 11:30 น. ว่าง 12:00 น. ว่าง 13:00 น. ว่าง 13:30 น. ว่าง 14:00 น. ว่าง 14:30 น. ว่าง 15:00 น. ว่าง 15:30 น. ว่าง 16:00 น. ว่าง 16:30 น. ว่าง 17:00 น. ว่าง 17:30 น. ว่าง 18:00 น. ว่าง 18:30 น. ว่าง 19:00 น. ว่าง ย้อนกลับ ถัดไป: ชำระมัดจำ Powered by Local Service Booking SaaS"
+        },
+        {
+          "label": "3-confirm",
+          "url": "http://localhost:3100/book/r4-test-fixture-20260923",
+          "text": "🌐 EN Q R4 TEST FIXTURE (Synthetic — Delete After Acceptance) ระบบจองคิวออนไลน์ • ชำระมัดจำปลอดภัย โทร: 0000000000 ยืนยันคิวเรียบร้อย รหัสการจอง: BK-QHJGJG สถานะคิวจอง ยืนยันแล้ว บริการ: R4 Test Service 30min พนักงาน: ไม่ระบุพนักงาน (สุ่มช่าง) เวลานัด: 2026-09-23 @ 09:00 น. ยอดมัดจำ: ไม่ต้องชำระมัดจำ เบอร์สายตรงร้านค้า: 0000000000 รับแจ้งเตือนผ่านไลน์ เพื่อไม่พลาดคิวของท่าน กดผูกบัญชี LINE กลาง (@@kmo-build-placeholder) เลื่อนหรือยกเลิกคิวนี้ โทรสอบถามทางร้านกรณีฉุกเฉิน (0000000000) Powered by Local Service Booking SaaS"
+        },
+        {
+          "label": "4-result",
+          "url": "http://localhost:3100/book/r4-test-fixture-20260923",
+          "text": "🌐 EN Q R4 TEST FIXTURE (Synthetic — Delete After Acceptance) ระบบจองคิวออนไลน์ • ชำระมัดจำปลอดภัย โทร: 0000000000 ยืนยันคิวเรียบร้อย รหัสการจอง: BK-QHJGJG สถานะคิวจอง ยืนยันแล้ว บริการ: R4 Test Service 30min พนักงาน: ไม่ระบุพนักงาน (สุ่มช่าง) เวลานัด: 2026-09-23 @ 09:00 น. ยอดมัดจำ: ไม่ต้องชำระมัดจำ เบอร์สายตรงร้านค้า: 0000000000 รับแจ้งเตือนผ่านไลน์ เพื่อไม่พลาดคิวของท่าน กดผูกบัญชี LINE กลาง (@@kmo-build-placeholder) เลื่อนหรือยกเลิกคิวนี้ โทรสอบถามทางร้านกรณีฉุกเฉิน (0000000000) Powered by Local Service Booking SaaS"
+        }
+      ],
+      "rpc": [
+        {
+          "fn": "shop_public_profile",
+          "status": 200,
+          "bodyKeys": null,
+          "code": null
+        },
+        {
+          "fn": "shop_public_profile",
+          "status": 200,
+          "bodyKeys": null,
+          "code": null
+        },
+        {
+          "fn": "rpc/create_booking_hold",
+          "status": 200,
+          "bodyKeys": [
+            "booking_id",
+            "booking_code",
+            "link_token",
+            "status",
+            "deposit_status",
+            "deposit_amount",
+            "total_price",
+            "expires_at",
+            "staff_id"
+          ],
+          "code": null
+        }
+      ],
+      "consoleErrors": []
+    },
+    "mobile": {
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "nextEnabledAfterSlot": true,
+      "steps": [
+        {
+          "label": "2-staff-date",
+          "url": "http://localhost:3100/book/r4-test-fixture-20260923",
+          "text": "🌐 EN Q R4 TEST FIXTURE (Synthetic — Delete After Acceptance) ระบบจองคิวออนไลน์ • ชำระมัดจำปลอดภัย 0000000000 2. เลือกพนักงาน & นัดหมายวันเวลา บริการที่เลือก: R4 Test Service 30min ข้อมูลผู้จอง (สำหรับยืนยันสล็อต) ชื่อผู้จอง * เบอร์โทรศัพท์ * เลือกพนักงานให้บริการ ไม่ระบุช่าง (ช่างคนไหนก็ได้) R4T R4TB เลือกวันที่ เลือกรอบเวลาที่ว่าง 09:00 น. ว่าง 09:30 น. ว่าง 10:00 น. ว่าง 10:30 น. ว่าง 11:00 น. ว่าง 11:30 น. ว่าง 12:00 น. ว่าง 13:00 น. ว่าง 13:30 น. ว่าง 14:00 น. ว่าง 14:30 น. ว่าง 15:00 น. ว่าง 15:30 น. ว่าง 16:00 น. ว่าง 16:30 น. ว่าง 17:00 น. ว่าง 17:30 น. ว่าง 18:00 น. ว่าง 18:30 น. ว่าง 19:00 น. ว่าง ย้อนกลับ ถัดไป: ชำระมัดจำ Powered by Local Service Booking SaaS"
+        },
+        {
+          "label": "2b-slot-picked",
+          "url": "http://localhost:3100/book/r4-test-fixture-20260923",
+          "text": "🌐 EN Q R4 TEST FIXTURE (Synthetic — Delete After Acceptance) ระบบจองคิวออนไลน์ • ชำระมัดจำปลอดภัย 0000000000 2. เลือกพนักงาน & นัดหมายวันเวลา บริการที่เลือก: R4 Test Service 30min ข้อมูลผู้จอง (สำหรับยืนยันสล็อต) ชื่อผู้จอง * เบอร์โทรศัพท์ * เลือกพนักงานให้บริการ ไม่ระบุช่าง (ช่างคนไหนก็ได้) R4T R4TB เลือกวันที่ เลือกรอบเวลาที่ว่าง 09:00 น. ว่าง 09:30 น. ว่าง 10:00 น. ว่าง 10:30 น. ว่าง 11:00 น. ว่าง 11:30 น. ว่าง 12:00 น. ว่าง 13:00 น. ว่าง 13:30 น. ว่าง 14:00 น. ว่าง 14:30 น. ว่าง 15:00 น. ว่าง 15:30 น. ว่าง 16:00 น. ว่าง 16:30 น. ว่าง 17:00 น. ว่าง 17:30 น. ว่าง 18:00 น. ว่าง 18:30 น. ว่าง 19:00 น. ว่าง ย้อนกลับ ถัดไป: ชำระมัดจำ Powered by Local Service Booking SaaS"
+        },
+        {
+          "label": "3-confirm",
+          "url": "http://localhost:3100/book/r4-test-fixture-20260923",
+          "text": "🌐 EN Q R4 TEST FIXTURE (Synthetic — Delete After Acceptance) ระบบจองคิวออนไลน์ • ชำระมัดจำปลอดภัย 0000000000 ยืนยันคิวเรียบร้อย รหัสการจอง: BK-WMUUTR สถานะคิวจอง ยืนยันแล้ว บริการ: R4 Test Service 30min พนักงาน: ไม่ระบุพนักงาน (สุ่มช่าง) เวลานัด: 2026-09-23 @ 09:00 น. ยอดมัดจำ: ไม่ต้องชำระมัดจำ เบอร์สายตรงร้านค้า: 0000000000 รับแจ้งเตือนผ่านไลน์ เพื่อไม่พลาดคิวของท่าน กดผูกบัญชี LINE กลาง (@@kmo-build-placeholder) เลื่อนหรือยกเลิกคิวนี้ โทรสอบถามทางร้านกรณีฉุกเฉิน (0000000000) Powered by Local Service Booking SaaS"
+        },
+        {
+          "label": "4-result",
+          "url": "http://localhost:3100/book/r4-test-fixture-20260923",
+          "text": "🌐 EN Q R4 TEST FIXTURE (Synthetic — Delete After Acceptance) ระบบจองคิวออนไลน์ • ชำระมัดจำปลอดภัย 0000000000 ยืนยันคิวเรียบร้อย รหัสการจอง: BK-WMUUTR สถานะคิวจอง ยืนยันแล้ว บริการ: R4 Test Service 30min พนักงาน: ไม่ระบุพนักงาน (สุ่มช่าง) เวลานัด: 2026-09-23 @ 09:00 น. ยอดมัดจำ: ไม่ต้องชำระมัดจำ เบอร์สายตรงร้านค้า: 0000000000 รับแจ้งเตือนผ่านไลน์ เพื่อไม่พลาดคิวของท่าน กดผูกบัญชี LINE กลาง (@@kmo-build-placeholder) เลื่อนหรือยกเลิกคิวนี้ โทรสอบถามทางร้านกรณีฉุกเฉิน (0000000000) Powered by Local Service Booking SaaS"
+        }
+      ],
+      "rpc": [
+        {
+          "fn": "shop_public_profile",
+          "status": 200,
+          "bodyKeys": null,
+          "code": null
+        },
+        {
+          "fn": "shop_public_profile",
+          "status": 200,
+          "bodyKeys": null,
+          "code": null
+        },
+        {
+          "fn": "rpc/create_booking_hold",
+          "status": 200,
+          "bodyKeys": [
+            "booking_id",
+            "booking_code",
+            "link_token",
+            "status",
+            "deposit_status",
+            "deposit_amount",
+            "total_price",
+            "expires_at",
+            "staff_id"
+          ],
+          "code": null
+        }
+      ],
+      "consoleErrors": []
+    }
+  }
+}

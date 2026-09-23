@@ -1,0 +1,200 @@
+{
+  "task": "BK01-R4-CLOSE-LONG-RUN-2026-09-23",
+  "date": "2026-09-23",
+  "verdict": "R4_CLOSED",
+  "git_disposition": "VERIFIED_READY_FOR_CLAUDE_COMMIT",
+  "base_checkpoint": "021d2427c3f9b35d5b235ce3202436bd382ae729",
+  "canonical_reviewed_source": "3b3a3338de029a058aa5763c806be42f8a5205ca",
+  "generated_at_utc": "2026-09-23T08:36:26.490354Z",
+  "artifact_count": 47,
+  "artifacts": [
+    {
+      "file": "EVIDENCE-admin-authenticated-dashboard-2026-09-23.json",
+      "sha256": "44c0f938dfae387c7e68f1a07be737f1db602ae2d552546a62cde600f347a7e0"
+    },
+    {
+      "file": "EVIDENCE-admin-r4-matrix-2026-09-23.json",
+      "sha256": "3dbba4c464ded59ad7ca482ad9f3da0137f782fad3125dd2ba5157efcaddf8c8"
+    },
+    {
+      "file": "EVIDENCE-admin-unauthenticated-contract-2026-09-23.json",
+      "sha256": "53cafea64f13b3f2b42ae01eff5adf9e0388d7da40bdf8674c2ed44c2572ba77"
+    },
+    {
+      "file": "EVIDENCE-consumer-browser-post-repair-2026-09-23.json",
+      "sha256": "4cac93858a2e2c186377a00fa9c61c4556a1567f9732fd85517341e1ae19e0fd"
+    },
+    {
+      "file": "EVIDENCE-consumer-browser-pre-repair-2026-09-23.json",
+      "sha256": "b5ff81552b0401210be1f8e0d819dfef6784d4ef863d373d2d013d09afbab203"
+    },
+    {
+      "file": "EVIDENCE-consumer-state-matrix-FIX-2026-09-23.json",
+      "sha256": "5fef4d25037d774986de32673729b4706b48fdf47c520aabf3f4a93cf1fba3b3"
+    },
+    {
+      "file": "EVIDENCE-consumer-state-matrix-KMO-2026-09-23.json",
+      "sha256": "b2004b60977411d4c421c59bb4dd745bed9f566c6b95d7486822552f3918208a"
+    },
+    {
+      "file": "EVIDENCE-consumer-state-matrix-KMO-post-cleanup-2026-09-23.json",
+      "sha256": "068824a4ee1d3dc271eb02ef32bf0e648ae78500902d820b8fcc298d6d5de7af"
+    },
+    {
+      "file": "EVIDENCE-consumer-state-matrix-LAB-2026-09-23.json",
+      "sha256": "f2ca12e34e81138bbe4ac98b83028b24f6e5ef4ec7ffe6156a5b9c733a81fa06"
+    },
+    {
+      "file": "EVIDENCE-consumer-state-matrix-ST-2026-09-23.json",
+      "sha256": "ece0c91173c718f3fbce2595b33bf650fd6d92458f68d1110c745942cffa38a2"
+    },
+    {
+      "file": "EVIDENCE-crosscut-admin-2026-09-23.json",
+      "sha256": "d4d5c9fb0e05483674bf9dd1f1f28ef4463a13f0bb08e1cfa6fb81ad0bce66b2"
+    },
+    {
+      "file": "EVIDENCE-crosscut-consumer-2026-09-23.json",
+      "sha256": "c44ae3329701cf63c5a030a6b059d4730affbbe9f83ce6484b61143fb1115fae"
+    },
+    {
+      "file": "EVIDENCE-e2e-booking-db-state-2026-09-23.json",
+      "sha256": "1a22852658e4ad5da258b6d07a4f9873b2acecbc29121342e9f9129deb5ff638"
+    },
+    {
+      "file": "EVIDENCE-fixture-cleanup-residue-2026-09-23.json",
+      "sha256": "68d4c2f097b8e85e8b762dba932756d32b1f12334c7cfd3cdad8417a3872b32f"
+    },
+    {
+      "file": "EVIDENCE-fixture-inventory-before-cleanup-2026-09-23.json",
+      "sha256": "7ad93fe9df8ad1c2cf4fe7cc05b2c60bd4c96b97b9c06273e98ddec7fc3d37b4"
+    },
+    {
+      "file": "EVIDENCE-fixture-isolation-2026-09-23.json",
+      "sha256": "fc14a5725c16b0988f08841a6503ea7192b57e22748f15f1d9523adf2d2af546"
+    },
+    {
+      "file": "EVIDENCE-INDEX-2026-09-23.json",
+      "sha256": "a6ebd3caa49911a30123f390db3dcb56040bf22b7fbe7833b03ba51a69d9b433"
+    },
+    {
+      "file": "EVIDENCE-kmo-predicate-grant-after-2026-09-23.json",
+      "sha256": "31e5c56887b2ab141eea05092028c39a82d3db4f3eb971003758b4a95422e8bc"
+    },
+    {
+      "file": "EVIDENCE-kmo-predicate-grant-before-2026-09-23.json",
+      "sha256": "3ff2046cb6e1a4e20a3eddf6eae20e47fe2051a41447791b97057b51810f0d5b"
+    },
+    {
+      "file": "EVIDENCE-kmo-unmodified-fingerprint-2026-09-23.json",
+      "sha256": "c2bec8482029a544a38296ff9d43641d654d7aadf08a0c582a769f44b018f902"
+    },
+    {
+      "file": "EVIDENCE-positive-e2e-browser-2026-09-23.json",
+      "sha256": "84dc84d796147eedf9bd7dd438a0efc6c2455b5fdf9315d0c2032ecf45290b49"
+    },
+    {
+      "file": "EVIDENCE-r4-1-r4-2-2026-09-23.json",
+      "sha256": "c82d6c3c3fe079c6ef6e092daa76344775468f16bedec7f0406574fb56d8d1e0"
+    },
+    {
+      "file": "EVIDENCE-r4-7-r4-8-2026-09-23.json",
+      "sha256": "09a8f0d2bced4dee4363235430eae775c44873f81db1c50ee3ac45e69962ec44"
+    },
+    {
+      "file": "EVIDENCE-r4-9-durations-2026-09-23.json",
+      "sha256": "f44f93ae9001120f6f02ad8df6e499c91e29ac6fa6dc0e6a39826bcdcce658e2"
+    },
+    {
+      "file": "KMO-REPAIR-2026-09-23-anon-predicate-shop_id.sql",
+      "sha256": "8002d9a7781a75ca939263e31691f8d16a8091dbf1f9dbfaf0e68a9835243193"
+    },
+    {
+      "file": "out-admin-matrix-login-dashboard-desktop.png",
+      "sha256": "4d3a205c31d95ef2f37629c3ba983d52104413203f4c60864b1f2c3b6d7e353b"
+    },
+    {
+      "file": "out-admin-matrix-login-dashboard-mobile.png",
+      "sha256": "adbb4eab763d38056916bc05b20fd03e9b1f262267a55eb2d9e7f88c6f907be4"
+    },
+    {
+      "file": "out-admin-r41-r49-matrix-desktop.png",
+      "sha256": "d087cfc8c9e15d477f78a242a3da01335f7dffbdcc6d2fc45bff6d5746ca7915"
+    },
+    {
+      "file": "out-admin-r41-r49-matrix-mobile.png",
+      "sha256": "f7949282fe740043c3f422807e0f97c71e0a3d06df88278a497e3eabb5c23cd1"
+    },
+    {
+      "file": "out-e2e-final-desktop-3-confirm.png",
+      "sha256": "2be56a476b382adf280e850894643c6ce1f087ed3309366a5d677d385c3fbbb5"
+    },
+    {
+      "file": "out-e2e-final-mobile-3-confirm.png",
+      "sha256": "1a9880372aa78db47a1976f7aed256d8664a9628a9aebda0f88d601a46442a88"
+    },
+    {
+      "file": "out-r41-r42-final-desktop.png",
+      "sha256": "fce279595aba2dc0079ab82728b5d155242c3f7de68f9bbd139f51ac16b11828"
+    },
+    {
+      "file": "out-r41-r42-final-mobile.png",
+      "sha256": "894fdc867ae2dcb61189f381168306f51cc916ba88f7e68a15700d64c26c8a60"
+    },
+    {
+      "file": "out-r41-r42-invalid-desktop.png",
+      "sha256": "94b7b52f72d8a9fc5ae4cb761ac26b82f342b4ad75ffe065bf50e42d81806dbc"
+    },
+    {
+      "file": "out-r47-r48-hold-desktop.png",
+      "sha256": "7b5dd3a21810e52e6578ff8fc6dfce4660a15a343d3f5017282d43014e4d28a6"
+    },
+    {
+      "file": "out-r49-mobile-pay.png",
+      "sha256": "82ce00e3dca46b1f583c08846c50de3d2a9b0b61acce6fb35e9fdbf7687134bd"
+    },
+    {
+      "file": "out-state-matrix-FIX-FIX-ok-shop-desktop.png",
+      "sha256": "2c72da612a762cb2084d880eb80baf66c1b478b08ecff1f96fa3247a828d0ad4"
+    },
+    {
+      "file": "out-state-matrix-KMO-KMO-missing-slug-desktop.png",
+      "sha256": "527a0e4b579d1a77fbb789a40f858dccb07c0908d9d571f62d6fadbb679b51a0"
+    },
+    {
+      "file": "out-state-matrix-KMO-KMO-valid-shop-no-public-staff-desktop.png",
+      "sha256": "5db28f8ae2fbd4bd6cca6746d6996d35ebd1208aa43a2bb998e624bc7ca63175"
+    },
+    {
+      "file": "out-state-matrix-KMO-KMO-valid-shop-no-public-staff-mobile.png",
+      "sha256": "37991418b58bf90074bb709077ba240ea8f772bb753ee3b2ddf3684a77f9f513"
+    },
+    {
+      "file": "out-state-matrix-LAB-LAB-fixture-shop-desktop.png",
+      "sha256": "5a89fdeebd35b972d692e808581f6f62de21b47c7ca654b6f0d242c00c3bd1f2"
+    },
+    {
+      "file": "out-state-matrix-ST-ST-deposit-hold-desktop.png",
+      "sha256": "656dfc6bca225b1df4160ec34d32dca326bccdf0294cc971c720d1c6f859403c"
+    },
+    {
+      "file": "out-state-matrix-ST-ST-no-schedule-desktop.png",
+      "sha256": "862ff6544a76fe96383eb64190a4c148915ca33ef398621e28810709d01992ad"
+    },
+    {
+      "file": "out-state-matrix-ST-ST-no-services-desktop.png",
+      "sha256": "4e97beefba4a81d075f887734a3a582279433f81789e74aff5da4ffb739af7cc"
+    },
+    {
+      "file": "out-state-matrix-ST-ST-no-slot-desktop.png",
+      "sha256": "3620aaa4fad3f20aef4d82fcf856b457f9bdd08dfe681d3cbc74b6696870d098"
+    },
+    {
+      "file": "REPORT-BK01-R4-CLOSURE-2026-09-23.md",
+      "sha256": "594bd6725db062b2113c6a6895646fba9d0d4dfc5e498ab0a0dd2bc25ee289c8"
+    },
+    {
+      "file": "REPORT-BK01-R4-RESUME-2026-09-23.md",
+      "sha256": "50dfc7eaf6c0cf68ee51149868405cedea8cd0d8607e7bff31447a21f75e0188"
+    }
+  ]
+}

@@ -1,0 +1,102 @@
+{
+  "capturedAt": "2026-09-23T08:27:20.163Z",
+  "viewports": {
+    "desktop": {
+      "rpc_create_booking_hold": {
+        "status": 200,
+        "raw": {
+          "booking_id": "0fb380f1-455e-480f-a266-67f06b3ffb6c",
+          "booking_code": "BK-XZ46WH",
+          "link_token": "13107CB869",
+          "status": "hold",
+          "deposit_status": "awaiting",
+          "deposit_amount": 500,
+          "total_price": 800,
+          "expires_at": "2026-09-23T08:43:01.535315+00:00",
+          "staff_id": "5e4e97fd-018b-46cd-bcb7-90f598f5c2e9"
+        }
+      },
+      "paymentStep": {
+        "text": "🌐 EN Q R4-STATE-DEPOSIT-HOLD (Synthetic R4 State Fixture) ระบบจองคิวออนไลน์ • ชำระมัดจำปลอดภัย โทร: 0000000002 3. ชำระมัดจำ PromptPay & ยืนยัน สแกน QR Code โอนมัดจำเพื่อล็อกคิวงานอัตโนมัติ กรุณาโอนมัดจำภายใน 14:56 นาที รหัสจองคิวชั่วคราว: BK-XZ46WH PromptPay QR บันทึกรูป QR Code ยอดเงินมัดจำล็อกคิว ฿500.00 ชื่อบัญชี: R4 Synthetic PromptPay เลขพร้อมเพย์: 0000000000 คัดลอกเลข แนบสลิปการโอนมัดจำ * คลิกเพื่ออัปโหลดสลิปเงินมัดจำ รองรับไฟล์ JPG, PNG หรือ WebP ย้อนกลับ ยืนยันการโอนเงินมัดจำ Powered by Local Service Booking SaaS",
+        "qrCount": 1,
+        "amounts": [
+          "฿500"
+        ],
+        "countdown": [
+          "14:56"
+        ]
+      },
+      "qrPayloadPresent": null,
+      "countdown": {
+        "first": "14:56",
+        "after12s": "14:44",
+        "changed": true
+      },
+      "holdRpc": {
+        "status": 200,
+        "raw": {
+          "booking_id": "0fb380f1-455e-480f-a266-67f06b3ffb6c",
+          "booking_code": "BK-XZ46WH",
+          "link_token": "13107CB869",
+          "status": "hold",
+          "deposit_status": "awaiting",
+          "deposit_amount": 500,
+          "total_price": 800,
+          "expires_at": "2026-09-23T08:43:01.535315+00:00",
+          "staff_id": "5e4e97fd-018b-46cd-bcb7-90f598f5c2e9"
+        }
+      },
+      "noSlot": {
+        "text": "🌐 EN Q R4-STATE-NO-SLOT (Synthetic R4 State Fixture) ระบบจองคิวออนไลน์ • ชำระมัดจำปลอดภัย โทร: 0000000002 2. เลือกพนักงาน & นัดหมายวันเวลา บริการที่เลือก: R4 State Service ข้อมูลผู้จอง (สำหรับยืนยันสล็อต) ชื่อผู้จอง * เบอร์โทรศัพท์ * เลือกพนักงานให้บริการ ไม่ระบุช่าง (ช่างคนไหนก็ได้) R4S เลือกวันที่ เลือกรอบเวลาที่ว่าง 09:00 น. ไม่ว่าง 09:30 น. ไม่ว่าง 10:00 น. ไม่ว่าง 10:30 น. ไม่ว่าง 11:00 น. ไม่ว่าง 11:30 น. ไม่ว่าง 12:00 น. ไม่ว่าง 13:00 น. ไม่ว่าง 13:30 น. ไม่ว่าง 14:00 น. ไม่ว่าง 14:30 น. ไม่ว่าง 15:00 น. ไม่ว่าง 15:30 น. ไม่ว่าง 16:00 น. ไม่ว่าง 16:30 น. ไม่ว่าง 17:00 น. ไม่ว่าง 17:30 น. ไม่ว่าง 18:00 น. ไม่ว่าง 18:30 น. ไม่ว่าง 19:00 น. ไม่ว่าง ย้อนกลับ ถัดไป: ชำระมัดจำ Powered by Local Service Booking SaaS",
+        "slotButtons": 23,
+        "hasSlotLabel": true
+      }
+    },
+    "mobile": {
+      "rpc_create_booking_hold": {
+        "status": 400,
+        "raw": {
+          "code": "P0001",
+          "details": null,
+          "hint": null,
+          "message": "No available staff for the requested time slot"
+        }
+      },
+      "paymentStep": {
+        "text": "🌐 EN Q R4-STATE-DEPOSIT-HOLD (Synthetic R4 State Fixture) ระบบจองคิวออนไลน์ • ชำระมัดจำปลอดภัย 0000000002 No available staff for the requested time slot 2. เลือกพนักงาน & นัดหมายวันเวลา บริการที่เลือก: R4 Hold Service 30min ข้อมูลผู้จอง (สำหรับยืนยันสล็อต) ชื่อผู้จอง * เบอร์โทรศัพท์ * เลือกพนักงานให้บริการ ไม่ระบุช่าง (ช่างคนไหนก็ได้) R4S เลือกวันที่ เลือกรอบเวลาที่ว่าง 09:00 น. ว่าง 09:30 น. ว่าง 10:00 น. ว่าง 10:30 น. ว่าง 11:00 น. ว่าง 11:30 น. ว่าง 12:00 น. ไม่ว่าง 13:00 น. ว่าง 13:30 น. ว่าง 14:00 น. ว่าง 14:30 น. ว่าง 15:00 น. ว่าง 15:30 น. ว่าง 16:00 น. ว่าง 16:30 น. ว่าง 17:00 น. ว่าง 17:30 น. ว่าง 18:00 น. ว่าง 18:30 น. ว่าง 19:00 น. ว่าง ย้อนกลับ ถัดไป: ชำระมัดจำ Powered by Local Service Booking SaaS",
+        "qrCount": 0,
+        "amounts": [],
+        "countdown": [
+          "09:00",
+          "09:30",
+          "10:00",
+          "10:30",
+          "11:00",
+          "11:30",
+          "12:00",
+          "13:00"
+        ]
+      },
+      "qrPayloadPresent": null,
+      "countdown": {
+        "first": "09:00",
+        "after12s": "09:00",
+        "changed": false
+      },
+      "holdRpc": {
+        "status": 400,
+        "raw": {
+          "code": "P0001",
+          "details": null,
+          "hint": null,
+          "message": "No available staff for the requested time slot"
+        }
+      },
+      "noSlot": {
+        "text": "🌐 EN Q R4-STATE-NO-SLOT (Synthetic R4 State Fixture) ระบบจองคิวออนไลน์ • ชำระมัดจำปลอดภัย 0000000002 2. เลือกพนักงาน & นัดหมายวันเวลา บริการที่เลือก: R4 State Service ข้อมูลผู้จอง (สำหรับยืนยันสล็อต) ชื่อผู้จอง * เบอร์โทรศัพท์ * เลือกพนักงานให้บริการ ไม่ระบุช่าง (ช่างคนไหนก็ได้) R4S เลือกวันที่ เลือกรอบเวลาที่ว่าง 09:00 น. ไม่ว่าง 09:30 น. ไม่ว่าง 10:00 น. ไม่ว่าง 10:30 น. ไม่ว่าง 11:00 น. ไม่ว่าง 11:30 น. ไม่ว่าง 12:00 น. ไม่ว่าง 13:00 น. ไม่ว่าง 13:30 น. ไม่ว่าง 14:00 น. ไม่ว่าง 14:30 น. ไม่ว่าง 15:00 น. ไม่ว่าง 15:30 น. ไม่ว่าง 16:00 น. ไม่ว่าง 16:30 น. ไม่ว่าง 17:00 น. ไม่ว่าง 17:30 น. ไม่ว่าง 18:00 น. ไม่ว่าง 18:30 น. ไม่ว่าง 19:00 น. ไม่ว่าง ย้อนกลับ ถัดไป: ชำระมัดจำ Powered by Local Service Booking SaaS",
+        "slotButtons": 23,
+        "hasSlotLabel": true
+      }
+    }
+  }
+}

@@ -1,0 +1,615 @@
+{
+  "capturedAt": "2026-09-23T08:26:40.373Z",
+  "cases": [
+    {
+      "case": "ST-no-services",
+      "expected": "NO_SERVICES",
+      "viewport": "desktop",
+      "httpStatus": 200,
+      "url": "http://localhost:3100/book/r4-state-no-services",
+      "observedState": "NO_SERVICES",
+      "visibleText": "🌐 EN Q R4-STATE-NO-SERVICES (Synthetic R4 State Fixture) ระบบจองคิวออนไลน์ • ชำระมัดจำปลอดภัย โทร: 0000000002 ยังไม่มีบริการให้จอง ร้านนี้ยังไม่ได้เพิ่มบริการที่จองได้ กรุณาติดต่อร้านค้าโดยตรง โทรสอบถามทางร้าน (0000000002) Powered by Local Service Booking SaaS",
+      "buttons": [
+        "🌐 EN"
+      ],
+      "rest": [
+        {
+          "table": "shop_public_profile",
+          "status": 200,
+          "rows": 1,
+          "code": null
+        },
+        {
+          "table": "shop_public_profile",
+          "status": 200,
+          "rows": 1,
+          "code": null
+        },
+        {
+          "table": "shop_holidays",
+          "status": 200,
+          "rows": 0,
+          "code": null
+        },
+        {
+          "table": "staff",
+          "status": 200,
+          "rows": 1,
+          "code": null
+        },
+        {
+          "table": "services",
+          "status": 200,
+          "rows": 0,
+          "code": null
+        },
+        {
+          "table": "staff_schedules",
+          "status": 200,
+          "rows": 7,
+          "code": null
+        },
+        {
+          "table": "staff",
+          "status": 200,
+          "rows": 1,
+          "code": null
+        },
+        {
+          "table": "shop_holidays",
+          "status": 200,
+          "rows": 0,
+          "code": null
+        },
+        {
+          "table": "services",
+          "status": 200,
+          "rows": 0,
+          "code": null
+        },
+        {
+          "table": "staff_schedules",
+          "status": 200,
+          "rows": 7,
+          "code": null
+        }
+      ],
+      "consoleErrors": [],
+      "screenshot": "D:/AI-Workspace/runtime/browser-tools/out-state-matrix-ST-ST-no-services-desktop.png"
+    },
+    {
+      "case": "ST-no-services",
+      "expected": "NO_SERVICES",
+      "viewport": "mobile",
+      "httpStatus": 200,
+      "url": "http://localhost:3100/book/r4-state-no-services",
+      "observedState": "NO_SERVICES",
+      "visibleText": "🌐 EN Q R4-STATE-NO-SERVICES (Synthetic R4 State Fixture) ระบบจองคิวออนไลน์ • ชำระมัดจำปลอดภัย 0000000002 ยังไม่มีบริการให้จอง ร้านนี้ยังไม่ได้เพิ่มบริการที่จองได้ กรุณาติดต่อร้านค้าโดยตรง โทรสอบถามทางร้าน (0000000002) Powered by Local Service Booking SaaS",
+      "buttons": [
+        "🌐 EN"
+      ],
+      "rest": [
+        {
+          "table": "shop_public_profile",
+          "status": 200,
+          "rows": 1,
+          "code": null
+        },
+        {
+          "table": "shop_public_profile",
+          "status": 200,
+          "rows": 1,
+          "code": null
+        },
+        {
+          "table": "staff",
+          "status": 200,
+          "rows": 1,
+          "code": null
+        },
+        {
+          "table": "services",
+          "status": 200,
+          "rows": 0,
+          "code": null
+        },
+        {
+          "table": "shop_holidays",
+          "status": 200,
+          "rows": 0,
+          "code": null
+        },
+        {
+          "table": "staff_schedules",
+          "status": 200,
+          "rows": 7,
+          "code": null
+        },
+        {
+          "table": "services",
+          "status": 200,
+          "rows": 0,
+          "code": null
+        },
+        {
+          "table": "staff",
+          "status": 200,
+          "rows": 1,
+          "code": null
+        },
+        {
+          "table": "shop_holidays",
+          "status": 200,
+          "rows": 0,
+          "code": null
+        },
+        {
+          "table": "staff_schedules",
+          "status": 200,
+          "rows": 7,
+          "code": null
+        }
+      ],
+      "consoleErrors": [],
+      "screenshot": "D:/AI-Workspace/runtime/browser-tools/out-state-matrix-ST-ST-no-services-mobile.png"
+    },
+    {
+      "case": "ST-no-schedule",
+      "expected": "NO_SCHEDULE",
+      "viewport": "desktop",
+      "httpStatus": 200,
+      "url": "http://localhost:3100/book/r4-state-no-schedule",
+      "observedState": "NO_SCHEDULE",
+      "visibleText": "🌐 EN Q R4-STATE-NO-SCHEDULE (Synthetic R4 State Fixture) ระบบจองคิวออนไลน์ • ชำระมัดจำปลอดภัย โทร: 0000000002 ยังไม่ได้ตั้งค่าตารางการจอง ร้านนี้ยังไม่ได้ตั้งค่าเวลาทำการ กรุณาติดต่อร้านค้าโดยตรง โทรสอบถามทางร้าน (0000000002) Powered by Local Service Booking SaaS",
+      "buttons": [
+        "🌐 EN"
+      ],
+      "rest": [
+        {
+          "table": "shop_public_profile",
+          "status": 200,
+          "rows": 1,
+          "code": null
+        },
+        {
+          "table": "shop_public_profile",
+          "status": 200,
+          "rows": 1,
+          "code": null
+        },
+        {
+          "table": "staff",
+          "status": 200,
+          "rows": 1,
+          "code": null
+        },
+        {
+          "table": "services",
+          "status": 200,
+          "rows": 1,
+          "code": null
+        },
+        {
+          "table": "shop_holidays",
+          "status": 200,
+          "rows": 0,
+          "code": null
+        },
+        {
+          "table": "staff_schedules",
+          "status": 200,
+          "rows": 0,
+          "code": null
+        },
+        {
+          "table": "services",
+          "status": 200,
+          "rows": 1,
+          "code": null
+        },
+        {
+          "table": "shop_holidays",
+          "status": 200,
+          "rows": 0,
+          "code": null
+        },
+        {
+          "table": "staff",
+          "status": 200,
+          "rows": 1,
+          "code": null
+        },
+        {
+          "table": "staff_schedules",
+          "status": 200,
+          "rows": 0,
+          "code": null
+        }
+      ],
+      "consoleErrors": [],
+      "screenshot": "D:/AI-Workspace/runtime/browser-tools/out-state-matrix-ST-ST-no-schedule-desktop.png"
+    },
+    {
+      "case": "ST-no-schedule",
+      "expected": "NO_SCHEDULE",
+      "viewport": "mobile",
+      "httpStatus": 200,
+      "url": "http://localhost:3100/book/r4-state-no-schedule",
+      "observedState": "NO_SCHEDULE",
+      "visibleText": "🌐 EN Q R4-STATE-NO-SCHEDULE (Synthetic R4 State Fixture) ระบบจองคิวออนไลน์ • ชำระมัดจำปลอดภัย 0000000002 ยังไม่ได้ตั้งค่าตารางการจอง ร้านนี้ยังไม่ได้ตั้งค่าเวลาทำการ กรุณาติดต่อร้านค้าโดยตรง โทรสอบถามทางร้าน (0000000002) Powered by Local Service Booking SaaS",
+      "buttons": [
+        "🌐 EN"
+      ],
+      "rest": [
+        {
+          "table": "shop_public_profile",
+          "status": 200,
+          "rows": 1,
+          "code": null
+        },
+        {
+          "table": "shop_public_profile",
+          "status": 200,
+          "rows": 1,
+          "code": null
+        },
+        {
+          "table": "shop_holidays",
+          "status": 200,
+          "rows": 0,
+          "code": null
+        },
+        {
+          "table": "staff",
+          "status": 200,
+          "rows": 1,
+          "code": null
+        },
+        {
+          "table": "services",
+          "status": 200,
+          "rows": 1,
+          "code": null
+        },
+        {
+          "table": "staff_schedules",
+          "status": 200,
+          "rows": 0,
+          "code": null
+        },
+        {
+          "table": "staff",
+          "status": 200,
+          "rows": 1,
+          "code": null
+        },
+        {
+          "table": "services",
+          "status": 200,
+          "rows": 1,
+          "code": null
+        },
+        {
+          "table": "shop_holidays",
+          "status": 200,
+          "rows": 0,
+          "code": null
+        },
+        {
+          "table": "staff_schedules",
+          "status": 200,
+          "rows": 0,
+          "code": null
+        }
+      ],
+      "consoleErrors": [],
+      "screenshot": "D:/AI-Workspace/runtime/browser-tools/out-state-matrix-ST-ST-no-schedule-mobile.png"
+    },
+    {
+      "case": "ST-no-slot",
+      "expected": "NO_SLOT_FOR_DATE or NO_SCHEDULE",
+      "viewport": "desktop",
+      "httpStatus": 200,
+      "url": "http://localhost:3100/book/r4-state-no-slot",
+      "observedState": "OK_STEPPER",
+      "visibleText": "🌐 EN Q R4-STATE-NO-SLOT (Synthetic R4 State Fixture) ระบบจองคิวออนไลน์ • ชำระมัดจำปลอดภัย โทร: 0000000002 1. เลือกบริการที่คุณต้องการ เลือกบริการเพื่อดูรายละเอียดระยะเวลาและค่ามัดจำ R4 State Service ฿300 r4 state fixture service 30 นาที มัดจำ ฿0 ถัดไป: เลือกพนักงาน & วันเวลา Powered by Local Service Booking SaaS",
+      "buttons": [
+        "🌐 EN",
+        "ถัดไป: เลือกพนักงาน & วันเวลา"
+      ],
+      "rest": [
+        {
+          "table": "shop_public_profile",
+          "status": 200,
+          "rows": 1,
+          "code": null
+        },
+        {
+          "table": "shop_public_profile",
+          "status": 200,
+          "rows": 1,
+          "code": null
+        },
+        {
+          "table": "services",
+          "status": 200,
+          "rows": 1,
+          "code": null
+        },
+        {
+          "table": "staff",
+          "status": 200,
+          "rows": 1,
+          "code": null
+        },
+        {
+          "table": "shop_holidays",
+          "status": 200,
+          "rows": 0,
+          "code": null
+        },
+        {
+          "table": "staff_schedules",
+          "status": 200,
+          "rows": 1,
+          "code": null
+        },
+        {
+          "table": "services",
+          "status": 200,
+          "rows": 1,
+          "code": null
+        },
+        {
+          "table": "staff",
+          "status": 200,
+          "rows": 1,
+          "code": null
+        },
+        {
+          "table": "shop_holidays",
+          "status": 200,
+          "rows": 0,
+          "code": null
+        },
+        {
+          "table": "staff_schedules",
+          "status": 200,
+          "rows": 1,
+          "code": null
+        }
+      ],
+      "consoleErrors": [],
+      "screenshot": "D:/AI-Workspace/runtime/browser-tools/out-state-matrix-ST-ST-no-slot-desktop.png"
+    },
+    {
+      "case": "ST-no-slot",
+      "expected": "NO_SLOT_FOR_DATE or NO_SCHEDULE",
+      "viewport": "mobile",
+      "httpStatus": 200,
+      "url": "http://localhost:3100/book/r4-state-no-slot",
+      "observedState": "OK_STEPPER",
+      "visibleText": "🌐 EN Q R4-STATE-NO-SLOT (Synthetic R4 State Fixture) ระบบจองคิวออนไลน์ • ชำระมัดจำปลอดภัย 0000000002 1. เลือกบริการที่คุณต้องการ เลือกบริการเพื่อดูรายละเอียดระยะเวลาและค่ามัดจำ R4 State Service ฿300 r4 state fixture service 30 นาที มัดจำ ฿0 ถัดไป: เลือกพนักงาน & วันเวลา Powered by Local Service Booking SaaS",
+      "buttons": [
+        "🌐 EN",
+        "ถัดไป: เลือกพนักงาน & วันเวลา"
+      ],
+      "rest": [
+        {
+          "table": "shop_public_profile",
+          "status": 200,
+          "rows": 1,
+          "code": null
+        },
+        {
+          "table": "shop_public_profile",
+          "status": 200,
+          "rows": 1,
+          "code": null
+        },
+        {
+          "table": "staff",
+          "status": 200,
+          "rows": 1,
+          "code": null
+        },
+        {
+          "table": "shop_holidays",
+          "status": 200,
+          "rows": 0,
+          "code": null
+        },
+        {
+          "table": "services",
+          "status": 200,
+          "rows": 1,
+          "code": null
+        },
+        {
+          "table": "staff_schedules",
+          "status": 200,
+          "rows": 1,
+          "code": null
+        },
+        {
+          "table": "staff",
+          "status": 200,
+          "rows": 1,
+          "code": null
+        },
+        {
+          "table": "shop_holidays",
+          "status": 200,
+          "rows": 0,
+          "code": null
+        },
+        {
+          "table": "services",
+          "status": 200,
+          "rows": 1,
+          "code": null
+        },
+        {
+          "table": "staff_schedules",
+          "status": 200,
+          "rows": 1,
+          "code": null
+        }
+      ],
+      "consoleErrors": [],
+      "screenshot": "D:/AI-Workspace/runtime/browser-tools/out-state-matrix-ST-ST-no-slot-mobile.png"
+    },
+    {
+      "case": "ST-deposit-hold",
+      "expected": "deposit hold path",
+      "viewport": "desktop",
+      "httpStatus": 200,
+      "url": "http://localhost:3100/book/r4-state-deposit-hold",
+      "observedState": "PAYMENT_NOT_CONFIGURED",
+      "visibleText": "🌐 EN Q R4-STATE-DEPOSIT-HOLD (Synthetic R4 State Fixture) ระบบจองคิวออนไลน์ • ชำระมัดจำปลอดภัย โทร: 0000000002 ยังไม่ได้ตั้งค่าการรับมัดจำ ร้านนี้ต้องเก็บมัดจำ แต่ยังตั้งค่าการรับเงินไม่เสร็จ กรุณาติดต่อร้านค้าเพื่อจอง โทรสอบถามทางร้าน (0000000002) Powered by Local Service Booking SaaS",
+      "buttons": [
+        "🌐 EN"
+      ],
+      "rest": [
+        {
+          "table": "shop_public_profile",
+          "status": 200,
+          "rows": 1,
+          "code": null
+        },
+        {
+          "table": "shop_public_profile",
+          "status": 200,
+          "rows": 1,
+          "code": null
+        },
+        {
+          "table": "services",
+          "status": 200,
+          "rows": 1,
+          "code": null
+        },
+        {
+          "table": "staff_schedules",
+          "status": 200,
+          "rows": 7,
+          "code": null
+        },
+        {
+          "table": "staff",
+          "status": 200,
+          "rows": 1,
+          "code": null
+        },
+        {
+          "table": "shop_holidays",
+          "status": 200,
+          "rows": 0,
+          "code": null
+        },
+        {
+          "table": "services",
+          "status": 200,
+          "rows": 1,
+          "code": null
+        },
+        {
+          "table": "staff_schedules",
+          "status": 200,
+          "rows": 7,
+          "code": null
+        },
+        {
+          "table": "shop_holidays",
+          "status": 200,
+          "rows": 0,
+          "code": null
+        },
+        {
+          "table": "staff",
+          "status": 200,
+          "rows": 1,
+          "code": null
+        }
+      ],
+      "consoleErrors": [],
+      "screenshot": "D:/AI-Workspace/runtime/browser-tools/out-state-matrix-ST-ST-deposit-hold-desktop.png"
+    },
+    {
+      "case": "ST-deposit-hold",
+      "expected": "deposit hold path",
+      "viewport": "mobile",
+      "httpStatus": 200,
+      "url": "http://localhost:3100/book/r4-state-deposit-hold",
+      "observedState": "PAYMENT_NOT_CONFIGURED",
+      "visibleText": "🌐 EN Q R4-STATE-DEPOSIT-HOLD (Synthetic R4 State Fixture) ระบบจองคิวออนไลน์ • ชำระมัดจำปลอดภัย 0000000002 ยังไม่ได้ตั้งค่าการรับมัดจำ ร้านนี้ต้องเก็บมัดจำ แต่ยังตั้งค่าการรับเงินไม่เสร็จ กรุณาติดต่อร้านค้าเพื่อจอง โทรสอบถามทางร้าน (0000000002) Powered by Local Service Booking SaaS",
+      "buttons": [
+        "🌐 EN"
+      ],
+      "rest": [
+        {
+          "table": "shop_public_profile",
+          "status": 200,
+          "rows": 1,
+          "code": null
+        },
+        {
+          "table": "shop_public_profile",
+          "status": 200,
+          "rows": 1,
+          "code": null
+        },
+        {
+          "table": "shop_holidays",
+          "status": 200,
+          "rows": 0,
+          "code": null
+        },
+        {
+          "table": "staff_schedules",
+          "status": 200,
+          "rows": 7,
+          "code": null
+        },
+        {
+          "table": "staff",
+          "status": 200,
+          "rows": 1,
+          "code": null
+        },
+        {
+          "table": "services",
+          "status": 200,
+          "rows": 1,
+          "code": null
+        },
+        {
+          "table": "shop_holidays",
+          "status": 200,
+          "rows": 0,
+          "code": null
+        },
+        {
+          "table": "staff_schedules",
+          "status": 200,
+          "rows": 7,
+          "code": null
+        },
+        {
+          "table": "staff",
+          "status": 200,
+          "rows": 1,
+          "code": null
+        },
+        {
+          "table": "services",
+          "status": 200,
+          "rows": 1,
+          "code": null
+        }
+      ],
+      "consoleErrors": [],
+      "screenshot": "D:/AI-Workspace/runtime/browser-tools/out-state-matrix-ST-ST-deposit-hold-mobile.png"
+    }
+  ]
+}

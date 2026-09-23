@@ -1,0 +1,213 @@
+{
+  "capturedAt": "2026-09-23T05:54:03.877Z",
+  "cases": [
+    {
+      "case": "KMO-valid-shop-no-public-staff",
+      "expected": "NO_STAFF",
+      "viewport": "desktop",
+      "httpStatus": 200,
+      "url": "http://localhost:3100/book/kmo-rackbarcustom",
+      "observedState": "NO_STAFF",
+      "visibleText": "🌐 EN Q KMO RACKBARCUSTOM ระบบจองคิวออนไลน์ • ชำระมัดจำปลอดภัย โทร: 0625893189 ยังไม่มีพนักงานรับจอง ร้านนี้ยังไม่ได้ตั้งค่าผู้ให้บริการสำหรับรับจอง กรุณาติดต่อร้านค้าโดยตรง โทรสอบถามทางร้าน (0625893189) Powered by Local Service Booking SaaS",
+      "buttons": [
+        "🌐 EN"
+      ],
+      "rest": [
+        {
+          "table": "shop_public_profile",
+          "status": 200,
+          "rows": 1,
+          "code": null
+        },
+        {
+          "table": "shop_public_profile",
+          "status": 200,
+          "rows": 1,
+          "code": null
+        },
+        {
+          "table": "staff",
+          "status": 200,
+          "rows": 0,
+          "code": null
+        },
+        {
+          "table": "staff_schedules",
+          "status": 200,
+          "rows": 14,
+          "code": null
+        },
+        {
+          "table": "shop_holidays",
+          "status": 200,
+          "rows": 0,
+          "code": null
+        },
+        {
+          "table": "services",
+          "status": 200,
+          "rows": 2,
+          "code": null
+        },
+        {
+          "table": "staff_schedules",
+          "status": 200,
+          "rows": 14,
+          "code": null
+        },
+        {
+          "table": "staff",
+          "status": 200,
+          "rows": 0,
+          "code": null
+        },
+        {
+          "table": "shop_holidays",
+          "status": 200,
+          "rows": 0,
+          "code": null
+        },
+        {
+          "table": "services",
+          "status": 200,
+          "rows": 2,
+          "code": null
+        }
+      ],
+      "consoleErrors": [],
+      "screenshot": "D:/AI-Workspace/runtime/browser-tools/out-state-matrix-KMO-KMO-valid-shop-no-public-staff-desktop.png"
+    },
+    {
+      "case": "KMO-valid-shop-no-public-staff",
+      "expected": "NO_STAFF",
+      "viewport": "mobile",
+      "httpStatus": 200,
+      "url": "http://localhost:3100/book/kmo-rackbarcustom",
+      "observedState": "NO_STAFF",
+      "visibleText": "🌐 EN Q KMO RACKBARCUSTOM ระบบจองคิวออนไลน์ • ชำระมัดจำปลอดภัย 0625893189 ยังไม่มีพนักงานรับจอง ร้านนี้ยังไม่ได้ตั้งค่าผู้ให้บริการสำหรับรับจอง กรุณาติดต่อร้านค้าโดยตรง โทรสอบถามทางร้าน (0625893189) Powered by Local Service Booking SaaS",
+      "buttons": [
+        "🌐 EN"
+      ],
+      "rest": [
+        {
+          "table": "shop_public_profile",
+          "status": 200,
+          "rows": 1,
+          "code": null
+        },
+        {
+          "table": "shop_public_profile",
+          "status": 200,
+          "rows": 1,
+          "code": null
+        },
+        {
+          "table": "shop_holidays",
+          "status": 200,
+          "rows": 0,
+          "code": null
+        },
+        {
+          "table": "staff",
+          "status": 200,
+          "rows": 0,
+          "code": null
+        },
+        {
+          "table": "services",
+          "status": 200,
+          "rows": 2,
+          "code": null
+        },
+        {
+          "table": "staff_schedules",
+          "status": 200,
+          "rows": 14,
+          "code": null
+        },
+        {
+          "table": "shop_holidays",
+          "status": 200,
+          "rows": 0,
+          "code": null
+        },
+        {
+          "table": "staff",
+          "status": 200,
+          "rows": 0,
+          "code": null
+        },
+        {
+          "table": "services",
+          "status": 200,
+          "rows": 2,
+          "code": null
+        },
+        {
+          "table": "staff_schedules",
+          "status": 200,
+          "rows": 14,
+          "code": null
+        }
+      ],
+      "consoleErrors": [],
+      "screenshot": "D:/AI-Workspace/runtime/browser-tools/out-state-matrix-KMO-KMO-valid-shop-no-public-staff-mobile.png"
+    },
+    {
+      "case": "KMO-missing-slug",
+      "expected": "SHOP_NOT_FOUND",
+      "viewport": "desktop",
+      "httpStatus": 200,
+      "url": "http://localhost:3100/book/definitely-not-a-real-shop-xyz",
+      "observedState": "SHOP_NOT_FOUND",
+      "visibleText": "🌐 EN Q Definitely Not A Real Shop Xyz ระบบจองคิวออนไลน์ • ชำระมัดจำปลอดภัย โทร: ไม่พบเบอร์ติดต่อร้าน ไม่พบร้านค้า ลิงก์จองอาจไม่ถูกต้อง หรือร้านนี้ไม่เปิดให้บริการแล้ว Powered by Local Service Booking SaaS",
+      "buttons": [
+        "🌐 EN"
+      ],
+      "rest": [
+        {
+          "table": "shop_public_profile",
+          "status": 200,
+          "rows": 0,
+          "code": null
+        },
+        {
+          "table": "shop_public_profile",
+          "status": 200,
+          "rows": 0,
+          "code": null
+        }
+      ],
+      "consoleErrors": [],
+      "screenshot": "D:/AI-Workspace/runtime/browser-tools/out-state-matrix-KMO-KMO-missing-slug-desktop.png"
+    },
+    {
+      "case": "KMO-missing-slug",
+      "expected": "SHOP_NOT_FOUND",
+      "viewport": "mobile",
+      "httpStatus": 200,
+      "url": "http://localhost:3100/book/definitely-not-a-real-shop-xyz",
+      "observedState": "SHOP_NOT_FOUND",
+      "visibleText": "🌐 EN Q Definitely Not A Real Shop Xyz ระบบจองคิวออนไลน์ • ชำระมัดจำปลอดภัย ไม่พบเบอร์ติดต่อร้าน ไม่พบร้านค้า ลิงก์จองอาจไม่ถูกต้อง หรือร้านนี้ไม่เปิดให้บริการแล้ว Powered by Local Service Booking SaaS",
+      "buttons": [
+        "🌐 EN"
+      ],
+      "rest": [
+        {
+          "table": "shop_public_profile",
+          "status": 200,
+          "rows": 0,
+          "code": null
+        },
+        {
+          "table": "shop_public_profile",
+          "status": 200,
+          "rows": 0,
+          "code": null
+        }
+      ],
+      "consoleErrors": [],
+      "screenshot": "D:/AI-Workspace/runtime/browser-tools/out-state-matrix-KMO-KMO-missing-slug-mobile.png"
+    }
+  ]
+}

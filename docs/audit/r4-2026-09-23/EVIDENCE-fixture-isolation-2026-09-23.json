@@ -1,0 +1,66 @@
+{
+  "captured_at_utc": "2026-09-23T08:08:07.506173Z",
+  "fixture_shop_id": "0d1ac9c7-1ab9-45e6-99ce-ec603ee73faa",
+  "fixture_slug": "r4-test-fixture-20260923",
+  "isolation": {
+    "real_kmo": {
+      "shop_id": "07d4e41a-9c17-4a6c-ba25-c0ef6714e362",
+      "staff_rows": 2,
+      "staff_active": 0,
+      "staff_names": [
+        "\u0e1a\u0e2d\u0e25",
+        "\u0e42\u0e1f"
+      ],
+      "services": 2,
+      "schedule_rows": 14,
+      "holidays": 0,
+      "bookings": 0,
+      "shop_users": 1,
+      "require_deposit": true,
+      "default_deposit": 500,
+      "is_active": true,
+      "weekly": [
+        "true",
+        "false",
+        "true",
+        "true",
+        "true",
+        "true",
+        "true"
+      ],
+      "notif_logs": 0
+    },
+    "fixture": {
+      "shop_id": "0d1ac9c7-1ab9-45e6-99ce-ec603ee73faa",
+      "slug": "r4-test-fixture-20260923",
+      "service_rows": 1,
+      "staff_rows": 1,
+      "staff_active": 1,
+      "schedule_rows": 7,
+      "weekly_rows": 7,
+      "shop_users": 1,
+      "bookings": 0,
+      "notif_logs": 0,
+      "require_deposit": false,
+      "is_active": true
+    },
+    "membership_scope": [
+      {
+        "shop_slug": "r4-test-fixture-20260923",
+        "role": "owner"
+      }
+    ],
+    "kmo_memberships": [
+      {
+        "role": "owner",
+        "uid_tail": "52206a"
+      }
+    ],
+    "totals": {
+      "shops": 2,
+      "staff": 3,
+      "services": 3,
+      "bookings": 0
+    }
+  }
+}

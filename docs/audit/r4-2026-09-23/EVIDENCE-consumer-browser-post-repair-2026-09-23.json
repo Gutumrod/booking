@@ -1,0 +1,171 @@
+{
+  "base": "http://localhost:3100",
+  "slug": "kmo-rackbarcustom",
+  "capturedAt": "2026-09-23T05:35:21.015Z",
+  "viewports": {
+    "desktop": {
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "httpStatus": 200,
+      "url": "http://localhost:3100/book/kmo-rackbarcustom",
+      "title": "Create Next App",
+      "htmlLang": "th",
+      "visibleText": "🌐 EN Q KMO RACKBARCUSTOM ระบบจองคิวออนไลน์ • ชำระมัดจำปลอดภัย โทร: 0625893189 ยังไม่มีพนักงานรับจอง ร้านนี้ยังไม่ได้ตั้งค่าผู้ให้บริการสำหรับรับจอง กรุณาติดต่อร้านค้าโดยตรง โทรสอบถามทางร้าน (0625893189) Powered by Local Service Booking SaaS",
+      "visibleTextLength": 241,
+      "stepperHits": 0,
+      "buttons": [
+        "🌐 EN",
+        ""
+      ],
+      "restCalls": [
+        {
+          "table": "shop_public_profile",
+          "status": 200,
+          "rows": 1,
+          "errorCode": null
+        },
+        {
+          "table": "shop_holidays",
+          "status": 200,
+          "rows": 0,
+          "errorCode": null
+        },
+        {
+          "table": "staff_schedules",
+          "status": 200,
+          "rows": 14,
+          "errorCode": null
+        },
+        {
+          "table": "shop_public_profile",
+          "status": 200,
+          "rows": 1,
+          "errorCode": null
+        },
+        {
+          "table": "services",
+          "status": 200,
+          "rows": 2,
+          "errorCode": null
+        },
+        {
+          "table": "staff",
+          "status": 200,
+          "rows": 0,
+          "errorCode": null
+        },
+        {
+          "table": "shop_holidays",
+          "status": 200,
+          "rows": 0,
+          "errorCode": null
+        },
+        {
+          "table": "staff",
+          "status": 200,
+          "rows": 0,
+          "errorCode": null
+        },
+        {
+          "table": "staff_schedules",
+          "status": 200,
+          "rows": 14,
+          "errorCode": null
+        },
+        {
+          "table": "services",
+          "status": 200,
+          "rows": 2,
+          "errorCode": null
+        }
+      ],
+      "pageErrors": [],
+      "consoleErrors": [],
+      "screenshot": "D:/AI-Workspace/runtime/browser-tools/out-after-repair-desktop.png"
+    },
+    "mobile": {
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "httpStatus": 200,
+      "url": "http://localhost:3100/book/kmo-rackbarcustom",
+      "title": "Create Next App",
+      "htmlLang": "th",
+      "visibleText": "🌐 EN Q KMO RACKBARCUSTOM ระบบจองคิวออนไลน์ • ชำระมัดจำปลอดภัย 0625893189 ยังไม่มีพนักงานรับจอง ร้านนี้ยังไม่ได้ตั้งค่าผู้ให้บริการสำหรับรับจอง กรุณาติดต่อร้านค้าโดยตรง โทรสอบถามทางร้าน (0625893189) Powered by Local Service Booking SaaS",
+      "visibleTextLength": 236,
+      "stepperHits": 0,
+      "buttons": [
+        "🌐 EN",
+        ""
+      ],
+      "restCalls": [
+        {
+          "table": "shop_public_profile",
+          "status": 200,
+          "rows": 1,
+          "errorCode": null
+        },
+        {
+          "table": "staff",
+          "status": 200,
+          "rows": 0,
+          "errorCode": null
+        },
+        {
+          "table": "shop_public_profile",
+          "status": 200,
+          "rows": 1,
+          "errorCode": null
+        },
+        {
+          "table": "staff_schedules",
+          "status": 200,
+          "rows": 14,
+          "errorCode": null
+        },
+        {
+          "table": "services",
+          "status": 200,
+          "rows": 2,
+          "errorCode": null
+        },
+        {
+          "table": "shop_holidays",
+          "status": 200,
+          "rows": 0,
+          "errorCode": null
+        },
+        {
+          "table": "staff",
+          "status": 200,
+          "rows": 0,
+          "errorCode": null
+        },
+        {
+          "table": "staff_schedules",
+          "status": 200,
+          "rows": 14,
+          "errorCode": null
+        },
+        {
+          "table": "services",
+          "status": 200,
+          "rows": 2,
+          "errorCode": null
+        },
+        {
+          "table": "shop_holidays",
+          "status": 200,
+          "rows": 0,
+          "errorCode": null
+        }
+      ],
+      "pageErrors": [],
+      "consoleErrors": [],
+      "screenshot": "D:/AI-Workspace/runtime/browser-tools/out-after-repair-mobile.png"
+    }
+  }
+}

@@ -8,7 +8,35 @@ only with browser/mobile proof on an approved target
 **Branch:** `docs/bk01-real-shop-hardening`
 **Consumes:** R0 (KMO-02, KMO-03, KMO-05, KMO-08, KMO-09, KMO-X4), R1 (HC-01, HC-09, HC-16, HC-19), R3 (§5, §7)
 
-## Execution status override — 2026-09-22
+## Execution status override — 2026-09-23 (R4 CLOSED)
+
+The specification below remains the locked R4 contract; this block records the closure evidence without rewriting historical design text.
+
+- **R4 CLOSED.** All nine items were accepted on real browser/mobile evidence, not on automated suites alone.
+- Owner ruling approved an isolated synthetic fixture inside the KMO project and a temporary fixture-scoped test admin; both were created, used and removed with residue 0, and the real `kmo-rackbarcustom` tenant was proven unchanged (md5 fingerprint over shops/staff/services/schedules/shop_users/weekly, 6/6 identical).
+- R4-1 deposit survives price edit/save/reload (deposit 250 preserved across a 500→750 save and a later 900 edit); R4-2 empty-during-edit allowed, invalid visibly invalid with zero RPC and no mutation; R4-3 all eight HH:MM fields use `inputMode=numeric` with blur canonicalisation and invalid revert; R4-4 dirty Staff B edits survive saving Staff A with a dirty-state banner; R4-5 Preview opens the real tenant page and readiness rows are truthful; R4-6 consumer states proven (`OK_STEPPER`, `NO_STAFF`, `SHOP_NOT_FOUND`, `NO_SERVICES`, `NO_SCHEDULE`, `NO_SLOT_FOR_DATE`, `PAYMENT_NOT_CONFIGURED`, `BOOKING_DISABLED`); R4-7 QR renders only with a server-sourced amount and config-sourced recipient; R4-8 countdown follows server `expires_at`; R4-9 durations 1/2/37/90 verified with a successful 1-minute booking.
+- Positive customer E2E proven on desktop and mobile, plus cross-cutting regression (no cross-tenant leak, route transition, stale navigation, dirty-state, payment/readiness truth).
+- Automatic gates at closure: tests 118/118; lint 0 errors / 12 warnings; both builds and typechecks PASS; diff/secret/protected-scope clean.
+- Git: `VERIFIED_READY_FOR_CLAUDE_COMMIT` — Claude owns commit/push for this repository.
+- Evidence: `docs/audit/r4-2026-09-23/REPORT-BK01-R4-CLOSURE-2026-09-23.md` and `EVIDENCE-INDEX-2026-09-23.json`.
+
+## Execution status override — 2026-09-23 (resume, superseded by the closure block above)
+
+The specification below remains the locked R4 contract; this block records current execution evidence without rewriting historical design text.
+
+- Frozen baseline: `feature/bk01-real-shop-hardening-r4 @ 021d2427c3f9b35d5b235ce3202436bd382ae729` (delta from reviewed source `3b3a333` = docs/evidence only).
+- Independent source verdict: `SOURCE_REVIEW_PASS / BROWSER_PROOF_RESUME` after NEW-F18 (still current).
+- Fresh gates: tests 118/118 PASS; lint 0 errors / 12 warnings; Admin + Consumer builds PASS; both typechecks PASS; secret/protected-scope/diff checks PASS.
+- KMO availability privilege drift: **CLOSED** — controlled anon `SELECT (shop_id)` repair applied on `staff_schedules` and `shop_holidays` and verified live; no table-wide/write privilege, no extra column, policies unchanged.
+- Consumer desktop/mobile proof: public reads 200; truthful `NO_STAFF` at the real KMO shop; `SHOP_NOT_FOUND` (invalid slug); `BOOKING_DISABLED` and `SHOP_NOT_FOUND` on wstera-lab.
+- Truthful-state separation proven: `LOAD_ERROR` under authorization failure vs `NO_STAFF` with zero rows, same revision and tenant.
+- Not reachable on authorized runtimes (not fabricated): `NO_SERVICES`, `NO_SCHEDULE`, `NO_SLOT_FOR_DATE`, `PAYMENT_NOT_CONFIGURED`.
+- Admin unauthenticated contract proven in browser; authenticated Admin R4 matrix (R4-1 … R4-9) remains owed and needs an Owner/admin session.
+- Positive customer hold/create proof is blocked by the KMO `staff = 0` public runtime until an authorized fixture exists.
+- Therefore R4 is **NOT CLOSED**. Current disposition: `BROWSER_PROOF_RESUME_PARTIAL_REMEDIATED / R4 NOT CLOSED`.
+- Evidence: `docs/audit/r4-2026-09-23/` and `docs/daily/2026-09-23.md`.
+
+## Execution status override — 2026-09-22 (retained)
 
 The specification below remains the locked R4 contract; this block records current execution evidence without rewriting historical design text.
 

@@ -1,0 +1,23 @@
+{
+  "captured_at_utc": "2026-09-23T08:33:06.644307Z",
+  "residue": {
+    "residual_shop_rows": 0,
+    "residual_services": 0,
+    "residual_staff": 0,
+    "residual_sched": 0,
+    "residual_bookings": 0,
+    "residual_customers": 0,
+    "residual_notif": 0,
+    "residual_members": 0,
+    "residual_subs": 0,
+    "residual_weekly": 0,
+    "residual_auth_users": 0,
+    "residual_identities": 0,
+    "all_shops_now": 1,
+    "all_staff_now": 2,
+    "all_services_now": 2,
+    "all_bookings_now": 0,
+    "all_customers_now": 0,
+    "all_notif_now": 0
+  }
+}

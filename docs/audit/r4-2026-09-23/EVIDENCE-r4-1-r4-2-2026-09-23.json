@@ -1,0 +1,135 @@
+{
+  "capturedAt": "2026-09-23T08:23:38.909Z",
+  "viewports": {
+    "desktop": {
+      "indexes": {
+        "priceIdx": 6,
+        "depIdx": 7
+      },
+      "R4_2_empty": {
+        "value": "",
+        "valid": false,
+        "message": "Please fill out this field.",
+        "required": true,
+        "min": "0"
+      },
+      "R4_2_invalidState": {
+        "value": "-5",
+        "valid": false,
+        "message": "Value must be greater than or equal to 0."
+      },
+      "R4_2_invalid": {
+        "rpcDuringInvalidSubmit": 0,
+        "stillOpen": true
+      },
+      "beforeSave": {
+        "price": "750",
+        "deposit": "250"
+      },
+      "saveRpc": [
+        {
+          "fn": "update_service",
+          "status": 204,
+          "body": ""
+        }
+      ],
+      "afterReload": {
+        "priceFound": true,
+        "depositFound": true,
+        "price": "750",
+        "deposit": "250",
+        "card": "R4 Test Service 30min synthetic R4 acceptance service ฿750 30 นาที มัดจำ: ฿250"
+      },
+      "R4_1_persisted": true,
+      "R4_1_secondEdit": {
+        "price": "900",
+        "deposit": "250"
+      },
+      "R4_1_depositNotOverwritten": true,
+      "restoreRpc": [
+        {
+          "fn": "update_service",
+          "status": 204,
+          "body": ""
+        }
+      ],
+      "rpc": [
+        {
+          "fn": "update_service",
+          "status": 204,
+          "body": ""
+        },
+        {
+          "fn": "update_service",
+          "status": 204,
+          "body": ""
+        }
+      ]
+    },
+    "mobile": {
+      "indexes": {
+        "priceIdx": 6,
+        "depIdx": 7
+      },
+      "R4_2_empty": {
+        "value": "",
+        "valid": false,
+        "message": "Please fill out this field.",
+        "required": true,
+        "min": "0"
+      },
+      "R4_2_invalidState": {
+        "value": "-5",
+        "valid": false,
+        "message": "Value must be greater than or equal to 0."
+      },
+      "R4_2_invalid": {
+        "rpcDuringInvalidSubmit": 0,
+        "stillOpen": true
+      },
+      "beforeSave": {
+        "price": "750",
+        "deposit": "250"
+      },
+      "saveRpc": [
+        {
+          "fn": "update_service",
+          "status": 204,
+          "body": ""
+        }
+      ],
+      "afterReload": {
+        "priceFound": true,
+        "depositFound": true,
+        "price": "750",
+        "deposit": "250",
+        "card": "R4 Test Service 30min synthetic R4 acceptance service ฿750 30 นาที มัดจำ: ฿250"
+      },
+      "R4_1_persisted": true,
+      "R4_1_secondEdit": {
+        "price": "900",
+        "deposit": "250"
+      },
+      "R4_1_depositNotOverwritten": true,
+      "restoreRpc": [
+        {
+          "fn": "update_service",
+          "status": 204,
+          "body": ""
+        }
+      ],
+      "rpc": [
+        {
+          "fn": "update_service",
+          "status": 204,
+          "body": ""
+        },
+        {
+          "fn": "update_service",
+          "status": 204,
+          "body": ""
+        }
+      ]
+    }
+  }
+}

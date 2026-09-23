@@ -1,0 +1,311 @@
+{
+  "capturedAt": "2026-09-23T08:10:11.356Z",
+  "cases": [
+    {
+      "case": "FIX-ok-shop",
+      "expected": "OK_STEPPER",
+      "viewport": "desktop",
+      "httpStatus": 200,
+      "url": "http://localhost:3100/book/r4-test-fixture-20260923",
+      "observedState": "OK_STEPPER",
+      "visibleText": "🌐 EN Q R4 TEST FIXTURE (Synthetic — Delete After Acceptance) ระบบจองคิวออนไลน์ • ชำระมัดจำปลอดภัย โทร: 0000000000 1. เลือกบริการที่คุณต้องการ เลือกบริการเพื่อดูรายละเอียดระยะเวลาและค่ามัดจำ R4 Test Service 30min ฿500 synthetic R4 acceptance service 30 นาที มัดจำ ฿0 ถัดไป: เลือกพนักงาน & วันเวลา Powered by Local Service Booking SaaS",
+      "buttons": [
+        "🌐 EN",
+        "ถัดไป: เลือกพนักงาน & วันเวลา"
+      ],
+      "rest": [
+        {
+          "table": "shop_public_profile",
+          "status": 200,
+          "rows": 1,
+          "code": null
+        },
+        {
+          "table": "staff",
+          "status": 200,
+          "rows": 2,
+          "code": null
+        },
+        {
+          "table": "staff_schedules",
+          "status": 200,
+          "rows": 14,
+          "code": null
+        },
+        {
+          "table": "shop_holidays",
+          "status": 200,
+          "rows": 0,
+          "code": null
+        },
+        {
+          "table": "shop_public_profile",
+          "status": 200,
+          "rows": 1,
+          "code": null
+        },
+        {
+          "table": "services",
+          "status": 200,
+          "rows": 1,
+          "code": null
+        },
+        {
+          "table": "staff",
+          "status": 200,
+          "rows": 2,
+          "code": null
+        },
+        {
+          "table": "shop_holidays",
+          "status": 200,
+          "rows": 0,
+          "code": null
+        },
+        {
+          "table": "staff_schedules",
+          "status": 200,
+          "rows": 14,
+          "code": null
+        },
+        {
+          "table": "services",
+          "status": 200,
+          "rows": 1,
+          "code": null
+        }
+      ],
+      "consoleErrors": [],
+      "screenshot": "D:/AI-Workspace/runtime/browser-tools/out-state-matrix-FIX-FIX-ok-shop-desktop.png"
+    },
+    {
+      "case": "FIX-ok-shop",
+      "expected": "OK_STEPPER",
+      "viewport": "mobile",
+      "httpStatus": 200,
+      "url": "http://localhost:3100/book/r4-test-fixture-20260923",
+      "observedState": "OK_STEPPER",
+      "visibleText": "🌐 EN Q R4 TEST FIXTURE (Synthetic — Delete After Acceptance) ระบบจองคิวออนไลน์ • ชำระมัดจำปลอดภัย 0000000000 1. เลือกบริการที่คุณต้องการ เลือกบริการเพื่อดูรายละเอียดระยะเวลาและค่ามัดจำ R4 Test Service 30min ฿500 synthetic R4 acceptance service 30 นาที มัดจำ ฿0 ถัดไป: เลือกพนักงาน & วันเวลา Powered by Local Service Booking SaaS",
+      "buttons": [
+        "🌐 EN",
+        "ถัดไป: เลือกพนักงาน & วันเวลา"
+      ],
+      "rest": [
+        {
+          "table": "shop_public_profile",
+          "status": 200,
+          "rows": 1,
+          "code": null
+        },
+        {
+          "table": "shop_holidays",
+          "status": 200,
+          "rows": 0,
+          "code": null
+        },
+        {
+          "table": "staff",
+          "status": 200,
+          "rows": 2,
+          "code": null
+        },
+        {
+          "table": "shop_public_profile",
+          "status": 200,
+          "rows": 1,
+          "code": null
+        },
+        {
+          "table": "services",
+          "status": 200,
+          "rows": 1,
+          "code": null
+        },
+        {
+          "table": "staff_schedules",
+          "status": 200,
+          "rows": 14,
+          "code": null
+        },
+        {
+          "table": "shop_holidays",
+          "status": 200,
+          "rows": 0,
+          "code": null
+        },
+        {
+          "table": "staff",
+          "status": 200,
+          "rows": 2,
+          "code": null
+        },
+        {
+          "table": "services",
+          "status": 200,
+          "rows": 1,
+          "code": null
+        },
+        {
+          "table": "staff_schedules",
+          "status": 200,
+          "rows": 14,
+          "code": null
+        }
+      ],
+      "consoleErrors": [],
+      "screenshot": "D:/AI-Workspace/runtime/browser-tools/out-state-matrix-FIX-FIX-ok-shop-mobile.png"
+    },
+    {
+      "case": "FIX-deposit-no-promptpay",
+      "expected": "PAYMENT_NOT_CONFIGURED",
+      "viewport": "desktop",
+      "httpStatus": 200,
+      "url": "http://localhost:3100/book/r4-test-fixture-deposit-20260923",
+      "observedState": "UNKNOWN",
+      "visibleText": "🌐 EN Q R4 TEST FIXTURE DEPOSIT (Synthetic — Delete After Acceptance) ระบบจองคิวออนไลน์ • ชำระมัดจำปลอดภัย โทร: 0000000001 ยังไม่ได้ตั้งค่าการรับมัดจำ ร้านนี้ต้องเก็บมัดจำ แต่ยังตั้งค่าการรับเงินไม่เสร็จ กรุณาติดต่อร้านค้าเพื่อจอง โทรสอบถามทางร้าน (0000000001) Powered by Local Service Booking SaaS",
+      "buttons": [
+        "🌐 EN"
+      ],
+      "rest": [
+        {
+          "table": "shop_public_profile",
+          "status": 200,
+          "rows": 1,
+          "code": null
+        },
+        {
+          "table": "shop_public_profile",
+          "status": 200,
+          "rows": 1,
+          "code": null
+        },
+        {
+          "table": "staff",
+          "status": 200,
+          "rows": 1,
+          "code": null
+        },
+        {
+          "table": "shop_holidays",
+          "status": 200,
+          "rows": 0,
+          "code": null
+        },
+        {
+          "table": "services",
+          "status": 200,
+          "rows": 1,
+          "code": null
+        },
+        {
+          "table": "staff_schedules",
+          "status": 200,
+          "rows": 7,
+          "code": null
+        },
+        {
+          "table": "services",
+          "status": 200,
+          "rows": 1,
+          "code": null
+        },
+        {
+          "table": "shop_holidays",
+          "status": 200,
+          "rows": 0,
+          "code": null
+        },
+        {
+          "table": "staff",
+          "status": 200,
+          "rows": 1,
+          "code": null
+        },
+        {
+          "table": "staff_schedules",
+          "status": 200,
+          "rows": 7,
+          "code": null
+        }
+      ],
+      "consoleErrors": [],
+      "screenshot": "D:/AI-Workspace/runtime/browser-tools/out-state-matrix-FIX-FIX-deposit-no-promptpay-desktop.png"
+    },
+    {
+      "case": "FIX-deposit-no-promptpay",
+      "expected": "PAYMENT_NOT_CONFIGURED",
+      "viewport": "mobile",
+      "httpStatus": 200,
+      "url": "http://localhost:3100/book/r4-test-fixture-deposit-20260923",
+      "observedState": "UNKNOWN",
+      "visibleText": "🌐 EN Q R4 TEST FIXTURE DEPOSIT (Synthetic — Delete After Acceptance) ระบบจองคิวออนไลน์ • ชำระมัดจำปลอดภัย 0000000001 ยังไม่ได้ตั้งค่าการรับมัดจำ ร้านนี้ต้องเก็บมัดจำ แต่ยังตั้งค่าการรับเงินไม่เสร็จ กรุณาติดต่อร้านค้าเพื่อจอง โทรสอบถามทางร้าน (0000000001) Powered by Local Service Booking SaaS",
+      "buttons": [
+        "🌐 EN"
+      ],
+      "rest": [
+        {
+          "table": "shop_public_profile",
+          "status": 200,
+          "rows": 1,
+          "code": null
+        },
+        {
+          "table": "shop_public_profile",
+          "status": 200,
+          "rows": 1,
+          "code": null
+        },
+        {
+          "table": "services",
+          "status": 200,
+          "rows": 1,
+          "code": null
+        },
+        {
+          "table": "staff_schedules",
+          "status": 200,
+          "rows": 7,
+          "code": null
+        },
+        {
+          "table": "staff",
+          "status": 200,
+          "rows": 1,
+          "code": null
+        },
+        {
+          "table": "shop_holidays",
+          "status": 200,
+          "rows": 0,
+          "code": null
+        },
+        {
+          "table": "services",
+          "status": 200,
+          "rows": 1,
+          "code": null
+        },
+        {
+          "table": "staff_schedules",
+          "status": 200,
+          "rows": 7,
+          "code": null
+        },
+        {
+          "table": "staff",
+          "status": 200,
+          "rows": 1,
+          "code": null
+        },
+        {
+          "table": "shop_holidays",
+          "status": 200,
+          "rows": 0,
+          "code": null
+        }
+      ],
+      "consoleErrors": [],
+      "screenshot": "D:/AI-Workspace/runtime/browser-tools/out-state-matrix-FIX-FIX-deposit-no-promptpay-mobile.png"
+    }
+  ]
+}

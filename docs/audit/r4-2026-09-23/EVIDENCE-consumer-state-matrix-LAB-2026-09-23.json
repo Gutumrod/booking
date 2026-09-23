@@ -1,0 +1,117 @@
+{
+  "capturedAt": "2026-09-23T05:52:19.069Z",
+  "cases": [
+    {
+      "case": "LAB-fixture-shop",
+      "expected": "see-observed",
+      "viewport": "desktop",
+      "httpStatus": 200,
+      "url": "http://localhost:3102/book/bk-sr-03-qeasy-fixture",
+      "observedState": "BOOKING_DISABLED",
+      "visibleText": "🌐 EN Q BK-SR-03 QEASY Fixture ระบบจองคิวออนไลน์ • ชำระมัดจำปลอดภัย โทร: ไม่พบเบอร์ติดต่อร้าน ร้านนี้ไม่รับจองคิวออนไลน์ในขณะนี้ กรุณาติดต่อร้านค้าโดยตรงหากต้องการสอบถามเพิ่มเติม Powered by Local Service Booking SaaS",
+      "buttons": [
+        "🌐 EN"
+      ],
+      "rest": [
+        {
+          "table": "shop_public_profile",
+          "status": 200,
+          "rows": 1,
+          "code": null
+        },
+        {
+          "table": "shop_public_profile",
+          "status": 200,
+          "rows": 1,
+          "code": null
+        }
+      ],
+      "consoleErrors": [],
+      "screenshot": "D:/AI-Workspace/runtime/browser-tools/out-state-matrix-LAB-LAB-fixture-shop-desktop.png"
+    },
+    {
+      "case": "LAB-fixture-shop",
+      "expected": "see-observed",
+      "viewport": "mobile",
+      "httpStatus": 200,
+      "url": "http://localhost:3102/book/bk-sr-03-qeasy-fixture",
+      "observedState": "BOOKING_DISABLED",
+      "visibleText": "🌐 EN Q BK-SR-03 QEASY Fixture ระบบจองคิวออนไลน์ • ชำระมัดจำปลอดภัย ไม่พบเบอร์ติดต่อร้าน ร้านนี้ไม่รับจองคิวออนไลน์ในขณะนี้ กรุณาติดต่อร้านค้าโดยตรงหากต้องการสอบถามเพิ่มเติม Powered by Local Service Booking SaaS",
+      "buttons": [
+        "🌐 EN"
+      ],
+      "rest": [
+        {
+          "table": "shop_public_profile",
+          "status": 200,
+          "rows": 1,
+          "code": null
+        },
+        {
+          "table": "shop_public_profile",
+          "status": 200,
+          "rows": 1,
+          "code": null
+        }
+      ],
+      "consoleErrors": [],
+      "screenshot": "D:/AI-Workspace/runtime/browser-tools/out-state-matrix-LAB-LAB-fixture-shop-mobile.png"
+    },
+    {
+      "case": "LAB-missing-slug",
+      "expected": "SHOP_NOT_FOUND",
+      "viewport": "desktop",
+      "httpStatus": 200,
+      "url": "http://localhost:3102/book/no-such-lab-shop-xyz",
+      "observedState": "SHOP_NOT_FOUND",
+      "visibleText": "🌐 EN Q No Such Lab Shop Xyz ระบบจองคิวออนไลน์ • ชำระมัดจำปลอดภัย โทร: ไม่พบเบอร์ติดต่อร้าน ไม่พบร้านค้า ลิงก์จองอาจไม่ถูกต้อง หรือร้านนี้ไม่เปิดให้บริการแล้ว Powered by Local Service Booking SaaS",
+      "buttons": [
+        "🌐 EN"
+      ],
+      "rest": [
+        {
+          "table": "shop_public_profile",
+          "status": 200,
+          "rows": 0,
+          "code": null
+        },
+        {
+          "table": "shop_public_profile",
+          "status": 200,
+          "rows": 0,
+          "code": null
+        }
+      ],
+      "consoleErrors": [],
+      "screenshot": "D:/AI-Workspace/runtime/browser-tools/out-state-matrix-LAB-LAB-missing-slug-desktop.png"
+    },
+    {
+      "case": "LAB-missing-slug",
+      "expected": "SHOP_NOT_FOUND",
+      "viewport": "mobile",
+      "httpStatus": 200,
+      "url": "http://localhost:3102/book/no-such-lab-shop-xyz",
+      "observedState": "SHOP_NOT_FOUND",
+      "visibleText": "🌐 EN Q No Such Lab Shop Xyz ระบบจองคิวออนไลน์ • ชำระมัดจำปลอดภัย ไม่พบเบอร์ติดต่อร้าน ไม่พบร้านค้า ลิงก์จองอาจไม่ถูกต้อง หรือร้านนี้ไม่เปิดให้บริการแล้ว Powered by Local Service Booking SaaS",
+      "buttons": [
+        "🌐 EN"
+      ],
+      "rest": [
+        {
+          "table": "shop_public_profile",
+          "status": 200,
+          "rows": 0,
+          "code": null
+        },
+        {
+          "table": "shop_public_profile",
+          "status": 200,
+          "rows": 0,
+          "code": null
+        }
+      ],
+      "consoleErrors": [],
+      "screenshot": "D:/AI-Workspace/runtime/browser-tools/out-state-matrix-LAB-LAB-missing-slug-mobile.png"
+    }
+  ]
+}

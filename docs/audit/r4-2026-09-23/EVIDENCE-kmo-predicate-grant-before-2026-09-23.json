@@ -1,0 +1,86 @@
+{
+  "captured_at_utc": "2026-09-23T05:35:01Z",
+  "project": "KMO-Booking (xfhpwxjywqgqefbncumm)",
+  "schema": "local_service",
+  "rls_enabled": {
+    "staff_schedules": true,
+    "shop_holidays": true
+  },
+  "anon_table_level_select": {
+    "staff_schedules": false,
+    "shop_holidays": false
+  },
+  "anon_write_privileges": {
+    "staff_schedules": {
+      "insert": false,
+      "update": false,
+      "delete": false
+    },
+    "shop_holidays": {
+      "insert": false,
+      "update": false,
+      "delete": false
+    }
+  },
+  "anon_column_select": {
+    "staff_schedules": {
+      "shop_id": false,
+      "staff_id": true,
+      "day_of_week": true,
+      "is_working_day": true,
+      "work_start": true,
+      "work_end": true,
+      "break_start": true,
+      "break_end": true,
+      "id": false,
+      "created_at": false
+    },
+    "shop_holidays": {
+      "shop_id": false,
+      "staff_id": true,
+      "holiday_date": true,
+      "reason": true,
+      "id": false,
+      "creation_idempotency_key": false,
+      "created_at": false
+    }
+  },
+  "policies": [
+    {
+      "table": "staff_schedules",
+      "name": "KMO public schedules",
+      "roles": "{anon}",
+      "cmd": "SELECT",
+      "qual": "true"
+    },
+    {
+      "table": "staff_schedules",
+      "name": "KMO merchant schedules read",
+      "roles": "{authenticated}",
+      "cmd": "SELECT"
+    },
+    {
+      "table": "shop_holidays",
+      "name": "KMO public holidays",
+      "roles": "{anon}",
+      "cmd": "SELECT",
+      "qual": "true"
+    },
+    {
+      "table": "shop_holidays",
+      "name": "KMO merchant holidays read",
+      "roles": "{authenticated}",
+      "cmd": "SELECT"
+    }
+  ],
+  "business_counts": {
+    "shops": 1,
+    "services": 2,
+    "staff": 2,
+    "staff_active": 0,
+    "staff_schedules": 14,
+    "shop_holidays": 0,
+    "bookings": 0,
+    "shop_users": 1
+  }
+}
