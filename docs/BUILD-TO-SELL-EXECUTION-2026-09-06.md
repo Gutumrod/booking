@@ -30,7 +30,9 @@ Create merchant onboarding checklist, configuration checklist, support/incident 
 After pilot evidence: approve final public Basic/Pro prices, auto-slip commercial terms, WSTERA Central OA fair-use/message allowance, merchant-owned OA add-on price/operating terms, cancellation/reschedule defaults, public claims, support promise, and launch checklist. Public Pro requires auto-slip evidence.
 
 ## Immediate next ticket
-**Continue BK-SR-03 from evidence checkpoint `3ee8368`.** LINE external rehearsal and rollback/redeploy proof are PASS. Finish Queueeasy RELEASE/RESET verification, then complete the approved Stripe test/webhook rehearsal and closure review. BK-SR-01 and BK-SR-02 remain CLOSED. Do not start Order implementation.
+**SUPERSEDED by the 2026-09-23 OWNER HOLD — AWAIT KMO EVIDENCE.** Canonical BK01 execution (including BK-SR-03 continuation below) is intentionally paused pending real-shop evidence from KMO; see `docs/OWNER-HOLD-BK01-AWAIT-KMO-EVIDENCE-2026-09-23.md` for what is paused, why, and the resume conditions. The line below records the pre-hold plan for when work resumes, not a currently authorized action.
+
+~~Continue BK-SR-03 from evidence checkpoint `3ee8368`.~~ LINE external rehearsal and rollback/redeploy proof are PASS. Remaining pre-hold plan: finish Queueeasy RELEASE/RESET verification, then complete the approved Stripe test/webhook rehearsal and closure review. BK-SR-01 and BK-SR-02 remain CLOSED. Do not start Order implementation.
 
 ## Definition of done
 - One exact release commit has passing release/security/database evidence.

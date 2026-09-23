@@ -1,6 +1,6 @@
 # BK01 Master Checklist
 
-**Status:** BK-0 governance checklist retained; current R4 execution checkpoint updated 2026-09-23 — R4 GIT CLOSED at `50555c14d1c578caabc421dbad995c8f2b80709e`
+**Status:** BK-0 governance checklist retained; current R4 execution checkpoint updated 2026-09-23 — R4 GIT CLOSED at `50555c14d1c578caabc421dbad995c8f2b80709e`. **2026-09-23 OWNER HOLD active:** canonical work beyond this checkpoint (BK-SR-03 remainder, BK-SR-04, BK-SR-05, R7/Junction/Order-live/Claim-live) is paused pending KMO real-shop evidence — see `docs/OWNER-HOLD-BK01-AWAIT-KMO-EVIDENCE-2026-09-23.md`. This is a pause, not a PASS, for those items.
 
 ## BK-0 documentation lock
 - [x] baseline branch/commit recorded (`main @ e99615d`)
@@ -79,7 +79,7 @@ BK-SR-02 / BK-B is CLOSED. BK-SR-03 staging/external-system rehearsal is next; t
 - [ ] rollback + smoke + redeploy + final smoke PASS
 - [ ] BK-SR-03 durable evidence finalized and independent closure review PASS
 
-**Current BK-SR-03 verdict:** `BLOCKED_PENDING_STAGING_SECRETS`. Cloudflare authentication and the Supabase test target are now approved. Remaining provider prerequisites are staging env population plus non-production LINE OA and Stripe test credentials. Production/KMO credentials and `.env.local` are forbidden staging substitutes.
+**Current BK-SR-03 verdict:** `OWNER_HOLD_PAUSED` as of 2026-09-23 (previously `BLOCKED_PENDING_STAGING_SECRETS`, since progressed to LINE/rollback PASS per `docs/CURRENT_STATUS.md`). BK-SR-03 remains OPEN/PAUSED, not CLOSED, while canonical work awaits KMO real-shop evidence; see `docs/OWNER-HOLD-BK01-AWAIT-KMO-EVIDENCE-2026-09-23.md`. Production/KMO credentials and `.env.local` remain forbidden staging substitutes regardless of hold status.
 
 **Shared-Lab guard:** BK01 owns `local_service`; treat project-global `auth`, storage, cron and migration ledger as shared. Do not modify unknown cron jobs or another product's resources. `Shared SaaS Runtime` remains production-only until release gates pass.
 ## BK-C/BK-D downstream commercial and public-launch gates

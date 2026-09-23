@@ -55,6 +55,7 @@ No implementation phase may introduce a new externally visible entitlement, role
 
 ## Current execution pointers — 2026-09-23
 For current implementation/gate status, read these before older phase reports:
+- `OWNER-HOLD-BK01-AWAIT-KMO-EVIDENCE-2026-09-23.md` — **current controlling execution-priority record**: canonical BK01 product-core work is intentionally paused pending real-shop evidence from KMO; states freeze point, what is paused, what remains incomplete, KMO's role, finding classification/promotion rules, and precise resume conditions
 - `CURRENT_STATUS.md` — canonical execution snapshot and hard boundaries
 - `daily/2026-09-23.md` — current verified work log including the R4 closure update
 - `audit/r4-2026-09-23/REPORT-BK01-R4-CLOSURE-2026-09-23.md` — **R4 closure report**: closure gate, Owner-approved fixture/test-admin lifecycle, R4-1…R4-9, consumer matrix, cross-cutting, positive E2E, cleanup residue proof

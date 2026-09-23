@@ -7,7 +7,15 @@
 **Current source gate:** `SOURCE_REVIEW_PASS`
 **Current R4 gate:** `R4 CLOSED`
 **Git disposition:** `R4 GIT CLOSED` at `50555c14d1c578caabc421dbad995c8f2b80709e` — HEAD = `origin/feature/bk01-real-shop-hardening-r4`, worktree clean
-**Portfolio mode:** BUILD-TO-SELL / active Booking V1 real-shop hardening track
+**Portfolio mode:** OWNER HOLD — AWAIT KMO REAL-SHOP EVIDENCE (dated 2026-09-23; supersedes prior "continue BK-SR-03" execution guidance until resumed)
+
+## 2026-09-23 OWNER HOLD — AWAIT KMO EVIDENCE
+
+This is the current controlling status for canonical execution priority. It does not reopen or affect the R4 GIT CLOSED disposition above.
+
+Owner decision: pause canonical BK01 product-core work at this stable R4-closed checkpoint (do not continue BK-SR-03 remainder, BK-SR-04, R7, Junction work, Order-live, Claim-live, or other implementation done merely to self-prove behavior). KMO — a real operating shop with its own GitHub/Supabase/Cloudflare and real Booking/Order/Claim/custom-fabrication operations — is the proving ground; BK01 will selectively promote only generic, reusable, safe findings after reproduction/generalization/design/security review and an explicit Owner decision. No canonical mutation is authorized during the hold except explicit Owner override or a bounded documentation/security-critical emergency. Full rules (classification, promotion, resume conditions): `docs/OWNER-HOLD-BK01-AWAIT-KMO-EVIDENCE-2026-09-23.md`.
+
+**BK-SR-03:** OPEN/PAUSED (not CLOSED). **BK-SR-04:** NOT STARTED/PAUSED. **BK-SR-05:** NOT STARTED (future). **R7 / Junction A / formal Junction B / Order-live / Claim-live:** remain separately BLOCKED by HOUSE-A/platform authority, independent of this hold. No SELL-READY or PUBLIC-LAUNCH-READY claim.
 
 ## 2026-09-23 R4 CLOSURE
 
@@ -78,12 +86,14 @@ Execution priority: `docs/BUILD-TO-SELL-EXECUTION-2026-09-06.md`.
 
 ## Next Authorized Action
 
+**Superseded by the 2026-09-23 OWNER HOLD above.** The items below describe pre-hold execution sequencing and remain historically accurate, but none of them are to be continued while the hold is active. See `docs/OWNER-HOLD-BK01-AWAIT-KMO-EVIDENCE-2026-09-23.md` for resume conditions.
+
 1. BK-SR-02 remains CLOSED at exact release checkpoint `d2ee14f`; do not reopen it without contradictory evidence.
-2. BK-SR-03 is ACTIVE; LINE integration acceptance is PASS end-to-end and Cloudflare rollback/redeploy proof is PASS. BK-SR-03 is not closed yet.
-3. Continue BK-SR-03 only on approved non-production runtime. `wstera-lab` is linked with migration history `30/30`; consumer staging is deployed and rollback/redeploy is proven. Queueeasy is RELEASE_PENDING; final fixture reset requires `Use webhook` OFF plus provider verification `active=false`. Remaining BK-SR-03 work is Stripe test/webhook rehearsal and closure review. `.env.local` remains production-bound and forbidden as a staging source.
-4. The temporary Claude session lock is RELEASED as of 2026-09-06 14:08 Asia/Bangkok; preserve existing evidence and resume bounded work without restarting completed stages.
+2. BK-SR-03 was ACTIVE pre-hold; LINE integration acceptance is PASS end-to-end and Cloudflare rollback/redeploy proof is PASS. BK-SR-03 is not closed; it is now PAUSED by the Owner Hold, not being continued.
+3. Pre-hold plan (not currently authorized): continue BK-SR-03 only on approved non-production runtime. `wstera-lab` is linked with migration history `30/30`; consumer staging is deployed and rollback/redeploy is proven. Queueeasy is RELEASE_PENDING; final fixture reset requires `Use webhook` OFF plus provider verification `active=false`. Remaining BK-SR-03 work is Stripe test/webhook rehearsal and closure review. `.env.local` remains production-bound and forbidden as a staging source.
+4. The temporary Claude session lock is RELEASED as of 2026-09-06 14:08 Asia/Bangkok; this note is historical only.
 5. Do not use `.env.local`, production/KMO credentials, or production targets as a staging shortcut. Do not start Order implementation automatically.
-6. R4 is GIT CLOSED at `50555c1`; do not restart completed R4 phases. No unambiguous next BK01 track is documented beyond continuing BK-SR-03 above — do not start Junction A retry, LAB/shared-runtime mutation, R7, formal Junction B, Order-live or Claim-live work before durable `HOUSE-A PASS`.
+6. R4 is GIT CLOSED at `50555c1`; do not restart completed R4 phases. Per the Owner Hold, do not resume BK-SR-03/04/05, and continue not starting Junction A retry, LAB/shared-runtime mutation, R7, formal Junction B, Order-live or Claim-live work before durable `HOUSE-A PASS`.
 
 ## LINE Commercial Path — Owner Override 2026-09-08
 
