@@ -1,6 +1,6 @@
 # BK01 Documentation Index & Authority Order
 
-**Status:** Authority order LOCKED — 2026-08-28; current execution pointers updated 2026-09-22
+**Status:** Authority order LOCKED — 2026-08-28; current execution pointers updated 2026-09-23
 
 ## Authority order
 When documents disagree, use this order:

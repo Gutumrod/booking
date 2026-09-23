@@ -17,7 +17,7 @@ The specification below remains the locked R4 contract; this block records the c
 - R4-1 deposit survives price edit/save/reload (deposit 250 preserved across a 500→750 save and a later 900 edit); R4-2 empty-during-edit allowed, invalid visibly invalid with zero RPC and no mutation; R4-3 all eight HH:MM fields use `inputMode=numeric` with blur canonicalisation and invalid revert; R4-4 dirty Staff B edits survive saving Staff A with a dirty-state banner; R4-5 Preview opens the real tenant page and readiness rows are truthful; R4-6 consumer states proven (`OK_STEPPER`, `NO_STAFF`, `SHOP_NOT_FOUND`, `NO_SERVICES`, `NO_SCHEDULE`, `NO_SLOT_FOR_DATE`, `PAYMENT_NOT_CONFIGURED`, `BOOKING_DISABLED`); R4-7 QR renders only with a server-sourced amount and config-sourced recipient; R4-8 countdown follows server `expires_at`; R4-9 durations 1/2/37/90 verified with a successful 1-minute booking.
 - Positive customer E2E proven on desktop and mobile, plus cross-cutting regression (no cross-tenant leak, route transition, stale navigation, dirty-state, payment/readiness truth).
 - Automatic gates at closure: tests 118/118; lint 0 errors / 12 warnings; both builds and typechecks PASS; diff/secret/protected-scope clean.
-- Git: `VERIFIED_READY_FOR_CLAUDE_COMMIT` — Claude owns commit/push for this repository.
+- Git: `R4 GIT CLOSED` — Claude committed and pushed the verified diff at `50555c14d1c578caabc421dbad995c8f2b80709e`; HEAD = origin, worktree clean.
 - Evidence: `docs/audit/r4-2026-09-23/REPORT-BK01-R4-CLOSURE-2026-09-23.md` and `EVIDENCE-INDEX-2026-09-23.json`.
 
 ## Execution status override — 2026-09-23 (resume, superseded by the closure block above)

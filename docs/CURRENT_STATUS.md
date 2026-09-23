@@ -3,10 +3,10 @@
 **Product:** Booking by WSTERA (BK01)
 **Repository branch:** `feature/bk01-real-shop-hardening-r4`
 **Canonical source checkpoint:** `3b3a3338de029a058aa5763c806be42f8a5205ca`
-**Documentation/evidence checkpoint:** `021d2427c3f9b35d5b235ce3202436bd382ae729`
+**Documentation/evidence checkpoint:** `50555c14d1c578caabc421dbad995c8f2b80709e`
 **Current source gate:** `SOURCE_REVIEW_PASS`
 **Current R4 gate:** `R4 CLOSED`
-**Git disposition:** `VERIFIED_READY_FOR_CLAUDE_COMMIT` (Hermes holds no commit/push authority for this repo)
+**Git disposition:** `R4 GIT CLOSED` at `50555c14d1c578caabc421dbad995c8f2b80709e` — HEAD = `origin/feature/bk01-real-shop-hardening-r4`, worktree clean
 **Portfolio mode:** BUILD-TO-SELL / active Booking V1 real-shop hardening track
 
 ## 2026-09-23 R4 CLOSURE
@@ -38,7 +38,7 @@ Durable current evidence:
 
 ## Owner Decisions Required
 
-None outstanding for R4 acceptance. Remaining operational step: Claude reviews the verified diff and performs commit/push under `claude-owns-git-commits`, after which HEAD = origin and the worktree must be clean.
+None outstanding for R4 acceptance. Claude reviewed the verified diff and performed commit/push under `claude-owns-git-commits` at `50555c14d1c578caabc421dbad995c8f2b80709e`; HEAD = origin and the worktree is clean. BK01 R4 is GIT CLOSED.
 
 ## 2026-09-22 Previous Execution Override (retained as historical checkpoint evidence)
 
@@ -83,7 +83,7 @@ Execution priority: `docs/BUILD-TO-SELL-EXECUTION-2026-09-06.md`.
 3. Continue BK-SR-03 only on approved non-production runtime. `wstera-lab` is linked with migration history `30/30`; consumer staging is deployed and rollback/redeploy is proven. Queueeasy is RELEASE_PENDING; final fixture reset requires `Use webhook` OFF plus provider verification `active=false`. Remaining BK-SR-03 work is Stripe test/webhook rehearsal and closure review. `.env.local` remains production-bound and forbidden as a staging source.
 4. The temporary Claude session lock is RELEASED as of 2026-09-06 14:08 Asia/Bangkok; preserve existing evidence and resume bounded work without restarting completed stages.
 5. Do not use `.env.local`, production/KMO credentials, or production targets as a staging shortcut. Do not start Order implementation automatically.
-6. R4 resume work continues only from the canonical worktree at the frozen baseline; do not restart completed phases.
+6. R4 is GIT CLOSED at `50555c1`; do not restart completed R4 phases. No unambiguous next BK01 track is documented beyond continuing BK-SR-03 above — do not start Junction A retry, LAB/shared-runtime mutation, R7, formal Junction B, Order-live or Claim-live work before durable `HOUSE-A PASS`.
 
 ## LINE Commercial Path — Owner Override 2026-09-08
 
@@ -110,7 +110,7 @@ Earliest exception requires BK-A + BK-B closed, Order contracts locked, Reuse Ga
 **BK-A:** CLOSED / CONT04_PASS
 **BK-SR-02 / BK-B:** CLOSED / exact release checkpoint `d2ee14f`
 **BK-SR-03:** ACTIVE / LINE_STAGING_SLICE_PASS at `dba74bd`; remaining rollback + Stripe + closure review
-**R4:** ACTIVE / `BROWSER_PROOF_RESUME_PARTIAL_REMEDIATED` / NOT CLOSED
+**R4:** CLOSED / `R4_CLOSED` — GIT CLOSED at `50555c14d1c578caabc421dbad995c8f2b80709e`
 **ORDER PHASE 0 DOCS:** COMPLETE / LOCKED
 **ORDER IMPLEMENTATION:** NOT AUTHORIZED
 

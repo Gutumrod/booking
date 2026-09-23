@@ -1,6 +1,6 @@
 # BK01 Master Checklist
 
-**Status:** BK-0 governance checklist retained; current R4 execution checkpoint updated 2026-09-22
+**Status:** BK-0 governance checklist retained; current R4 execution checkpoint updated 2026-09-23 — R4 GIT CLOSED at `50555c14d1c578caabc421dbad995c8f2b80709e`
 
 ## BK-0 documentation lock
 - [x] baseline branch/commit recorded (`main @ e99615d`)
@@ -134,8 +134,8 @@ BK-SR-02 / BK-B is CLOSED. BK-SR-03 staging/external-system rehearsal is next; t
 - [x] fixture + temporary test admin cleanup with residue 0 and real-KMO fingerprint unchanged
 - [x] R4 CLOSED with real behavioral evidence
 
-**Current verdict (2026-09-23):** `R4 CLOSED`.
+**Current verdict (2026-09-23):** `R4 CLOSED` — `R4 GIT CLOSED` at `50555c14d1c578caabc421dbad995c8f2b80709e`.
 
-**Owner decisions required:** none outstanding for R4 acceptance. Remaining operational step: Claude reviews the verified diff and commit/pushes under `claude-owns-git-commits`, then HEAD = origin and the worktree must be clean.
+**Owner decisions required:** none outstanding for R4 acceptance. Claude reviewed the verified diff and committed/pushed under `claude-owns-git-commits` at `50555c14d1c578caabc421dbad995c8f2b80709e`; HEAD = origin and the worktree is clean.
 
 **Evidence:** `docs/audit/r4-2026-09-23/REPORT-BK01-R4-CLOSURE-2026-09-23.md` (+ `EVIDENCE-INDEX-2026-09-23.json`) and `docs/daily/2026-09-23.md`.

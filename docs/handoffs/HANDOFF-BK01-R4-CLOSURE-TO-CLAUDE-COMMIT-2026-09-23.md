@@ -84,3 +84,7 @@ docs(booking): close BK01 R4 with browser/mobile + isolated-fixture evidence
 - **Control plane:** `work-sync` is a recorded known blocker (`dead_letter / 422 unresolved product identity`). It was deliberately not retried to manufacture success and was not folded into R4 scope.
 - **Proof infrastructure:** Next 16 dev blocks cross-origin dev resources for `127.0.0.1` (`allowedDevOrigins` only lists `*.trycloudflare.com`); use `localhost` for local proof. No source change was made for this.
 - **Boundaries untouched:** Junction A, HOUSE platform, WSTERA LAB/shared runtime, runtime R7, formal Junction B, Order-live, Claim-live, SB01, KMO Security Advisor cleanup.
+
+## RESULT — Claude commit/push complete (this handoff is no longer pending)
+
+Claude committed and pushed this closure evidence at `50555c14d1c578caabc421dbad995c8f2b80709e` on `feature/bk01-real-shop-hardening-r4`. `git rev-parse HEAD` = `git rev-parse origin/feature/bk01-real-shop-hardening-r4`; worktree clean. **R4 is GIT CLOSED.** A subsequent docs-only reconciliation pass (`docs(booking): reconcile BK01 R4 closure state`) removed remaining stale current-state contradictions across `CURRENT_STATUS.md`, `10_DEVELOPMENT_ROADMAP.md`, `MASTER_CHECKLIST.md`, `daily/2026-09-23.md` and this handoff.
