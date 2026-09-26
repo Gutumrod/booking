@@ -7,6 +7,7 @@ import { LanguageToggle } from '@/components/language-toggle';
 
 export default function Home() {
   const t = useTranslations('landing');
+  const tc = useTranslations('common');
 
   return (
     <div className="relative min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-center items-center p-6 font-sans">
@@ -46,6 +47,14 @@ export default function Home() {
           className="block w-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 py-3.5 rounded-xl font-bold text-sm shadow-lg shadow-emerald-950/50 transition-all"
         >
           {t('demoCta')}
+        </Link>
+
+        <Link
+          href="/support"
+          data-testid="support-entry-link"
+          className="block text-xs text-slate-400 underline hover:text-emerald-400"
+        >
+          {tc('supportLink')}
         </Link>
       </div>
     </div>

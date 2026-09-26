@@ -8,7 +8,8 @@
     "timeSuffix": "",
     "currencyAmount": "฿{amount}.00",
     "durationMinutes": "{minutes} min",
-    "back": "Back"
+    "back": "Back",
+    "supportLink": "Support & contact"
   },
   "landing": {
     "badge": "Customer Booking Portal",
@@ -145,5 +146,19 @@
     "cancelled": "Booking cancelled",
     "rescheduled": "Booking rescheduled",
     "invalidLink": "This booking-management link is invalid or incomplete"
+  },
+  "support": {
+    "title": "Support & contact",
+    "subtitle": "Support for this booking portal is handled in writing.",
+    "writtenOnlyTitle": "Written support only",
+    "writtenOnlyBody": "This is a text-based support channel: you send a written message, and the reply comes back in writing.",
+    "noLiveCall": "Live call and telephone support are not available for this product.",
+    "emailLabel": "Support e-mail",
+    "lineLabel": "LINE Official Account",
+    "valuePending": "Not configured yet",
+    "ownerInputNote": "The platform owner must supply this value before it can be used.",
+    "whatToInclude": "When you write to us, please include",
+    "includeBookingCode": "your booking code, the shop name and what went wrong.",
+    "privacyNote": "Please do not send your password, card numbers or full payment slip images in a support message."
   }
 }
