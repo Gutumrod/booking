@@ -17,7 +17,8 @@
     "featureTime": "Pick an available time slot and preferred staff member instantly.",
     "featureQr": "Generate a PromptPay deposit QR based on the selected service.",
     "featureLine": "Submit your slip and get booking updates through the shop LINE OA.",
-    "demoCta": "Try the demo booking flow (Good Cuts Barber)"
+    "demoCta": "Try the demo booking flow (Good Cuts Barber)",
+    "plansCta": "See plans and pricing"
   },
   "booking": {
     "fallbackShopName": "Service shop",
@@ -145,5 +146,74 @@
     "cancelled": "Booking cancelled",
     "rescheduled": "Booking rescheduled",
     "invalidLink": "This booking-management link is invalid or incomplete"
+  },
+  "plans": {
+    "title": "Plans and pricing",
+    "subtitle": "Start free, then upgrade when your shop grows.",
+    "currencyNote": "Prices follow the selected language: Thai shows Thai Baht (THB) and English shows US Dollars (USD).",
+    "card": {
+      "limitsHeading": "Plan limits",
+      "includedHeading": "Included",
+      "notIncludedHeading": "Not included",
+      "availabilityLabel": "Plan availability",
+      "availabilityAvailable": "Available",
+      "availabilityNotForSale": "Not for sale",
+      "notIncludedAutoSlip": "Automatic slip verification is not in this plan"
+    },
+    "free": {
+      "name": "Free",
+      "badge": "Free forever",
+      "price": "Free",
+      "priceNote": "No monthly fee",
+      "limitBookings": "50 bookings per month",
+      "limitShops": "1 shop",
+      "limitServices": "3 services"
+    },
+    "basic": {
+      "name": "Basic",
+      "badge": "For growing shops",
+      "price": "$11 / month",
+      "priceNote": "Billed monthly",
+      "includesFree": "Includes everything the Free plan gives you",
+      "limitsPending": "The Basic booking, shop and service limits are not announced yet"
+    },
+    "pro": {
+      "name": "Pro",
+      "price": "Not for sale",
+      "note": "The Pro plan is not open for purchase and has no published price yet."
+    },
+    "table": {
+      "heading": "Plan comparison",
+      "featureHeading": "Feature",
+      "freeHeading": "Free",
+      "basicHeading": "Basic",
+      "yes": "Included",
+      "no": "Not included",
+      "pending": "Not announced",
+      "rows": {
+        "bookings": "Bookings per month",
+        "shops": "Number of shops",
+        "services": "Number of services",
+        "onlineBooking": "Online booking page for customers",
+        "promptpay": "PromptPay QR for the deposit",
+        "customerSelfService": "Customers can cancel or reschedule themselves",
+        "lineNotifications": "LINE notifications after booking",
+        "autoSlip": "Automatic slip verification"
+      },
+      "values": {
+        "bookingsFree": "50 / month",
+        "shopsFree": "1",
+        "servicesFree": "3"
+      }
+    },
+    "lineCost": {
+      "heading": "LINE message charges are the shop's responsibility",
+      "body": "LINE message charges are the shop's responsibility and the shop pays LINE directly. This plan price does not include LINE message charges."
+    },
+    "enforcement": {
+      "heading": "Plan limits are enforced by the product",
+      "body": "Each plan's booking, shop and service limits are checked and enforced by the product itself, not hidden behind a disabled button. When you reach a limit the product tells you why the action cannot continue."
+    },
+    "footnote": "This table lists only the features this product genuinely has today. \"Not included\" means the plan really does not have it."
   }
 }

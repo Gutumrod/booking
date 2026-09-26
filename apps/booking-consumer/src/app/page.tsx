@@ -47,6 +47,13 @@ export default function Home() {
         >
           {t('demoCta')}
         </Link>
+
+        <Link
+          href="/plans"
+          className="block w-full border border-slate-700 bg-slate-900/80 hover:border-emerald-500/60 hover:text-emerald-300 text-slate-100 py-3 rounded-xl font-bold text-sm transition-all"
+        >
+          {t('plansCta')}
+        </Link>
       </div>
     </div>
   );
