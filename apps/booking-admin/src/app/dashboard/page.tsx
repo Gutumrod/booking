@@ -39,6 +39,7 @@ import { commitNumericField, DURATION_INPUT_PROPS, DURATION_RULES } from '@/lib/
 import { computeReadiness, isShopReady, needsMerchantAttention, type ReadinessKey } from '@/lib/readiness';
 import { TimeField } from '@/components/time-field';
 import { mergeServerSchedules } from '@/lib/schedule-merge';
+import { BASIC_PLAN_PRICE_THB } from '@/lib/commercial-contract';
 import { 
   Calendar, Users, DollarSign, Eye, Clock,
   Settings, AlertCircle, Plus, ShieldCheck,
@@ -451,7 +452,12 @@ export default function AdminDashboard() {
     }
   };
 
-  const handleUpgrade = async (plan: 'basic_490' | 'pro_990') => {
+  /**
+   * Only Basic is purchasable. The parameter is typed to the contract's
+   * `PurchasablePlanId` so no caller can start a checkout for a plan the Owner
+   * has not put on sale — Pro included (Owner decision 2026-09-26, A-2).
+   */
+  const handleUpgrade = async (plan: 'basic_490') => {
     if (!tenantSnapshotReady || shopRole !== 'owner') return;
 
     setMutatingResourceId(`checkout-${plan}`);
@@ -1862,6 +1868,13 @@ export default function AdminDashboard() {
                 </div>
               </div>
 
+              {/*
+                BASIC TIER — ฿390/month or $11/month is a locked commercial
+                fact (A-2). The "no booking cap" wording is intent, not reality
+                yet: the database still blocks `basic_490` at 100 bookings per
+                month, and the migration that removes that cap is written but NOT
+                applied (review round 2, finding F-1).
+              */}
               <div className="bg-slate-900 border border-slate-700 rounded-2xl p-6 flex flex-col justify-between space-y-6 relative hover:border-slate-600 transition-all">
                 <div className="space-y-4">
                   <div className="flex justify-between items-start">
@@ -1872,7 +1885,7 @@ export default function AdminDashboard() {
                   </div>
 
                   <div className="text-3xl font-extrabold text-white font-mono">
-                    ฿490 <span className="text-xs font-normal text-slate-400">{locale === 'th' ? '/เดือน' : '/month'}</span>
+                    ฿{BASIC_PLAN_PRICE_THB} <span className="text-xs font-normal text-slate-400">{locale === 'th' ? '/เดือน' : '/month'}</span>
                   </div>
 
                   <p className="border-t border-slate-800 pt-4 text-xs leading-relaxed text-slate-400">
@@ -1896,37 +1909,40 @@ export default function AdminDashboard() {
                 </div>
               </div>
 
-              <div className="bg-slate-900 border-2 border-emerald-500 rounded-2xl p-6 flex flex-col justify-between space-y-6 relative shadow-xl shadow-emerald-950/40">
+              {/*
+                Pro exists in the product but is NOT on sale. The Owner has
+                approved no Pro price and automatic slip verification is not
+                sellable yet, so this card shows no price and carries no
+                purchase control (Owner decision 2026-09-26, A-2).
+              */}
+              <div className="bg-slate-900 border border-slate-700 rounded-2xl p-6 flex flex-col justify-between space-y-6 relative opacity-80">
                 <div className="space-y-4">
                   <div className="flex justify-between items-start">
                     <div>
                       <h3 className="font-extrabold text-lg text-white">{t('planProHeader')}</h3>
-                      <p className="text-[11px] text-emerald-400 font-medium">{t('planProMonthly')}</p>
+                      <p className="text-[11px] text-slate-400 font-medium">{t('planProMonthly')}</p>
                     </div>
+                    <span className="bg-slate-700 text-slate-100 text-[10px] font-extrabold px-2 py-0.5 rounded-full">
+                      {t('notSellableBadge')}
+                    </span>
                   </div>
 
-                  <div className="text-3xl font-extrabold text-emerald-400 font-mono">
-                    ฿990 <span className="text-xs font-normal text-slate-400">{locale === 'th' ? '/เดือน' : '/month'}</span>
+                  <div className="text-xl font-extrabold text-slate-400 font-mono">
+                    {t('notSellableBadge')}
                   </div>
 
                   <p className="border-t border-slate-800 pt-4 text-xs leading-relaxed text-slate-400">
                     {t('planProDesc')}
                   </p>
+                  <p className="text-[10px] font-semibold text-amber-300">
+                    {t('planProNote')}
+                  </p>
                 </div>
 
                 <div className="pt-4 border-t border-slate-800/80">
-                  <button
-                    type="button"
-                    onClick={() => handleUpgrade('pro_990')}
-                    disabled={shopRole !== 'owner' || isManagedSubscriptionPlan('pro_990') || mutatingResourceId === 'checkout-pro_990'}
-                    className="w-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold py-3 rounded-xl text-xs shadow-lg shadow-emerald-950/40 transition-all block text-center disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {mutatingResourceId === 'checkout-pro_990'
-                      ? t('gotoBilling')
-                      : isManagedSubscriptionPlan('pro_990')
-                        ? t('currentPlan')
-                        : t('choosePro')}
-                  </button>
+                  <p className="w-full bg-slate-800/60 text-slate-400 font-bold py-3 rounded-xl text-xs border border-slate-700/60 text-center cursor-not-allowed">
+                    {t('notSellableBadge')}
+                  </p>
                 </div>
               </div>
             </div>
