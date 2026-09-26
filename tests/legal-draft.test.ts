@@ -15,7 +15,9 @@ import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-const read = (rel: string) => readFileSync(join(root, rel), 'utf8');
+// Normalise CRLF: Windows checkouts (core.autocrlf=true) turn the .md drafts into CRLF while the
+// message strings use LF, which made the content comparison fail on Windows only.
+const read = (rel: string) => readFileSync(join(root, rel), 'utf8').replace(/\r\n/g, '\n');
 const readJson = (rel: string) => JSON.parse(read(rel));
 
 const messages = {
