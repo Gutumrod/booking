@@ -251,11 +251,63 @@ test('no invented company identity, contact address or commercial term appears',
       assert.doesNotMatch(blob, pattern, `${locale} legal copy matched forbidden ${pattern}`);
     }
   }
-  // Pilot prices may appear only when explicitly marked as not final.
+  // The retired commercial model must never come back: the old ฿490/฿990 pilot
+  // reference points, the free-plan-as-14-day-trial reading, and the 100/500
+  // paid booking wall the database still blocked Basic at.
+  const retired = [
+    /฿490|490 baht|490 บาท/i,
+    /฿990|990 baht|990 บาท/i,
+    /100 or 500|100 หรือ 500/i,
+  ];
+  for (const locale of locales) {
+    const blob = JSON.stringify(messages[locale].legal);
+    for (const pattern of retired) {
+      assert.doesNotMatch(blob, pattern, `${locale} legal copy still states the retired ${pattern}`);
+    }
+  }
+
+  // The billing section must state the locked packs, and every value the Owner
+  // has not supplied must stay an explicit placeholder rather than a number.
+  const locked: Record<(typeof locales)[number], RegExp[]> = {
+    en: [
+      /free forever/i, // Free is free forever
+      /50 bookings per calendar month/i, // 50 bookings per calendar month
+      /\b1 shop\b/i, // 1 shop
+      /\b3 services\b/i, // 3 services
+      /no PromptPay deposit/i, // a Free shop takes no PromptPay deposit
+      /฿390/, // Basic price, THB
+      /\$11/, // Basic price, USD
+      /no booking ceiling/i, // Basic has no booking ceiling
+      /Pro is not on sale/i, // Pro is not on sale
+      /annual billing is not open/i, // annual billing is not open
+      /Basic trial promotion/i, // the 14-day offer is a Basic promotion
+      /separate from Free/i, // and it is separate from Free
+      /falls back to Free entitlements and is not closed/i, // trial expiry does not close the shop
+      /precondition for selling Pro publicly/i, // Pro gated on automatic verification
+    ],
+    th: [
+      /ฟรีตลอดไป/, // Free is free forever
+      /50\s*คิวต่อเดือน/, // 50 bookings per calendar month
+      /1\s*ร้าน/, // 1 shop
+      /3\s*บริการ/, // 3 services
+      /ไม่มีมัดจำ PromptPay/, // a Free shop takes no PromptPay deposit
+      /฿390/, // Basic price, THB
+      /\$11/, // Basic price, USD
+      /ไม่มีเพดานจำนวนคิว/, // Basic has no booking ceiling
+      /Pro ยังไม่เปิดขาย/, // Pro is not on sale
+      /รายปียังไม่เปิด/, // annual billing is not open
+      /โปรโมชันทดลองใช้แพ็ก Basic/, // the 14-day offer is a Basic promotion
+      /แยกจากแพ็กฟรี/, // and it is separate from Free
+      /ตกไปใช้สิทธิ์ของแพ็กฟรีโดยไม่ถูกปิด/, // trial expiry does not close the shop
+      /เงื่อนไขบังคับก่อนขาย Pro สู่สาธารณะ/, // Pro gated on automatic verification
+    ],
+  };
   for (const locale of locales) {
     const billing = messages[locale].legal.terms.sections.subscriptionAndBilling.b;
     assert.match(billing, /OWNER INPUT/);
-    assert.match(billing, locale === 'th' ? /ยังไม่ใช่ราคาสุดท้าย|อ้างอิง/ : /not final|pilot reference/i);
+    for (const pattern of locked[locale]) {
+      assert.match(billing, pattern, `${locale} billing section no longer states ${pattern}`);
+    }
   }
 });
 
