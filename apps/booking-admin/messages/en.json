@@ -57,11 +57,22 @@
     "ownerEmailLabel": "Login email *",
     "passwordLabel2": "Password (Password) *",
     "passwordPlaceholder": "At least 8 characters",
-    "stepShopTitle": "Shop & owner account details (Step 1/3)",
+    "stepBusinessTypeTitle": "What kind of business is your shop? (Step 1/4)",
+    "stepBusinessTypeShort": "Business type",
+    "businessTypeSelectHint": "Choose one type. We will prefill example services with durations, and opening hours, that you can edit.",
+    "businessTypeRequired": "Please choose your business type to continue.",
+    "businessTypeSelectedBadge": "Selected",
+    "businessTypePatternPreviewTitle": "What the {type} starter pattern gives you",
+    "businessTypePatternServicesTitle": "Example services & durations (editable)",
+    "businessTypePatternHoursTitle": "Example opening hours (editable)",
+    "businessTypePatternEditableNote": "Every service and every opening hour can be edited or deleted after your shop is created.",
+    "businessTypeCategoryPrefillNote": "Pre-filled from your business type. You can edit or extend it freely.",
+    "stepShopTitle": "Shop & owner account details (Step 2/4)",
     "stepShopShort": "Shop details",
-    "stepPlanTitle": "Choose your booking system plan (Step 2/3)",
+    "stepPlanTitle": "Choose your booking system plan (Step 3/4)",
     "stepPlanShort": "Choose plan",
-    "stepPromptpayTitle": "PromptPay setup",
+    "stepPromptpayTitle": "PromptPay setup (Step 4/4)",
+    "stepPromptpayShort": "PromptPay",
     "pilotReferenceNotice": "Pilot reference pricing — not final public pricing",
     "planFreeTitle": "🎁 Free Trial",
     "planFreePrice": "Free 14 days",
@@ -466,5 +477,51 @@
     "priorityLow": "Low",
     "priorityMedium": "Medium",
     "priorityHigh": "High"
+  },
+  "businessType": {
+    "hairBarber": {
+      "label": "Hair & barber shop",
+      "description": "Cuts, beard trims and wash-and-set, with a Monday rest day.",
+      "services": {
+        "haircut": "Men's haircut",
+        "haircutWash": "Haircut + shampoo & set",
+        "beardTrim": "Beard trim / shave",
+        "washSet": "Wash & set",
+        "colorShort": "Short-hair colour"
+      }
+    },
+    "beautySalon": {
+      "label": "Beauty salon",
+      "description": "Facials, brows, lashes and event makeup.",
+      "services": {
+        "facialBasic": "Basic facial",
+        "facialPremium": "Premium facial",
+        "browShape": "Eyebrow shaping",
+        "lashExtension": "Lash extensions",
+        "makeupEvent": "Event makeup"
+      }
+    },
+    "nailSalon": {
+      "label": "Nail salon",
+      "description": "Manicure, pedicure, gel polish and nail art, open every day.",
+      "services": {
+        "manicure": "Manicure",
+        "pedicure": "Pedicure",
+        "gelPolish": "Gel polish",
+        "nailArt": "Nail art",
+        "extensionSet": "Full extension set"
+      }
+    },
+    "other": {
+      "label": "Other business",
+      "description": "A neutral starter set for any other appointment business.",
+      "services": {
+        "consultation": "Consultation",
+        "standardService": "Standard service",
+        "servicePackage": "Service package",
+        "followUp": "Follow-up visit"
+      }
+    },
+    "closedDay": "Closed"
   }
 }

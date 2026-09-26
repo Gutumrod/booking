@@ -6,9 +6,16 @@ import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { createClient } from '@/lib/supabase/client';
 import { LanguageToggle } from '@/components/language-toggle';
+import {
+  listBusinessTypes,
+  getBusinessType,
+  summarizeOpeningHours,
+  type BusinessTypeId,
+  buildSignupIntent,
+} from '@/lib/business-type-catalogue';
 import { 
   Store, Mail, Sparkles, ArrowRight, ArrowLeft, QrCode, CreditCard,
-  ShieldCheck, Building, CheckCircle2, Globe
+  ShieldCheck, Building, CheckCircle2, Globe, Scissors
 } from 'lucide-react';
 
 const PENDING_REGISTRATION_KEY = 'local-service.pending-owner-registration';
@@ -24,19 +31,36 @@ interface PendingRegistration {
   promptpayNumber: string;
   promptpayName: string;
   idempotencyKey: string;
+  // WU-A3: recorded for later analysis, so the shop's type, starter pattern and
+  // plan are known together. Applied client-side only; persisting the pattern in
+  // the database is server/SQL work that is NOT APPLIED.
+  businessType: BusinessTypeId;
+  businessTypeKey: string;
+  patternId: string;
+  patternVersion: number;
+  patternServiceCount: number;
+  patternTotalDurationMinutes: number;
+  patternServiceKeys: string[];
+  patternWorkingDays: number[];
 }
 
 function RegisterFormContent() {
   const t = useTranslations('auth');
   const tCommon = useTranslations('common');
+  const tBusinessType = useTranslations('businessType');
   const suggestedCategories = t.raw('suggestedCategories') as string[];
+  const dayNames = tCommon.raw('dayNames') as string[];
+  const businessTypes = listBusinessTypes();
   const router = useRouter();
   const searchParams = useSearchParams();
   const planParam = searchParams.get('plan');
 
   const [currentStep, setCurrentStep] = useState<number>(1);
 
-  // Step 1: Shop & Owner Info
+  // Step 1: Business type (WU-A3) — asked before the rest of the flow.
+  const [businessType, setBusinessType] = useState<BusinessTypeId | ''>('');
+
+  // Step 2: Shop & Owner Info
   const [shopName, setShopName] = useState('');
   const [shopSlug, setShopSlug] = useState('');
   const [businessCategory, setBusinessCategory] = useState('');
@@ -45,16 +69,34 @@ function RegisterFormContent() {
   const [ownerEmail, setOwnerEmail] = useState('');
   const [password, setPassword] = useState('');
 
-  // Step 2: Plan Selection
+  // Step 3: Plan Selection
   const [selectedPlan, setSelectedPlan] = useState<'free_trial' | 'basic_490' | 'pro_990'>(() =>
     planParam === 'basic_490' || planParam === 'pro_990' || planParam === 'free_trial'
       ? planParam
       : 'free_trial'
   );
 
-  // Step 3: PromptPay Setup
+  // Step 4: PromptPay Setup
   const [promptpayNumber, setPromptpayNumber] = useState('');
   const [promptpayName, setPromptpayName] = useState('');
+
+  // The starter pattern for the chosen type, shown before signup and then applied.
+  const selectedBusinessType = getBusinessType(businessType);
+  const patternHoursLines = selectedBusinessType
+    ? summarizeOpeningHours(selectedBusinessType.pattern, {
+      dayNames,
+      closedLabel: tBusinessType('closedDay'),
+    })
+    : [];
+
+  const selectBusinessType = (typeId: BusinessTypeId) => {
+    setBusinessType(typeId);
+    const definition = getBusinessType(typeId);
+    if (definition) {
+      // Prefill the free-text category from the chosen type; still editable.
+      setBusinessCategory(tBusinessType(`${definition.messageKey}.label`));
+    }
+  };
 
   // UI state
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -150,7 +192,15 @@ function RegisterFormContent() {
 
   const handleNextStep = (e: React.FormEvent) => {
     e.preventDefault();
-    if (currentStep < 3) {
+
+    // The business type is required: the starter pattern cannot be chosen
+    // without it, so the flow does not move past step 1 until it is set.
+    if (currentStep === 1 && !businessType) {
+      setErrorMessage(t('businessTypeRequired'));
+      return;
+    }
+
+    if (currentStep < 4) {
       setCurrentStep(prev => prev + 1);
     } else {
       handleFinalSubmit();
@@ -159,6 +209,13 @@ function RegisterFormContent() {
 
   const handleFinalSubmit = async () => {
     setErrorMessage('');
+
+    const intent = buildSignupIntent({ businessType, selectedPlan });
+    if (!intent) {
+      setErrorMessage(t('businessTypeRequired'));
+      return;
+    }
+
     setIsSubmitting(true);
 
     const registration: PendingRegistration = {
@@ -168,10 +225,18 @@ function RegisterFormContent() {
       ownerName: ownerName.trim(),
       ownerPhone: ownerPhone.trim(),
       ownerEmail: ownerEmail.trim().toLowerCase(),
-      selectedPlan,
+      selectedPlan: intent.selectedPlan,
       promptpayNumber: promptpayNumber.trim(),
       promptpayName: promptpayName.trim(),
       idempotencyKey: crypto.randomUUID(),
+      businessType: intent.pattern.business_type,
+      businessTypeKey: intent.pattern.business_type_key,
+      patternId: intent.pattern.pattern_id,
+      patternVersion: intent.pattern.pattern_version,
+      patternServiceCount: intent.pattern.pattern_service_count,
+      patternTotalDurationMinutes: intent.pattern.pattern_total_duration_minutes,
+      patternServiceKeys: intent.pattern.pattern_service_keys,
+      patternWorkingDays: intent.pattern.pattern_working_days,
     };
 
     localStorage.setItem(PENDING_REGISTRATION_KEY, JSON.stringify(registration));
@@ -228,17 +293,22 @@ function RegisterFormContent() {
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex items-center justify-between text-xs">
           <div className={`flex items-center gap-2 font-semibold ${currentStep >= 1 ? 'text-emerald-400' : 'text-slate-500'}`}>
             <span className={`w-6 h-6 rounded-full flex items-center justify-center font-mono font-bold text-xs ${currentStep >= 1 ? 'bg-emerald-500 text-slate-950' : 'bg-slate-800 text-slate-400'}`}>1</span>
-            <span className="hidden sm:inline">{t('stepShopShort')}</span>
+            <span className="hidden sm:inline">{t('stepBusinessTypeShort')}</span>
           </div>
           <div className="h-0.5 flex-1 bg-slate-800 mx-3" />
           <div className={`flex items-center gap-2 font-semibold ${currentStep >= 2 ? 'text-emerald-400' : 'text-slate-500'}`}>
             <span className={`w-6 h-6 rounded-full flex items-center justify-center font-mono font-bold text-xs ${currentStep >= 2 ? 'bg-emerald-500 text-slate-950' : 'bg-slate-800 text-slate-400'}`}>2</span>
-            <span className="hidden sm:inline">{t('stepPlanShort')}</span>
+            <span className="hidden sm:inline">{t('stepShopShort')}</span>
           </div>
           <div className="h-0.5 flex-1 bg-slate-800 mx-3" />
           <div className={`flex items-center gap-2 font-semibold ${currentStep >= 3 ? 'text-emerald-400' : 'text-slate-500'}`}>
             <span className={`w-6 h-6 rounded-full flex items-center justify-center font-mono font-bold text-xs ${currentStep >= 3 ? 'bg-emerald-500 text-slate-950' : 'bg-slate-800 text-slate-400'}`}>3</span>
-            <span className="hidden sm:inline">{t('stepPromptpayTitle')}</span>
+            <span className="hidden sm:inline">{t('stepPlanShort')}</span>
+          </div>
+          <div className="h-0.5 flex-1 bg-slate-800 mx-3" />
+          <div className={`flex items-center gap-2 font-semibold ${currentStep >= 4 ? 'text-emerald-400' : 'text-slate-500'}`}>
+            <span className={`w-6 h-6 rounded-full flex items-center justify-center font-mono font-bold text-xs ${currentStep >= 4 ? 'bg-emerald-500 text-slate-950' : 'bg-slate-800 text-slate-400'}`}>4</span>
+            <span className="hidden sm:inline">{t('stepPromptpayShort')}</span>
           </div>
         </div>
 
@@ -271,8 +341,96 @@ function RegisterFormContent() {
             </div>
           ) : (
             <form onSubmit={handleNextStep} className="space-y-6">
-              {/* STEP 1: SHOP & OWNER IDENTITY */}
+              {/* STEP 1: BUSINESS TYPE (WU-A3) */}
               {currentStep === 1 && (
+                <div className="space-y-4 animate-fade-in">
+                  <h2 className="text-base font-bold text-white flex items-center gap-2 border-b border-slate-800 pb-3">
+                    <Scissors className="w-5 h-5 text-emerald-400" />
+                    {t('stepBusinessTypeTitle')}
+                  </h2>
+
+                  <p className="text-[11px] text-slate-400">{t('businessTypeSelectHint')}</p>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {businessTypes.map((type) => {
+                      const isSelected = businessType === type.id;
+                      return (
+                        <button
+                          key={type.id}
+                          type="button"
+                          aria-pressed={isSelected}
+                          onClick={() => selectBusinessType(type.id)}
+                          className={`text-left rounded-2xl p-4 border transition-all space-y-1.5 ${
+                            isSelected
+                              ? 'bg-slate-900 border-2 border-emerald-500 shadow-lg shadow-emerald-950/40'
+                              : 'bg-slate-950 border-slate-800 hover:border-slate-700'
+                          }`}
+                        >
+                          <span className="flex items-center justify-between gap-2">
+                            <span className="font-bold text-sm text-white">
+                              {tBusinessType(`${type.messageKey}.label`)}
+                            </span>
+                            {isSelected && (
+                              <span className="text-[10px] font-bold text-emerald-400 flex items-center gap-1">
+                                <CheckCircle2 className="w-3.5 h-3.5" />
+                                {t('businessTypeSelectedBadge')}
+                              </span>
+                            )}
+                          </span>
+                          <span className="block text-[11px] text-slate-400">
+                            {tBusinessType(`${type.messageKey}.description`)}
+                          </span>
+                          <span className="block text-[10px] text-slate-500 font-mono">
+                            {type.pattern.services.length} {t('businessTypePatternServicesTitle')}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Pattern preview: exactly what signup will prefill, still editable */}
+                  {selectedBusinessType && (
+                    <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-3.5 space-y-3">
+                      <p className="font-bold text-emerald-400 text-xs flex items-center gap-1.5">
+                        <Sparkles className="w-4 h-4 text-emerald-400" />
+                        {t('businessTypePatternPreviewTitle', {
+                          type: tBusinessType(`${selectedBusinessType.messageKey}.label`),
+                        })}
+                      </p>
+
+                      <div>
+                        <p className="text-[11px] font-semibold text-slate-300">
+                          {t('businessTypePatternServicesTitle')}
+                        </p>
+                        <ul className="text-[11px] text-slate-300 space-y-1 pt-1">
+                          {selectedBusinessType.pattern.services.map((service) => (
+                            <li key={service.key} className="flex items-center justify-between gap-3">
+                              <span>{tBusinessType(`${selectedBusinessType.messageKey}.services.${service.key}`)}</span>
+                              <span className="font-mono text-amber-400">{service.durationMinutes} min</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+
+                      <div>
+                        <p className="text-[11px] font-semibold text-slate-300">
+                          {t('businessTypePatternHoursTitle')}
+                        </p>
+                        <ul className="text-[11px] text-slate-400 pt-1 space-y-0.5 font-mono">
+                          {patternHoursLines.map((line) => (
+                            <li key={line}>{line}</li>
+                          ))}
+                        </ul>
+                      </div>
+
+                      <p className="text-[10px] text-slate-400">{t('businessTypePatternEditableNote')}</p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* STEP 2: SHOP & OWNER IDENTITY */}
+              {currentStep === 2 && (
                 <div className="space-y-4 animate-fade-in">
                   <h2 className="text-base font-bold text-white flex items-center gap-2 border-b border-slate-800 pb-3">
                     <Building className="w-5 h-5 text-emerald-400" />
@@ -328,7 +486,13 @@ function RegisterFormContent() {
                         onChange={(e) => setBusinessCategory(e.target.value)}
                         className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-emerald-500"
                       />
-                      
+
+                      {selectedBusinessType && (
+                        <p className="text-[10px] text-emerald-400/90 font-medium pt-1.5">
+                          {t('businessTypeCategoryPrefillNote')}
+                        </p>
+                      )}
+
                       {/* Suggestion Chips */}
                       <div className="mt-2.5 space-y-1">
                         <span className="text-[10px] text-slate-400 block font-medium">{t('businessCategoryQuickPick')}</span>
@@ -402,8 +566,8 @@ function RegisterFormContent() {
                 </div>
               )}
 
-              {/* STEP 2: SELECT PLAN */}
-              {currentStep === 2 && (
+              {/* STEP 3: SELECT PLAN */}
+              {currentStep === 3 && (
                 <div className="space-y-5 animate-fade-in">
                   <div className="flex justify-between items-center border-b border-slate-800 pb-3">
                     <h2 className="text-base font-bold text-white flex items-center gap-2">
@@ -491,12 +655,12 @@ function RegisterFormContent() {
                 </div>
               )}
 
-              {/* STEP 3: PROMPTPAY SETUP */}
-              {currentStep === 3 && (
+              {/* STEP 4: PROMPTPAY SETUP */}
+              {currentStep === 4 && (
                 <div className="space-y-4 animate-fade-in">
                   <h2 className="text-base font-bold text-white flex items-center gap-2 border-b border-slate-800 pb-3">
                     <QrCode className="w-5 h-5 text-emerald-400" />
-                    {t('stepPromptpayTitle')} (Step 3/3)
+                    {t('stepPromptpayTitle')} (Step 4/4)
                   </h2>
 
                   <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-3.5 text-xs text-slate-300 space-y-1">
@@ -558,7 +722,7 @@ function RegisterFormContent() {
                 >
                   {isSubmitting ? (
                     tCommon('saving')
-                  ) : currentStep === 3 ? (
+                  ) : currentStep === 4 ? (
                     <>
                       ยืนยันสร้างร้านค้า & เข้าสู่แดชบอร์ด
                       <Sparkles className="w-4 h-4" />

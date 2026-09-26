@@ -57,11 +57,22 @@
     "ownerEmailLabel": "อีเมลสำหรับล็อกอิน *",
     "passwordLabel2": "รหัสผ่าน (Password) *",
     "passwordPlaceholder": "อย่างน้อย 8 ตัวอักษร",
-    "stepShopTitle": "ข้อมูลร้านค้าและบัญชีเจ้าของร้าน (Step 1/3)",
+    "stepBusinessTypeTitle": "ร้านของคุณเป็นธุรกิจประเภทไหน? (Step 1/4)",
+    "stepBusinessTypeShort": "ประเภทธุรกิจ",
+    "businessTypeSelectHint": "เลือกหนึ่งประเภท ระบบจะเตรียมตัวอย่างบริการพร้อมระยะเวลา และช่วงเวลาทำการให้ ร้านแก้ไขได้",
+    "businessTypeRequired": "กรุณาเลือกประเภทธุรกิจก่อนไปขั้นตอนต่อไป",
+    "businessTypeSelectedBadge": "เลือกแล้ว",
+    "businessTypePatternPreviewTitle": "แพทเทิร์นตั้งต้นของ {type} ที่ร้านจะได้",
+    "businessTypePatternServicesTitle": "ตัวอย่างบริการ & ระยะเวลา (แก้ไขได้)",
+    "businessTypePatternHoursTitle": "ตัวอย่างช่วงเวลาทำการ (แก้ไขได้)",
+    "businessTypePatternEditableNote": "บริการทุกตัวและช่วงเวลาทำการทุกวัน แก้ไขหรือลบได้หลังสร้างร้านเสร็จ",
+    "businessTypeCategoryPrefillNote": "เติมจากประเภทธุรกิจที่เลือกไว้ ยังแก้ไขหรือเพิ่มรายละเอียดได้อิสระ",
+    "stepShopTitle": "ข้อมูลร้านค้าและบัญชีเจ้าของร้าน (Step 2/4)",
     "stepShopShort": "ข้อมูลร้านค้า",
-    "stepPlanTitle": "เลือกแพ็กเกจระบบรับจองคิว (Step 2/3)",
+    "stepPlanTitle": "เลือกแพ็กเกจระบบรับจองคิว (Step 3/4)",
     "stepPlanShort": "เลือกแพ็กเกจ",
-    "stepPromptpayTitle": "ตั้งค่า PromptPay",
+    "stepPromptpayTitle": "ตั้งค่า PromptPay (Step 4/4)",
+    "stepPromptpayShort": "ตั้งค่า PromptPay",
     "pilotReferenceNotice": "ราคาอ้างอิง Pilot — ยังไม่ใช่ราคาขายสาธารณะสุดท้าย",
     "planFreeTitle": "🎁 Free Trial",
     "planFreePrice": "ฟรี 14 วัน",
@@ -466,5 +477,51 @@
     "priorityLow": "Low (ต่ำ)",
     "priorityMedium": "Medium (ปานกลาง)",
     "priorityHigh": "High (สูง / เร่งด่วน)"
+  },
+  "businessType": {
+    "hairBarber": {
+      "label": "ร้านทำผม / บาร์เบอร์",
+      "description": "ตัดผม โกนหนวด แต่งทรง พร้อมสระ-เซ็ต โดยหยุดวันจันทร์",
+      "services": {
+        "haircut": "ตัดผมชาย",
+        "haircutWash": "ตัดผมพร้อมสระ-เซ็ต",
+        "beardTrim": "โกนหนวด / แต่งเคราตามทรง",
+        "washSet": "สระผม-เซ็ตทรง",
+        "colorShort": "ทำสีผมสั้น"
+      }
+    },
+    "beautySalon": {
+      "label": "ร้านเสริมสวย",
+      "description": "ทำหน้า ออกแบบคิ้ว ต่อขนตา และแต่งหน้าโอกาสพิเศษ",
+      "services": {
+        "facialBasic": "ทำความสะอาดผิวหน้าขั้นพื้นฐาน",
+        "facialPremium": "ทรีตเมนต์ผิวหน้าพรีเมียม",
+        "browShape": "ออกแบบและจัดทรงคิ้ว",
+        "lashExtension": "ต่อขนตา",
+        "makeupEvent": "แต่งหน้าโอกาสพิเศษ"
+      }
+    },
+    "nailSalon": {
+      "label": "ร้านทำเล็บ",
+      "description": "ทำเล็บมือ เล็บเท้า ทาเจล และเพนต์เล็บ เปิดทุกวัน",
+      "services": {
+        "manicure": "ทำเล็บมือ",
+        "pedicure": "ทำเล็บเท้า",
+        "gelPolish": "ทาเจลเล็บ",
+        "nailArt": "เพนต์ลวดลายเล็บ",
+        "extensionSet": "ต่อเล็บเต็มชุด"
+      }
+    },
+    "other": {
+      "label": "ธุรกิจอื่นๆ",
+      "description": "ชุดตั้งต้นกลางๆ สำหรับธุรกิจรับนัดหมายประเภทอื่น",
+      "services": {
+        "consultation": "ปรึกษาก่อนให้บริการ",
+        "standardService": "บริการมาตรฐาน",
+        "servicePackage": "แพ็กเกจบริการ",
+        "followUp": "นัดติดตามผล"
+      }
+    },
+    "closedDay": "หยุด"
   }
 }
