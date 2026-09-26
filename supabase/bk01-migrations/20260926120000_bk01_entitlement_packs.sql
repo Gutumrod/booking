@@ -37,12 +37,15 @@
 --     role/schema/database/extension/global DDL, no writes to a managed
 --     Supabase schema.
 --   * Every mutation target is explicitly qualified under local_service.
---   * PUBLIC is never named in a GRANT or REVOKE: the policy allowlists only
---     anon, authenticated, service_role and bk01_runtime as grantees, so a
---     "FROM PUBLIC" clause is rejected outright. Consequence, stated plainly:
---     PostgreSQL's default PUBLIC privileges on the objects created here cannot
---     be revoked from this stream. See the note file for the mitigation and for
---     the finding that this needs the platform-global lane.
+--   * PUBLIC may be named ONLY as a REVOKE grantee, never in a GRANT. The
+--     policy allowlists anon, authenticated, service_role and bk01_runtime as
+--     GRANT grantees, rejects `GRANT ... TO PUBLIC`, and accepts
+--     `REVOKE ALL ... FROM PUBLIC` — revoking a privilege is not granting one.
+--     Consequence: every function created or replaced here revokes PostgreSQL's
+--     default PUBLIC EXECUTE, the SECURITY INVOKER trigger function included,
+--     and a CREATE OR REPLACE that changes an argument list (a NEW function
+--     object with its own default PUBLIC EXECUTE) carries its own REVOKE. That
+--     coverage is F-6. See the note file for the rule and the finding.
 --   * The policy's mutation-target patterns also reject any occurrence of the
 --     keyword "update" that is followed by a non-qualified token. That rules
 --     out, in this stream:
@@ -84,6 +87,19 @@ CREATE TABLE local_service.entitlement_plans (
     auto_slip_limit            INTEGER NOT NULL CHECK (auto_slip_limit >= 0),
     promptpay_deposit_allowed  BOOLEAN NOT NULL,
     is_publicly_sellable       BOOLEAN NOT NULL,
+    -- N-3: what a cancelled PAID plan does. The Owner has not answered B4, so
+    -- this is a configurable value with an asterisk (*) rather than compiled
+    -- logic. The default (true) is the already-answered B2 rule: fall back to
+    -- Free entitlements, keep the shop open, delete nothing. Setting it false
+    -- is the reserved shape for the opposite answer (stop accepting online
+    -- bookings when a paid plan is cancelled).
+    canceled_paid_plan_falls_back_to_free BOOLEAN NOT NULL DEFAULT true,
+    -- F-9: the sellability rule is enforced over the whole Pro FAMILY of plan
+    -- identifiers by deriving the flag from the identifier itself, instead of
+    -- comparing against one exact name. A later Pro identifier is covered the
+    -- day it is added.
+    is_pro_family              BOOLEAN
+        GENERATED ALWAYS AS (plan_code LIKE 'pro%') STORED,
     notes                      TEXT,
     updated_at                 TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -94,10 +110,13 @@ REVOKE ALL ON TABLE local_service.entitlement_plans FROM anon, authenticated;
 GRANT ALL ON TABLE local_service.entitlement_plans TO service_role;
 
 -- Owner-locked rule 5 ("Pro is not sold") is enforced on the data itself, so no
--- code path can sell Pro while the row says it is not for sale.
+-- code path can sell Pro while the row says it is not for sale. F-9: the rule
+-- covers the whole Pro family by identifier prefix (`is_pro_family`), not one
+-- exact name, because the permitted identifiers are the legacy spellings such as
+-- `pro_990` — an exact comparison against `'pro'` could never match a real row.
 ALTER TABLE local_service.entitlement_plans
-    ADD CONSTRAINT entitlement_plans_pro_not_sellable
-    CHECK (plan_code <> 'pro' OR NOT is_publicly_sellable);
+    ADD CONSTRAINT entitlement_plans_pro_family_not_sellable
+    CHECK (NOT is_pro_family OR NOT is_publicly_sellable);
 
 COMMENT ON TABLE local_service.entitlement_plans IS
     'BK01 plan entitlements. bookings_per_month NULL means no booking ceiling (fair use). Values live here rather than in functions so a plan change is a row change.';
@@ -184,6 +203,38 @@ CREATE INDEX service_entitlement_periods_shop_month_idx
 COMMENT ON TABLE local_service.service_entitlement_periods IS
     'Records the Thailand-time calendar month in which each service was last inside its shop plan allowance, so a service disabled by a downgrade can be switched back on without deleting anything.';
 
+-- A.5 F-7 — WHY a service is switched off. There are two different reasons a
+--     service can be off and they must never be conflated: the SYSTEM switched
+--     it off because the plan's service allowance was exceeded (temporary, and
+--     the system may switch it back on), or the OWNER switched it off on
+--     purpose (a product decision, and no automatic path may reverse it). The
+--     pre-F-7 restore routine re-enabled every off service it found, so the
+--     owner's own choice was silently reversed — on every customer booking and
+--     on every dashboard read, because the restore was invoked from those two
+--     paths. This column is the explicit marker the migration needs to tell the
+--     two cases apart:
+--
+--       entitlement_disabled = true   the system switched it off for an
+--                                     entitlement reason; the restore may
+--                                     switch it back on when the plan allows
+--       entitlement_disabled = false  the row is on, or the OWNER switched it
+--                                     off — never revived automatically
+--
+--     DEFAULT false so every pre-existing row (all of them written by the owner
+--     or by signup) is correctly classified as "not system-disabled" the moment
+--     the column appears, and the restore can never revive a legacy row.
+--     The paired CHECK states the invariant that keeps the two facts from
+--     contradicting each other: a row cannot be active AND system-disabled.
+ALTER TABLE local_service.services
+    ADD COLUMN entitlement_disabled BOOLEAN NOT NULL DEFAULT false;
+
+ALTER TABLE local_service.services
+    ADD CONSTRAINT services_not_active_and_entitlement_disabled
+    CHECK (NOT (is_active AND entitlement_disabled));
+
+COMMENT ON COLUMN local_service.services.entitlement_disabled IS
+    'F-7: true when the SYSTEM switched this service off because the plan service allowance was exceeded, so the system may switch it back on when the plan allows. false when the service is on, or when the OWNER switched it off on purpose — an owner switch-off is never reversed automatically.';
+
 -- ============================================================================
 -- B. SEED DATA
 -- ============================================================================
@@ -194,25 +245,29 @@ COMMENT ON TABLE local_service.service_entitlement_periods IS
 INSERT INTO local_service.entitlement_plans (
     plan_code, display_name_th, display_name_en, price_thb, price_usd,
     bookings_per_month, shops_limit, services_limit, staff_limit,
-    auto_slip_limit, promptpay_deposit_allowed, is_publicly_sellable, notes
+    auto_slip_limit, promptpay_deposit_allowed, is_publicly_sellable,
+    canceled_paid_plan_falls_back_to_free, notes
 ) VALUES
     (
         'free', 'ฟรี ตลอดไป', 'Free forever', 0, 0,
         50, 1, 3, 1,
         0, false, true,
-        'Owner-locked: 50 bookings per calendar month (Thailand time, reset on the 1st), 1 shop, 3 services, no PromptPay deposit. staff_limit 1 is the Owner proposal A1 (still unanswered: marked * in the note). auto_slip_limit 0 is the C2 proposal (still unanswered: marked *).'
+        true,
+        'Owner-locked: 50 bookings per calendar month (Thailand time, reset on the 1st), 1 shop, 3 services, no PromptPay deposit. staff_limit 1 is the Owner proposal A1 (still unanswered: marked * in the note). auto_slip_limit 0 is the C2 proposal (still unanswered: marked *). canceled_paid_plan_falls_back_to_free true is the N-3 default and carries a * because the Owner has not answered B4.'
     ),
     (
         'basic_490', 'Basic', 'Basic', 390, 11,
         NULL, 1, 50, 5,
         0, true, true,
-        'Owner-locked O-1 and A-2: 390 THB or 11 USD per month, no booking ceiling (bookings_per_month IS NULL). staff_limit 5 is the cap the database already enforced. services_limit 50 and auto_slip_limit 0 are NOT Owner-locked (marked * in the note).'
+        true,
+        'Owner-locked O-1 and A-2: 390 THB or 11 USD per month, no booking ceiling (bookings_per_month IS NULL). staff_limit 5 is the cap the database already enforced. services_limit 50 and auto_slip_limit 0 are NOT Owner-locked (marked * in the note). canceled_paid_plan_falls_back_to_free true is the N-3 default (marked *).'
     ),
     (
         'pro_990', 'Pro (ยังไม่ขาย)', 'Pro (not sold)', 790, 23,
         NULL, 1, 100, 10,
         100, true, false,
-        'Owner-locked A-2 and C2: Pro is NOT sold, hence is_publicly_sellable false and the entitlement_plans_pro_not_sellable constraint. The 790 THB and 23 USD figures are the unapproved C2 proposal, kept only as the configuration value for the day the Owner opens Pro (marked *).'
+        true,
+        'Owner-locked A-2 and C2: Pro is NOT sold, hence is_publicly_sellable false and the entitlement_plans_pro_family_not_sellable constraint (F-9: the whole pro% family, not one exact name). The 790 THB and 23 USD figures are the unapproved C2 proposal, kept only as the configuration value for the day the Owner opens Pro (marked *).'
     );
 
 INSERT INTO local_service.trial_promotions (
@@ -263,6 +318,24 @@ INSERT INTO local_service.business_types (
 -- C. SHOP SIGNUP: record the chosen business type
 -- ============================================================================
 
+-- N-4: the single read surface for the business type list. The codes seeded
+-- above are the source of truth, and this view is how the signup UI reads them
+-- instead of embedding its own codes. It is deliberately narrow (five columns,
+-- active rows only, fixed order) so it can be granted without opening the table.
+-- The UI lane consumes `local_service.app_business_types`; the column list and
+-- the meaning of each column are recorded in docs/house-swarm-1/WUC-DB-MIGRATION.md.
+CREATE OR REPLACE VIEW local_service.app_business_types AS
+SELECT type_code, emoji, label_th, label_en, display_order
+FROM local_service.business_types
+WHERE is_active = true
+ORDER BY display_order ASC, type_code ASC;
+
+REVOKE ALL ON TABLE local_service.app_business_types FROM PUBLIC, anon, authenticated;
+GRANT SELECT ON TABLE local_service.app_business_types TO authenticated;
+
+COMMENT ON VIEW local_service.app_business_types IS
+    'N-4 read surface: the business type list the signup UI must render, sourced from local_service.business_types so the database stays the single source of type codes. Columns: type_code, emoji, label_th, label_en, display_order.';
+
 ALTER TABLE local_service.shops
     ADD COLUMN business_type_code TEXT
         REFERENCES local_service.business_types (type_code);
@@ -276,19 +349,28 @@ COMMENT ON COLUMN local_service.shops.business_type_code IS
 -- Existing shops predate the type list. Classify them from their free-text
 -- category, then fall back to the seeded 'other' row, so no shop is left
 -- without a type.
+--
+-- F-8: this must be ONE statement. The rejected version wrote the free-text slug
+-- first and repaired the misses in a second UPDATE, but the foreign key is
+-- checked as soon as the first statement runs, so any existing shop whose
+-- category is not a seeded code (free text, Thai text, empty) aborted the whole
+-- migration. Every row here is written straight to a value that is EITHER the
+-- slug of its own category when that slug names a seeded type, OR the seeded
+-- 'other' code, so the foreign key cannot fail on any input.
 UPDATE local_service.shops
-   SET business_type_code = btrim(lower(regexp_replace(
-           coalesce(business_category, ''), '[^a-zA-Z0-9]+', '_', 'g')
-       ));
-
-UPDATE local_service.shops
-   SET business_type_code = 'other'
- WHERE business_type_code IS NULL
-    OR NOT EXISTS (
-           SELECT 1
-             FROM local_service.business_types AS bt
-            WHERE bt.type_code = local_service.shops.business_type_code
-       );
+   SET business_type_code = CASE
+           WHEN EXISTS (
+               SELECT 1
+                 FROM local_service.business_types AS bt
+                WHERE bt.type_code = btrim(lower(regexp_replace(
+                          coalesce(business_category, ''), '[^a-zA-Z0-9]+', '_', 'g'
+                      )))
+           ) THEN btrim(lower(regexp_replace(
+                    coalesce(business_category, ''), '[^a-zA-Z0-9]+', '_', 'g'
+                )))
+           ELSE 'other'
+       END
+ WHERE business_type_code IS NULL;
 
 -- ============================================================================
 -- D. TIME AND USAGE HELPERS
@@ -309,7 +391,7 @@ AS $$
     )::DATE;
 $$;
 
-REVOKE ALL ON FUNCTION local_service.bk01_month_key(TIMESTAMPTZ) FROM anon, authenticated;
+REVOKE ALL ON FUNCTION local_service.bk01_month_key(TIMESTAMPTZ) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION local_service.bk01_month_key(TIMESTAMPTZ) TO service_role;
 
 -- D.2 Slots consumed by one shop in one Thailand-time calendar month, counted
@@ -350,7 +432,7 @@ AS $$
            ) = p_month_key;
 $$;
 
-REVOKE ALL ON FUNCTION local_service.bk01_bookings_used_in_month(UUID, DATE) FROM anon, authenticated;
+REVOKE ALL ON FUNCTION local_service.bk01_bookings_used_in_month(UUID, DATE) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION local_service.bk01_bookings_used_in_month(UUID, DATE) TO service_role;
 
 -- D.3 The free plan's monthly ceiling, exposed to SECURITY INVOKER trigger
@@ -368,7 +450,7 @@ AS $$
      WHERE p.plan_code = 'free';
 $$;
 
-REVOKE ALL ON FUNCTION local_service.bk01_free_bookings_ceiling() FROM anon, authenticated;
+REVOKE ALL ON FUNCTION local_service.bk01_free_bookings_ceiling() FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION local_service.bk01_free_bookings_ceiling() TO service_role;
 
 -- ============================================================================
@@ -394,7 +476,7 @@ AS $$
     END;
 $$;
 
-REVOKE ALL ON FUNCTION local_service.bk01_effective_plan(TEXT, TEXT) FROM anon, authenticated;
+REVOKE ALL ON FUNCTION local_service.bk01_effective_plan(TEXT, TEXT) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION local_service.bk01_effective_plan(TEXT, TEXT) TO service_role;
 
 -- E.2 The plan a shop is actually on right now.
@@ -450,7 +532,7 @@ BEGIN
 END;
 $$;
 
-REVOKE ALL ON FUNCTION local_service.bk01_shop_effective_plan(UUID) FROM anon, authenticated;
+REVOKE ALL ON FUNCTION local_service.bk01_shop_effective_plan(UUID) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION local_service.bk01_shop_effective_plan(UUID) TO service_role;
 
 -- E.3 The plan table row a shop is on.
@@ -481,7 +563,7 @@ AS $$
      WHERE p.plan_code = local_service.bk01_shop_effective_plan(p_shop_id);
 $$;
 
-REVOKE ALL ON FUNCTION local_service.bk01_shop_limits(UUID) FROM anon, authenticated;
+REVOKE ALL ON FUNCTION local_service.bk01_shop_limits(UUID) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION local_service.bk01_shop_limits(UUID) TO service_role;
 
 -- E.4 The frozen entitlement lookup. Its identity is preserved exactly —
@@ -518,7 +600,7 @@ AS $$
            END;
 $$;
 
-REVOKE ALL ON FUNCTION local_service.get_tier_limits(TEXT) FROM anon, service_role;
+REVOKE ALL ON FUNCTION local_service.get_tier_limits(TEXT) FROM PUBLIC, anon, service_role;
 GRANT EXECUTE ON FUNCTION local_service.get_tier_limits(TEXT) TO authenticated;
 
 -- ============================================================================
@@ -611,7 +693,7 @@ BEGIN
 END;
 $$;
 
-REVOKE ALL ON FUNCTION local_service.ensure_entitlement_row(UUID) FROM anon, service_role;
+REVOKE ALL ON FUNCTION local_service.ensure_entitlement_row(UUID) FROM PUBLIC, anon, service_role;
 GRANT EXECUTE ON FUNCTION local_service.ensure_entitlement_row(UUID) TO authenticated;
 
 -- ============================================================================
@@ -684,7 +766,7 @@ BEGIN
 END;
 $$;
 
-REVOKE ALL ON FUNCTION local_service.enforce_booking_quota() FROM anon, authenticated, service_role;
+REVOKE ALL ON FUNCTION local_service.enforce_booking_quota() FROM PUBLIC, anon, authenticated, service_role;
 
 DROP TRIGGER IF EXISTS trg_enforce_booking_quota ON local_service.bookings;
 CREATE TRIGGER trg_enforce_booking_quota
@@ -793,7 +875,7 @@ BEGIN
 END;
 $$;
 
-REVOKE ALL ON FUNCTION local_service.enforce_shop_booking_acceptance() FROM anon, authenticated, service_role;
+REVOKE ALL ON FUNCTION local_service.enforce_shop_booking_acceptance() FROM PUBLIC, anon, authenticated, service_role;
 
 DROP TRIGGER IF EXISTS trg_enforce_shop_booking_acceptance ON local_service.bookings;
 CREATE TRIGGER trg_enforce_shop_booking_acceptance
@@ -807,9 +889,20 @@ CREATE TRIGGER trg_enforce_shop_booking_acceptance
 -- ============================================================================
 
 -- I.1 Stamp the services that are inside the allowance for the current
---     Thailand calendar month and switch any stamped service back on. The
+--     Thailand calendar month and switch the SYSTEM-DISABLED ones back on. The
 --     entitled set is the oldest services_limit services, which is deterministic
 --     and stable, so the shop's active set does not churn. Idempotent.
+--
+--     F-7: the enable condition is `entitlement_disabled = true`. A service the
+--     owner switched off carries `entitlement_disabled = false`, so it is left
+--     exactly as the owner left it — the owner's own choice is never reversed by
+--     this routine, whatever the plan says. Before F-7 this loop set
+--     `is_active = true` on every off row it found, and the routine was invoked
+--     from the booking path and from the dashboard read path, so a single
+--     customer booking silently switched the owner's service back on.
+--     The row is also only revived when it is still off, and the revive clears
+--     the marker in the same write, so `is_active` and `entitlement_disabled`
+--     can never contradict each other.
 CREATE OR REPLACE FUNCTION local_service.bk01_restore_services_within_limit(p_shop_id UUID)
 RETURNS INTEGER
 LANGUAGE plpgsql
@@ -850,15 +943,22 @@ BEGIN
          WHERE service_id = v_row.id
            AND month_key <> v_month;
 
+        -- F-7: only a service the SYSTEM disabled may be revived. The owner's
+        -- own switch-off (entitlement_disabled = false) is out of scope of this
+        -- routine by construction.
         IF EXISTS (
             SELECT 1
               FROM local_service.services AS s
              WHERE s.id = v_row.id
                AND s.is_active = false
+               AND s.entitlement_disabled = true
         ) THEN
             UPDATE local_service.services
-               SET is_active = true
-             WHERE id = v_row.id;
+               SET is_active = true,
+                   entitlement_disabled = false
+             WHERE id = v_row.id
+               AND is_active = false
+               AND entitlement_disabled = true;
 
             v_restored := v_restored + 1;
         END IF;
@@ -868,7 +968,7 @@ BEGIN
 END;
 $$;
 
-REVOKE ALL ON FUNCTION local_service.bk01_restore_services_within_limit(UUID) FROM anon, authenticated;
+REVOKE ALL ON FUNCTION local_service.bk01_restore_services_within_limit(UUID) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION local_service.bk01_restore_services_within_limit(UUID) TO service_role;
 
 -- I.2 Converge a shop onto its plan. Services outside the allowance and staff
@@ -876,13 +976,13 @@ GRANT EXECUTE ON FUNCTION local_service.bk01_restore_services_within_limit(UUID)
 --     the shop is inside its allowance again they are switched back on. Returns
 --     a small report so the effect is observable.
 --
---     This is the function that carries Owner rule 4. Note two properties that
---     matter because this stream cannot revoke PUBLIC's default EXECUTE on a
---     new function (see the header): it is convergence-only — it can only bring
---     a shop TO its plan's allowance and never beyond it, and bk01_restore_
---     services_within_limit re-enables only services inside the allowance — so
---     the worst an unexpected caller can do is nudge a shop onto its own plan,
---     with no data loss and no entitlement gain.
+--     This is the function that carries Owner rule 4, and the only place the
+--     service allowance converges. Properties that matter: it is
+--     convergence-only — it can only bring a shop TO its plan's allowance and
+--     never beyond it; bk01_restore_services_within_limit re-enables only
+--     services the SYSTEM disabled (F-7); and the disable step records its own
+--     reason in `entitlement_disabled`, which is what makes the disable
+--     reversible and the owner's own switch-off untouched.
 CREATE OR REPLACE FUNCTION local_service.bk01_reapply_shop_entitlements(p_shop_id UUID)
 RETURNS JSON
 LANGUAGE plpgsql
@@ -908,8 +1008,13 @@ BEGIN
     v_restored_services := local_service.bk01_restore_services_within_limit(p_shop_id);
 
     -- Services outside the allowance for this month: switched off, not deleted.
+    -- F-7: the reason is recorded (`entitlement_disabled = true`) so the
+    -- automatic restore can tell a system switch-off apart from one the owner
+    -- made on purpose. Only services the shop itself still has on are touched;
+    -- a service the owner already switched off keeps its own reason.
     UPDATE local_service.services AS s
-       SET is_active = false
+       SET is_active = false,
+           entitlement_disabled = true
      WHERE s.shop_id = p_shop_id
        AND s.is_active = true
        AND NOT EXISTS (
@@ -955,10 +1060,59 @@ BEGIN
 END;
 $$;
 
-REVOKE ALL ON FUNCTION local_service.bk01_reapply_shop_entitlements(UUID) FROM anon, authenticated;
+REVOKE ALL ON FUNCTION local_service.bk01_reapply_shop_entitlements(UUID) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION local_service.bk01_reapply_shop_entitlements(UUID) TO service_role;
 
--- I.3 create_service, with the allowance enforced before the row is written.
+-- I.3 F-7 — the ONE convergence entry point for the plan-change path.
+--
+--     Removing the convergence call from create_booking_hold and from
+--     get_entitlement_usage (see J and L) leaves exactly one circumstance in
+--     which a shop should be converged: its plan actually changed, which is the
+--     subscription row changing. This function is that circumstance. The billing
+--     lane calls it from the subscription write (Stripe webhook / trial fallback
+--     / cancellation); it must NOT be called from a customer-facing booking path
+--     and it must NOT be called from a dashboard read.
+--
+--     It is deliberately thin: it authorises nothing and decides nothing by
+--     itself, it converges the shop onto the plan it already has. That keeps one
+--     code path for the plan-change decision (this call site in the billing
+--     lane) and one implementation of the convergence (I.2), and means the anon
+--     booking path never writes local_service.services at all.
+--
+--     Reachable from service_role only: the billing lane runs as the service
+--     role. Revoking PUBLIC's default EXECUTE is what makes that true of the
+--     Data API too (F-6).
+CREATE OR REPLACE FUNCTION local_service.bk01_apply_plan_change(p_shop_id UUID)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, local_service
+AS $$
+DECLARE
+    v_plan TEXT;
+BEGIN
+    IF p_shop_id IS NULL THEN
+        RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'shop_id is required';
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1
+          FROM local_service.shops AS sh
+         WHERE sh.id = p_shop_id
+    ) THEN
+        RAISE EXCEPTION USING ERRCODE = '23503', MESSAGE = 'Shop not found';
+    END IF;
+
+    v_plan := local_service.bk01_shop_effective_plan(p_shop_id);
+
+    RETURN local_service.bk01_reapply_shop_entitlements(p_shop_id);
+END;
+$$;
+
+REVOKE ALL ON FUNCTION local_service.bk01_apply_plan_change(UUID) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION local_service.bk01_apply_plan_change(UUID) TO service_role;
+
+-- I.4 create_service, with the allowance enforced before the row is written.
 --     Identity, authorisation, validation and idempotency behaviour are those of
 --     the frozen definition (20260807175455_phase_e3_1:56-119). The gate runs
 --     after the idempotency lookup so a retry of an already-created service
@@ -1027,10 +1181,17 @@ BEGIN
       INTO v_limit
       FROM local_service.bk01_shop_limits(v_shop_id) AS p;
 
+    -- F-10: the allowance counts only ENABLED services. Counting every row
+    -- meant a Free shop with three services that switched one off could never
+    -- switch it back on: the stale count (3) still reached the limit (3) even
+    -- though only two services were on. A disabled service does not occupy the
+    -- allowance, so it is not counted here. local_service.create_service counts
+    -- enabled services only; a disabled service never occupies the allowance.
     SELECT count(*)
       INTO v_total
       FROM local_service.services
-     WHERE shop_id = v_shop_id;
+     WHERE shop_id = v_shop_id
+       AND is_active = true;
 
     IF v_limit IS NOT NULL AND v_total >= v_limit THEN
         RAISE EXCEPTION USING
@@ -1040,10 +1201,10 @@ BEGIN
 
     INSERT INTO local_service.services (
         shop_id, name, description, duration_minutes, price,
-        deposit_amount, is_active, creation_idempotency_key
+        deposit_amount, is_active, entitlement_disabled, creation_idempotency_key
     ) VALUES (
         v_shop_id, BTRIM(p_name), NULLIF(BTRIM(p_description), ''),
-        p_duration_minutes, p_price, p_deposit_amount, true, p_idempotency_key
+        p_duration_minutes, p_price, p_deposit_amount, true, false, p_idempotency_key
     )
     RETURNING id INTO v_service_id;
 
@@ -1058,13 +1219,25 @@ BEGIN
 END;
 $$;
 
-REVOKE ALL ON FUNCTION local_service.create_service(UUID, TEXT, TEXT, INTEGER, NUMERIC, NUMERIC, UUID) FROM anon, service_role;
+REVOKE ALL ON FUNCTION local_service.create_service(UUID, TEXT, TEXT, INTEGER, NUMERIC, NUMERIC, UUID) FROM PUBLIC, anon, service_role;
 GRANT EXECUTE ON FUNCTION local_service.create_service(UUID, TEXT, TEXT, INTEGER, NUMERIC, NUMERIC, UUID) TO authenticated;
 
--- I.4 set_service_active, with the same gate on the re-activation path.
+-- I.5 set_service_active, with the same gate on the re-activation path.
 --     Identity and authorisation are those of the frozen definition
 --     (20260807175455_phase_e3_1:174-203). Switching a service off is always
 --     allowed, which is what keeps the temporary disable reversible.
+--
+--     Two F-7 properties are carried here, because this is the only function
+--     the OWNER uses to switch a service off:
+--     * switching off records the owner's reason — `entitlement_disabled` is
+--       cleared to false, so the automatic restore (I.1) can tell an owner
+--       switch-off apart from a system switch-off and will never reverse the
+--       owner's own choice;
+--     * switching on clears the system marker as well, so the row is never
+--       left claiming the system disabled a service that is now enabled.
+--     F-10: the gate counts only ENABLED services, so a Free shop that switched
+--     one of its three services off can switch it back on — the off service no
+--     longer occupies the allowance.
 CREATE OR REPLACE FUNCTION local_service.set_service_active(
     p_service_id UUID,
     p_is_active BOOLEAN
@@ -1103,10 +1276,13 @@ BEGIN
           INTO v_limit
           FROM local_service.bk01_shop_limits(v_shop_id) AS p;
 
+        -- F-10: only ENABLED services occupy the allowance. The service being
+        -- switched on is not yet enabled, so it is not counted here.
         SELECT count(*)
           INTO v_total
           FROM local_service.services
-         WHERE shop_id = v_shop_id;
+         WHERE shop_id = v_shop_id
+           AND is_active = true;
 
         IF v_limit IS NOT NULL AND v_total >= v_limit THEN
             RAISE EXCEPTION USING
@@ -1115,8 +1291,13 @@ BEGIN
         END IF;
     END IF;
 
+    -- F-7: the owner's own switch-off clears the system marker, and switching
+    -- on clears it too, so `is_active` and `entitlement_disabled` never
+    -- contradict each other and the automatic restore can never revive a
+    -- service the owner switched off.
     UPDATE local_service.services
-       SET is_active = p_is_active
+       SET is_active = p_is_active,
+           entitlement_disabled = false
      WHERE id = p_service_id;
 
     IF p_is_active THEN
@@ -1136,7 +1317,7 @@ BEGIN
 END;
 $$;
 
-REVOKE ALL ON FUNCTION local_service.set_service_active(UUID, BOOLEAN) FROM anon, service_role;
+REVOKE ALL ON FUNCTION local_service.set_service_active(UUID, BOOLEAN) FROM PUBLIC, anon, service_role;
 GRANT EXECUTE ON FUNCTION local_service.set_service_active(UUID, BOOLEAN) TO authenticated;
 
 -- ============================================================================
@@ -1159,11 +1340,15 @@ GRANT EXECUTE ON FUNCTION local_service.set_service_active(UUID, BOOLEAN) TO aut
 -- behaviour is the same — the customer row's name is refreshed and its email is
 -- only filled in when the caller supplied one.
 --
--- A third change: entitlements are converged for the shop at the top of the
--- call. This is the only timely point at which a shop whose trial has just
--- fallen back is brought onto its free allowance without an owner session, since
--- the policy rules out the trigger on the subscription change that would
--- otherwise make it instantaneous. Convergence is bounded (see I.2).
+-- A third change (F-7): entitlements are NO LONGER converged at the top of this
+-- call. The rejected version converged the shop here, which meant every
+-- customer booking ran the convergence routine and re-enabled every service
+-- that happened to be off — reversing the owner's own switch-off, and writing
+-- local_service.services on an anon path. Convergence now happens only when the
+-- plan actually changes, through the plan-change entry point (I.5), which the
+-- billing lane calls from the subscription write. A service the owner switched
+-- off stays off here, because this path no longer touches the services table at
+-- all.
 --
 -- Everything else — fail-closed staff scheduling, the overlap exclusion, stale
 -- hold expiry, the staff selection heuristic, the returned JSON — is carried
@@ -1214,7 +1399,10 @@ BEGIN
         RAISE EXCEPTION 'Booking date must be today or later';
     END IF;
 
-    PERFORM local_service.bk01_reapply_shop_entitlements(p_shop_id);
+    -- F-7: no entitlement convergence here. This is the customer-facing booking
+    -- path; it must not write local_service.services and must not run the
+    -- automatic restore, which would reverse a service the owner switched off.
+    -- Convergence belongs to the plan-change path only (I.5).
 
     SELECT * INTO v_service
     FROM local_service.services
@@ -1458,7 +1646,7 @@ BEGIN
 END;
 $$;
 
-REVOKE ALL ON FUNCTION local_service.create_booking_hold(UUID, UUID, UUID, VARCHAR, VARCHAR, VARCHAR, DATE, TIME, TEXT) FROM anon, authenticated, service_role;
+REVOKE ALL ON FUNCTION local_service.create_booking_hold(UUID, UUID, UUID, VARCHAR, VARCHAR, VARCHAR, DATE, TIME, TEXT) FROM PUBLIC, anon, authenticated, service_role;
 GRANT EXECUTE ON FUNCTION local_service.create_booking_hold(UUID, UUID, UUID, VARCHAR, VARCHAR, VARCHAR, DATE, TIME, TEXT) TO anon, authenticated, service_role;
 
 -- ============================================================================
@@ -1540,7 +1728,7 @@ BEGIN
 END;
 $$;
 
-REVOKE ALL ON FUNCTION local_service.create_staff(UUID, TEXT, TEXT, UUID) FROM anon, service_role;
+REVOKE ALL ON FUNCTION local_service.create_staff(UUID, TEXT, TEXT, UUID) FROM PUBLIC, anon, service_role;
 GRANT EXECUTE ON FUNCTION local_service.create_staff(UUID, TEXT, TEXT, UUID) TO authenticated;
 
 -- K.2 set_staff_active, with the cap read from the plan row. Switching a staff
@@ -1603,7 +1791,7 @@ BEGIN
 END;
 $$;
 
-REVOKE ALL ON FUNCTION local_service.set_staff_active(UUID, BOOLEAN) FROM anon, service_role;
+REVOKE ALL ON FUNCTION local_service.set_staff_active(UUID, BOOLEAN) FROM PUBLIC, anon, service_role;
 GRANT EXECUTE ON FUNCTION local_service.set_staff_active(UUID, BOOLEAN) TO authenticated;
 
 -- ============================================================================
@@ -1616,8 +1804,13 @@ GRANT EXECUTE ON FUNCTION local_service.set_staff_active(UUID, BOOLEAN) TO authe
 -- ceiling and is reported as null rather than as a large number, so a client
 -- cannot mistake "unlimited" for a huge allowance.
 --
--- The call authorises first and converges the shop second, so an owner loading
--- the dashboard always sees the state their plan implies.
+-- The call authorises first and then READS. F-7: it no longer converges the
+-- shop. The rejected version ran the convergence routine here, so every
+-- dashboard load re-enabled every service that happened to be off — reversing
+-- the owner's own switch-off on a read, and making a read path write
+-- local_service.services. Convergence now happens only on the plan-change path
+-- (the plan-change entry point, I.5), which the billing lane calls.
+-- This function is therefore a pure read of the shop's entitlements.
 CREATE OR REPLACE FUNCTION local_service.get_entitlement_usage(
     p_shop_id UUID
 )
@@ -1632,7 +1825,6 @@ DECLARE
     v_limits RECORD;
     v_used INTEGER;
     v_remaining_main INT;
-    v_entitlement_report JSON;
 BEGIN
     IF auth.uid() IS NULL THEN
         RAISE EXCEPTION USING ERRCODE = '42501', MESSAGE = 'Authentication required';
@@ -1643,8 +1835,6 @@ BEGIN
     END IF;
 
     v_usage := local_service.ensure_entitlement_row(p_shop_id);
-
-    v_entitlement_report := local_service.bk01_reapply_shop_entitlements(p_shop_id);
 
     v_plan := local_service.bk01_shop_effective_plan(p_shop_id);
 
@@ -1677,13 +1867,12 @@ BEGIN
         'promptpay_deposit_allowed', v_limits.promptpay_deposit_allowed,
         'month_key', local_service.bk01_month_key(now()),
         'period_end', v_usage.period_end,
-        'entitlement_report', v_entitlement_report,
         'updated_at', v_usage.updated_at
     );
 END;
 $$;
 
-REVOKE ALL ON FUNCTION local_service.get_entitlement_usage(UUID) FROM anon, service_role;
+REVOKE ALL ON FUNCTION local_service.get_entitlement_usage(UUID) FROM PUBLIC, anon, service_role;
 GRANT EXECUTE ON FUNCTION local_service.get_entitlement_usage(UUID) TO authenticated;
 
 -- ============================================================================
@@ -1741,7 +1930,7 @@ BEGIN
 END;
 $$;
 
-REVOKE ALL ON FUNCTION local_service.apply_trial_promotion() FROM anon, authenticated, service_role;
+REVOKE ALL ON FUNCTION local_service.apply_trial_promotion() FROM PUBLIC, anon, authenticated, service_role;
 
 DROP TRIGGER IF EXISTS trg_apply_trial_promotion ON local_service.subscriptions;
 CREATE TRIGGER trg_apply_trial_promotion
@@ -1969,7 +2158,7 @@ $$;
 
 REVOKE ALL ON FUNCTION local_service.provision_owner_shop(
     TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, UUID
-) FROM anon;
+) FROM PUBLIC, anon;
 
 GRANT EXECUTE ON FUNCTION local_service.provision_owner_shop(
     TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, UUID

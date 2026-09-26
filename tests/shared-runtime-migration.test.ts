@@ -56,3 +56,126 @@ test('product Supabase config is explicitly local-only', () => {
   assert.match(config, /LOCAL DEVELOPMENT ONLY/);
   assert.match(config, /DO NOT run `supabase config push`/);
 });
+
+// ---------------------------------------------------------------------------
+// F-6 — the policy must let a REVOKE name PUBLIC (revoking is not granting)
+// while still rejecting a GRANT to PUBLIC, and must newly reject a created
+// function that carries no REVOKE ALL ON FUNCTION ... FROM PUBLIC.
+// ---------------------------------------------------------------------------
+
+const PROBE = 'local_service.bk01_policy_probe(uuid)';
+
+const probeSql = (lines: string[]) => lines.join('\n');
+
+test('F-6 policy accepts PUBLIC as a grantee inside a REVOKE statement', () => {
+  assert.equal(
+    validateBk01MigrationSql(
+      probeSql([
+        'create or replace function local_service.bk01_policy_probe(p uuid) returns int language sql as $$ select 1 $$;',
+        `revoke all on function ${PROBE} from public;`,
+        `revoke all on function ${PROBE} from public, anon, authenticated;`,
+        `grant execute on function ${PROBE} to service_role;`,
+      ]),
+      'revoke-from-public.sql',
+    ),
+    true,
+  );
+});
+
+test('F-6 policy still rejects a GRANT to PUBLIC', () => {
+  assert.throws(
+    () =>
+      validateBk01MigrationSql(
+        probeSql([
+          'create or replace function local_service.bk01_policy_probe(p uuid) returns int language sql as $$ select 1 $$;',
+          `revoke all on function ${PROBE} from public, anon;`,
+          `grant execute on function ${PROBE} to public;`,
+        ]),
+        'grant-to-public.sql',
+      ),
+    /GRANT to PUBLIC/,
+  );
+  // A GRANT to PUBLIC is rejected even when every role is otherwise allowlisted.
+  assert.throws(
+    () =>
+      validateBk01MigrationSql(
+        `grant execute on function ${PROBE} to public, authenticated;`,
+        'grant-to-public-mixed.sql',
+      ),
+    /GRANT to PUBLIC/,
+  );
+});
+
+test('F-6 policy rejects a created function with no REVOKE from PUBLIC', () => {
+  assert.throws(
+    () =>
+      validateBk01MigrationSql(
+        probeSql([
+          'create or replace function local_service.bk01_policy_probe(p uuid) returns int language sql as $$ select 1 $$;',
+          `revoke all on function ${PROBE} from anon, authenticated;`,
+          `grant execute on function ${PROBE} to service_role;`,
+        ]),
+        'missing-revoke.sql',
+      ),
+    /REVOKE ALL ON FUNCTION/,
+  );
+  // A bare CREATE FUNCTION (no OR REPLACE) gets PUBLIC's default EXECUTE too.
+  assert.throws(
+    () =>
+      validateBk01MigrationSql(
+        probeSql([
+          'create function local_service.bk01_policy_probe(p uuid) returns int language sql as $$ select 1 $$;',
+          `grant execute on function ${PROBE} to service_role;`,
+        ]),
+        'missing-revoke-create.sql',
+      ),
+    /REVOKE ALL ON FUNCTION/,
+  );
+});
+
+test('F-6 policy rejects a SECURITY INVOKER function that lacks its REVOKE', () => {
+  assert.throws(
+    () =>
+      validateBk01MigrationSql(
+        probeSql([
+          'create or replace function local_service.bk01_policy_probe() returns trigger language plpgsql security invoker as $$ begin return new; end $$;',
+          'revoke all on function local_service.bk01_policy_probe() from anon, authenticated;',
+          'grant execute on function local_service.bk01_policy_probe() to authenticated;',
+        ]),
+        'invoker-missing-revoke.sql',
+      ),
+    /REVOKE ALL ON FUNCTION/,
+  );
+});
+
+test('F-6 policy rejects a replaced signature that lacks its own REVOKE', () => {
+  assert.throws(
+    () =>
+      validateBk01MigrationSql(
+        probeSql([
+          'create or replace function local_service.bk01_policy_probe(p uuid) returns int language sql as $$ select 1 $$;',
+          `revoke all on function ${PROBE} from public, anon, authenticated;`,
+          `grant execute on function ${PROBE} to service_role;`,
+          'create or replace function local_service.bk01_policy_probe(p uuid, q text) returns int language sql as $$ select 1 $$;',
+          `grant execute on function local_service.bk01_policy_probe(uuid, text) to service_role;`,
+        ]),
+        'replaced-signature.sql',
+      ),
+    /REVOKE ALL ON FUNCTION/,
+  );
+  // The same file with the second REVOKE present is accepted.
+  assert.equal(
+    validateBk01MigrationSql(
+      probeSql([
+        'create or replace function local_service.bk01_policy_probe(p uuid) returns int language sql as $$ select 1 $$;',
+        `revoke all on function ${PROBE} from public, anon, authenticated;`,
+        `grant execute on function ${PROBE} to service_role;`,
+        'create or replace function local_service.bk01_policy_probe(p uuid, q text) returns int language sql as $$ select 1 $$;',
+        'revoke all on function local_service.bk01_policy_probe(uuid, text) from public, anon, authenticated;',
+        'grant execute on function local_service.bk01_policy_probe(uuid, text) to service_role;',
+      ]),
+      'replaced-signature-fixed.sql',
+    ),
+    true,
+  );
+});
