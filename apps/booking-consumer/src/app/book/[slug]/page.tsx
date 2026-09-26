@@ -15,6 +15,7 @@ import {
   StaffSchedule, ShopHoliday,
 } from '../../../lib/booking-service';
 import { LanguageToggle } from '@/components/language-toggle';
+import { LegalLinks } from '@/components/legal-document';
 import { QRCodeSVG } from 'qrcode.react';
 import { resolveBookingPageState, type BookingPageState } from '../../../lib/booking-state';
 import { resolvePaymentInstruction, preHoldServiceDeposit, isServicePaymentBlocked } from '../../../lib/payment-instruction';
@@ -870,6 +871,10 @@ function BookingRoute({ slug }: { slug: string }) {
         >
           {tc('supportLink')}
         </Link>
+
+        {/* Reachable before any payment step: the documents are linked on every
+            booking step, not only after a deposit is submitted. */}
+        <LegalLinks className="mt-2 text-[11px]" />
       </footer>
     </div>
   );

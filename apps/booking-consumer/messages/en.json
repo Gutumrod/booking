@@ -160,5 +160,148 @@
     "whatToInclude": "When you write to us, please include",
     "includeBookingCode": "your booking code, the shop name and what went wrong.",
     "privacyNote": "Please do not send your password, card numbers or full payment slip images in a support message."
+  },
+  "legal": {
+    "meta": {
+      "navLabel": "Legal",
+      "termsNavLabel": "Terms of Service",
+      "privacyNavLabel": "Privacy Policy",
+      "termsRoute": "/legal/terms",
+      "privacyRoute": "/legal/privacy",
+      "draftBadge": "PRE-LAUNCH DRAFT — NOT FINAL",
+      "draftTitle": "This {document} is not final",
+      "draftBody": "This text is an unreviewed pre-launch draft produced from this product's own repository documentation. It is not legal advice and it is not the contract that will apply at launch. It still requires approval by the Owner of the Service and review by a qualified lawyer.",
+      "draftFooter": "Awaiting approval — Owner of the Service: PENDING. Qualified legal review: PENDING. Do not rely on this text.",
+      "ownerInputLegend": "Items shown as [[OWNER INPUT: ...]] are intentionally blank. The Owner has not supplied these values and this draft does not invent them.",
+      "lastUpdatedLabel": "Draft version and date:",
+      "lastUpdatedValue": "[[OWNER INPUT: effective date and version number of the approved document]]",
+      "back": "Back to the booking portal"
+    },
+    "terms": {
+      "title": "Terms of Service",
+      "subtitle": "Draft — pre-launch",
+      "intro": "These Terms of Service describe the agreement between you and the operator of BK01. BK01 is a booking and deposit-management service for single-location service businesses in Thailand, such as salons, barber shops, beauty and nail shops. A shop publishes a booking page; a customer books a slot and, where the shop requires one, pays a deposit directly to that shop.",
+      "sections": {
+        "whoWeAre": {
+          "h": "1. Who operates the Service",
+          "b": "The Service is operated under the brand \"WSTERA\" and the product name \"BK01\", as documented in this product's own repository. The formal contracting details are not supplied yet, so this draft leaves them blank: [[OWNER INPUT: registered legal entity name of the operator]], [[OWNER INPUT: company registration number of the operator]], [[OWNER INPUT: registered address of the operator]] and [[OWNER INPUT: address for legal notices]].\nBK01 is software that a shop uses to publish a booking page, take bookings and keep deposit evidence. BK01 is not the appointment and it is not the service the shop provides."
+        },
+        "acceptance": {
+          "h": "2. Accepting these Terms",
+          "b": "By using the Service you agree to these Terms. If you use the Service for a shop, you confirm that you are authorised to act for that shop. If you do not agree, do not use the Service.\nBecause this draft has not been approved, the effective date and the version of the final text are not set yet: [[OWNER INPUT: effective date and version number of the approved Terms of Service]]."
+        },
+        "theService": {
+          "h": "3. What the Service does in its current state",
+          "b": "In its current state, as implemented in this repository, BK01 does the following:\n- publishes a public mobile web booking page for a shop; a customer books without installing an app and without creating a customer account;\n- collects the customer's name and Thai mobile phone number in order to create a booking;\n- lets the customer choose a service, a provider or any available provider, a date and an available time slot;\n- when the service requires a deposit, holds the slot for 15 minutes while the customer pays the shop's own PromptPay recipient;\n- lets the customer upload a deposit slip — JPEG, PNG or WebP, up to 5 MB — which is stored privately so the shop can review it;\n- lets the shop accept or reject the submitted slip; automatic slip verification is a Pro capability that is not available until it is released;\n- sends the booking confirmation and at least one pre-appointment reminder through LINE, and records whether delivery succeeded or failed;\n- lets the customer cancel or reschedule through a private booking link while the shop's policy window is open;\n- lets the shop mark a booking completed or no-show, and cancel with a reason.\nThe product documentation also describes target capabilities that are not implemented yet. The public pages show what is actually shipped, not what is planned."
+        },
+        "merchantRelationship": {
+          "h": "4. Your relationship with the shop",
+          "b": "The shop is responsible for the appointment, the service, the price, the deposit amount, and the shop's own cancellation, reschedule and refund policy.\nThe customer pays the deposit directly to the shop's own PromptPay recipient. BK01 does not hold, receive, escrow or control money belonging to shops, and a deposit paid to a shop is not a payment to WSTERA.\nA deposit refund is a shop decision and a shop operation unless a future payment integration explicitly automates it. BK01 does not claim that deposits are refunded automatically.\nThe default policy wording for deposits, refunds, cancellation and rescheduling that is published to customers must come from the Owner: [[OWNER INPUT: approved default merchant deposit, refund and cancellation policy wording to publish]]."
+        },
+        "accounts": {
+          "h": "5. Shop accounts",
+          "b": "Users of the shop side authenticate through the Service's identity provider. Under the current contract one owner may provision one shop per account. You are responsible for the accuracy of the shop details you publish, for keeping your account credentials secure, and for the people you invite into your shop.\nRoles are owner, admin and staff, with the access limits set out in the product contract. A staff account sees only its own operational schedule and its own bookings."
+        },
+        "bookingAndDeposits": {
+          "h": "6. Bookings, holds and deposit evidence",
+          "b": "A booking is created only when the requested time is available under the shop's published schedule and does not overlap an existing active booking. Availability is recalculated on the server when the booking is created; the display in the browser is advisory only.\nA booking that requires a deposit is held for 15 minutes. If the deposit is not submitted within that window, the hold expires and the time is released.\nA deposit slip is uploaded to private storage. It is not published at a permanent public address; it is readable only through authorised access, so that the shop can review that specific booking.\nIf automatic slip verification is used, it can confirm a deposit only on a positive result tied to the expected amount, merchant and transaction identity. An unknown, timed-out or ambiguous result stays in manual review and is never confirmed automatically. A duplicate transaction reference is rejected or escalated and never confirms two bookings."
+        },
+        "subscriptionAndBilling": {
+          "h": "7. Shop subscription and billing",
+          "b": "Shop subscriptions are billed monthly through Stripe. Annual billing is not offered.\nThe trial starts when a shop is provisioned and runs for 14 days, with an evaluation capacity of 50 bookings and at most 5 active providers. The trial does not convert into a paid plan unless a Stripe checkout or subscription event completes.\nBasic and Pro prices are not final. The figures ฿490 per month for Basic and ฿990 per month for Pro are pilot reference points only and are not approved public prices: [[OWNER INPUT: approved final public monthly price for Basic]], [[OWNER INPUT: approved final public monthly price for Pro]].\nA paid plan does not stop a normal shop at 100 or 500 bookings per month; a fair-use guard may be applied for abuse or platform protection. Basic and Pro allow at most 5 and at most 10 active providers respectively.\nBasic uses manual deposit verification. Pro automatic slip verification is required before Pro is sold publicly, and its monthly allowance and any top-up price are not set yet: [[OWNER INPUT: approved Pro automatic slip-verification monthly allowance and top-up price]].\nThe WSTERA central LINE account is the standard notification path for Trial, Basic and Pro. A shop-owned LINE account is an optional managed add-on; the shop remains responsible for its own LINE account and message costs, and the add-on price is not set yet: [[OWNER INPUT: approved shop-owned LINE OA managed add-on price]].\nWhether the published subscription price includes Thai VAT is not decided: [[OWNER INPUT: VAT treatment of the subscription price]].\nWhether a paid subscription fee is refundable is not decided: [[OWNER INPUT: approved subscription fee refund policy]].\nAn upgrade takes effect only from the authoritative Stripe subscription state, never from a choice made in the interface alone. A downgrade does not delete historical records; capabilities above the new entitlement become impossible to create and impossible to reactivate. A cancellation scheduled for the end of a period keeps the paid entitlement until that period ends; after it ends, new online bookings are blocked while historical data remains available according to the account retention policy."
+        },
+        "cancellationPolicy": {
+          "h": "8. Cancellation and rescheduling by the customer",
+          "b": "A customer can cancel or reschedule through the private booking link while the shop's configured window is open, and must give a reason. The Service enforces the shop's window on the server; if a change fails, the original booking is not altered. A booking released by cancellation frees the time slot.\nThe published default windows are the shop's own policy: [[OWNER INPUT: approved default cancellation window and reschedule window to publish]]."
+        },
+        "availability": {
+          "h": "9. Availability and changes to the Service",
+          "b": "The Service runs on Cloudflare Workers with Supabase and Stripe. It may be unavailable while maintenance or a provider incident is resolved. This draft promises no uptime level: [[OWNER INPUT: approved availability commitment, if any]].\nThese Terms may change. Any material change must be communicated to shop users before it takes effect: [[OWNER INPUT: approved notice period and method for changes to these Terms]]."
+        },
+        "acceptableUse": {
+          "h": "10. Acceptable use",
+          "b": "Do not use the Service to break the law; to upload content you have no right to upload; to try to reach data belonging to another shop; to interfere with or overload the Service; or to submit false deposit evidence. A deposit slip is financial evidence, and submitting a slip that does not correspond to a real payment is misuse of the Service."
+        },
+        "intellectualProperty": {
+          "h": "11. Intellectual property",
+          "b": "The Service software, its interfaces and its documentation belong to the operator or its licensors. Shop content — such as the shop name, service list, prices, provider list and images — belongs to the shop. The shop grants the operator the limited right to display that content on the shop's public booking page and to operate and support the Service."
+        },
+        "liability": {
+          "h": "12. Liability",
+          "b": "The Service is software that records bookings and deposit evidence. It does not guarantee that a customer attends, that a customer pays, or that a shop earns revenue. No absolute outcome claim is made, including any guaranteed no-show rate.\nThe operator is not responsible for the quality of the shop's service, for the shop's deposit or refund decisions, or for LINE message delivery failures, which never change booking state.\nThe liability cap and the exclusions that apply must be set by a qualified lawyer together with the Owner: [[OWNER INPUT: approved liability cap and liability exclusions]]."
+        },
+        "governingLaw": {
+          "h": "13. Governing law and disputes",
+          "b": "This draft intends these Terms to be governed by the law of Thailand and to be enforced in the courts of Thailand, but no dispute-resolution process has been approved yet: [[OWNER INPUT: approved governing law, jurisdiction and dispute-resolution process]]."
+        },
+        "contact": {
+          "h": "14. Contact",
+          "b": "Questions about these Terms are handled through the support channel published to customers and shops: [[OWNER INPUT: support contact channel shown to customers and merchants]], with published hours of [[OWNER INPUT: published support hours]].\nThis draft states no support e-mail address and no response-time promise, because the Owner has not supplied them."
+        }
+      }
+    },
+    "privacy": {
+      "title": "Privacy Policy",
+      "subtitle": "Draft — pre-launch",
+      "intro": "This Privacy Policy describes what personal data BK01 holds, why it holds it, who else is involved, and what rights a person has under the Thai Personal Data Protection Act (PDPA). It is written from the documentation in this product's own repository and is limited to what the Service actually does in its current state.",
+      "sections": {
+        "controllerAndRoles": {
+          "h": "1. Who is responsible for this personal data",
+          "b": "BK01 is software used by shops. Two parties handle personal data: the shop that receives the booking, and WSTERA, which operates the platform.\nThe situation recorded in this repository is that booking-customer data — name, mobile phone number, LINE binding and booking history — belongs to one shop and can be read by that shop's owner and admin roles; shop and staff account data is used to authenticate users and operate the shop; and subscription and billing identifiers are held at Stripe.\nThe formal allocation of PDPA roles, controller or processor, between WSTERA and the shop, for shop-owner data, staff data and booking-customer data, has not been approved and must be confirmed by qualified legal review: [[OWNER INPUT: approved PDPA role allocation between WSTERA and the merchant for shop-owner, staff and booking-customer personal data]]."
+        },
+        "whatWeHold": {
+          "h": "2. Personal data the Service holds",
+          "b": "The Service holds the following categories of personal data:\n- shop account: the login e-mail and authentication data handled by the identity provider; shop name, link slug, business category, phone number, address, PromptPay recipient number, PromptPay account name and LINE official account identifier;\n- providers and staff: name, nickname, phone number, weekly working hours, breaks and time off;\n- booking customer: name and Thai mobile phone number, the chosen service, the provider, the date, the time, the booking status, and any cancellation or reschedule reason; a customer has no account and no password, because public booking is anonymous by design;\n- deposit evidence: the deposit amount, the deposit status, and the uploaded slip image kept in private storage;\n- notifications: the LINE account binding for a booking, the notification event type, and the delivery success or failure result;\n- operations: support ticket content, audit events recording who acted, on what and when, and security logs.\nThe booking page asks a customer for a name and a mobile phone number only. It does not ask for an e-mail address, an identity document or a card number. A deposit is paid by PromptPay from the customer to the shop, so the bank-side PromptPay transaction records are held by the banks of the customer and the shop, not by BK01."
+        },
+        "purposes": {
+          "h": "3. Why the Service processes this data",
+          "b": "Each item below is a purpose for which the Service currently processes personal data:\n- creating a booking and honouring it, and preventing two bookings from occupying the same provider and time;\n- letting the shop verify that a deposit was paid before the appointment is treated as confirmed;\n- sending the confirmation and the pre-appointment reminder through LINE;\n- authenticating shop users and limiting what each role can see and change;\n- charging the shop for its subscription and keeping billing records consistent with Stripe;\n- handling support requests about a booking, a shop or an account;\n- keeping an audit trail of booking, deposit, entitlement and privileged-operator actions;\n- protecting the Service against abuse, overload, duplicate deposit evidence and security incidents.\nThe Service does not use booking-customer data for advertising and does not sell personal data."
+        },
+        "lawfulBasis": {
+          "h": "4. Lawful basis",
+          "b": "The Service must have a lawful basis for each purpose above. Consent is used only where it is legally and operationally appropriate; it is not treated as a substitute for analysing the lawful basis of a purpose.\nThe lawful basis for each purpose has not been approved and must be reviewed by a qualified lawyer: [[OWNER INPUT: approved lawful basis for each processing purpose]]."
+        },
+        "cookies": {
+          "h": "5. Cookies and similar storage",
+          "b": "As of this draft, the public customer booking pages in this repository store the customer's language choice in the cookie named saas_locale and in local storage under the same name, so that the page remembers whether Thai or English was chosen. No third-party analytics, advertising or tracking script was found in the public customer application in this repository.\nIf non-essential analytics, advertising cookies or similar identifiers are introduced later, the consent and notice requirements are to be reviewed before they are enabled.\nThe shop-facing application may store the signed-in session in the browser. That session storage is required for authentication and is listed here as a functional storage item."
+        },
+        "subprocessors": {
+          "h": "6. Subprocessors and external parties",
+          "b": "The Service relies on the following external parties. The list matches the dependency inventory in the product documentation:\n- Supabase — authentication, the Postgres database and the private object storage that holds deposit slips. Data categories: shop account data, provider and staff data, booking-customer data, deposit slips, audit and support records.\n- Cloudflare — the runtime that serves the public booking application and the shop application. Data categories: the request and security data needed to serve the pages.\n- Stripe — monthly shop subscription billing, payment method handling, invoices and subscription state. Data categories: shop billing identity and subscription identifiers.\n- LINE, operated by LY Corporation — delivery of confirmation and reminder messages, and the binding between a booking and a LINE account. Data categories: the LINE user binding and the message content.\n- Supabase Auth e-mail delivery path — verification and password-recovery messages for shop users. Data categories: the shop user's e-mail address.\n- Automatic slip-verification provider — not selected yet. Pro automatic verification is required before Pro is sold publicly: [[OWNER INPUT: automatic slip-verification provider name and processing details]].\nThe processing location of each party, and the person who owns the vendor privacy and security review, are not confirmed in this draft: [[OWNER INPUT: confirmed data location or region for each subprocessor]], [[OWNER INPUT: named owner of vendor privacy and security review]]. The contractual terms with each party must be recorded before public launch."
+        },
+        "crossBorder": {
+          "h": "7. Transfer and location of data",
+          "b": "Some of the parties above may process data outside Thailand. The cross-border transfer implications of each provider, and whether any transfer mechanism is required, have not been reviewed: [[OWNER INPUT: approved cross-border transfer assessment and any required transfer mechanism]]."
+        },
+        "retention": {
+          "h": "8. How long data is kept",
+          "b": "The Service does not yet have approved retention periods. The exact durations are a launch blocker and must be decided by the Owner together with qualified legal review. The classes below are exactly the classes that the legal and privacy checklist requires a decision for:\n- customer and booking records: [[OWNER INPUT: retention period for customer and booking records]];\n- deposit-slip images: [[OWNER INPUT: retention period for deposit-slip images]];\n- LINE notification and binding logs: [[OWNER INPUT: retention period for LINE notification and binding logs]];\n- authentication and account data: [[OWNER INPUT: retention period for authentication and account data]];\n- Stripe and billing records: [[OWNER INPUT: retention period for Stripe and billing records]];\n- support tickets and attachments: [[OWNER INPUT: retention period for support tickets and attachments]];\n- security and audit logs: [[OWNER INPUT: retention period for security and audit logs]];\n- backups after account closure: [[OWNER INPUT: retention period for backups after account closure]].\nEngineering documentation cannot determine these periods, so this draft states no number."
+        },
+        "dataSubjectRights": {
+          "h": "9. Your PDPA rights and how to use them",
+          "b": "Under the Thai Personal Data Protection Act (PDPA) you have the right to access and obtain a copy of your personal data, to request correction, to request deletion, to request restriction of processing, to object to processing, to withdraw consent where consent is the basis, and to complain to the Office of the Personal Data Protection Committee.\nA request is handled by verifying the requester and the scope of the request, then classifying the records into what can be removed, what can be anonymised and what must be retained for legal, accounting or security reasons, then executing the approved procedure and recording the outcome and any exception.\nBecause no retention, role or lawful-basis decision has been approved yet, this draft promises no response deadline: [[OWNER INPUT: approved identity-verification steps and response deadline for data-subject requests]], [[OWNER INPUT: privacy request channel for customers, staff and merchants]]."
+        },
+        "security": {
+          "h": "10. How the data is protected",
+          "b": "The Service is built so that private data is reachable only by an authorised shop membership and role: private tables are protected by row level security, and server-side functions with elevated privilege verify the shop and the role before they act. Public booking pages can read only the fields needed to display a shop and calculate availability.\nDeposit slips are held in a private bucket, uploaded through a per-booking signed upload authorisation, and downloaded only through authorised access so that the shop can review them. Permanent public links are not used.\nStripe keys, database service-role keys and LINE channel secrets stay on the server. They are never placed in client code or in shop-visible settings.\nBooking, deposit, reschedule, cancellation, entitlement and privileged-operator actions are recorded in an audit trail identifying who acted, on what and when."
+        },
+        "breach": {
+          "h": "11. If there is a data breach",
+          "b": "The product has an incident runbook and a separate support and escalation path for security and privacy incidents. Whether, when and how affected people, the shop, or a regulator must be notified is a legal determination and has not been approved: [[OWNER INPUT: approved breach notification duties and timelines]]."
+        },
+        "age": {
+          "h": "12. Age of users",
+          "b": "Public booking is designed to be used by a person arranging their own appointment or an appointment for someone they accompany. No minimum age statement has been approved: [[OWNER INPUT: approved minimum age statement for the Service]]."
+        },
+        "changes": {
+          "h": "13. Changes to this privacy notice",
+          "b": "This notice will change as the Service changes and as the Owner makes the decisions listed above. Any material change must be communicated to shop users before it takes effect, and the effective date and version must be recorded: [[OWNER INPUT: approved notice period and method for changes to this Privacy Policy]], [[OWNER INPUT: effective date and version number of the approved Privacy Policy]]."
+        },
+        "contact": {
+          "h": "14. Contact for privacy requests",
+          "b": "Privacy requests and questions about this notice are handled through: [[OWNER INPUT: privacy request channel for customers, staff and merchants]], with published hours of [[OWNER INPUT: published support hours]].\nThis draft states no e-mail address and no response deadline, because the Owner has not supplied them."
+        }
+      }
+    }
   }
 }
