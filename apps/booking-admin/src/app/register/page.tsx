@@ -3,16 +3,22 @@
 import { useRouter, useSearchParams } from 'next/navigation';
 import React, { useState, useEffect, useRef, useCallback, Suspense } from 'react';
 import Link from 'next/link';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { createClient } from '@/lib/supabase/client';
 import { LanguageToggle } from '@/components/language-toggle';
 import {
-  listBusinessTypes,
-  getBusinessType,
   summarizeOpeningHours,
-  type BusinessTypeId,
   buildSignupIntent,
+  findBusinessPattern,
 } from '@/lib/business-type-catalogue';
+import {
+  BUSINESS_TYPE_VIEW_QUALIFIED,
+  businessTypeLabel,
+  findBusinessType,
+  loadBusinessTypes,
+  type BusinessTypeListItem,
+  type BusinessTypeListStatus,
+} from '@/lib/business-type-view';
 import { 
   Store, Mail, Sparkles, ArrowRight, ArrowLeft, QrCode, CreditCard,
   ShieldCheck, Building, CheckCircle2, Globe, Scissors
@@ -31,12 +37,19 @@ interface PendingRegistration {
   promptpayNumber: string;
   promptpayName: string;
   idempotencyKey: string;
-  // WU-A3: recorded for later analysis, so the shop's type, starter pattern and
-  // plan are known together. Applied client-side only; persisting the pattern in
-  // the database is server/SQL work that is NOT APPLIED.
-  businessType: BusinessTypeId;
-  businessTypeKey: string;
-  patternId: string;
+  // WU-A3 + WUD-UI-TYPES: recorded for later analysis, so the shop's type, starter
+  // pattern and plan are known together. The type fields are the values the database
+  // view returned for the chosen code, together with the surface they came from.
+  // Applied client-side only; persisting the pattern in the database is server/SQL
+  // work that is NOT APPLIED.
+  businessType: string;
+  businessTypeLabel: string;
+  businessTypeEmoji: string;
+  businessTypeDisplayOrder: number;
+  businessTypeSource: string;
+  patternMessageKey: string | null;
+  patternSource: 'bundled-starter-pattern' | 'none';
+  patternId: string | null;
   patternVersion: number;
   patternServiceCount: number;
   patternTotalDurationMinutes: number;
@@ -48,17 +61,26 @@ function RegisterFormContent() {
   const t = useTranslations('auth');
   const tCommon = useTranslations('common');
   const tBusinessType = useTranslations('businessType');
+  const locale = useLocale();
   const suggestedCategories = t.raw('suggestedCategories') as string[];
   const dayNames = tCommon.raw('dayNames') as string[];
-  const businessTypes = listBusinessTypes();
   const router = useRouter();
   const searchParams = useSearchParams();
   const planParam = searchParams.get('plan');
 
   const [currentStep, setCurrentStep] = useState<number>(1);
 
-  // Step 1: Business type (WU-A3) — asked before the rest of the flow.
-  const [businessType, setBusinessType] = useState<BusinessTypeId | ''>('');
+  // WUD-UI-TYPES: the type list is NOT embedded in this page. It is read from the
+  // view `local_service.app_business_types` (see lib/business-type-view.ts), so the
+  // database owns the codes and the signup cannot drift from them. `loading` and
+  // `unavailable` are kept apart from `empty` so the step can say which happened.
+  const [businessTypes, setBusinessTypes] = useState<readonly BusinessTypeListItem[]>([]);
+  const [businessTypeStatus, setBusinessTypeStatus] =
+    useState<BusinessTypeListStatus | 'loading'>('loading');
+
+  // Step 1: Business type (WU-A3) — asked before the rest of the flow. The value is
+  // the code the database returned; no code is written into this page.
+  const [businessType, setBusinessType] = useState<string>('');
 
   // Step 2: Shop & Owner Info
   const [shopName, setShopName] = useState('');
@@ -80,22 +102,49 @@ function RegisterFormContent() {
   const [promptpayNumber, setPromptpayNumber] = useState('');
   const [promptpayName, setPromptpayName] = useState('');
 
-  // The starter pattern for the chosen type, shown before signup and then applied.
-  const selectedBusinessType = getBusinessType(businessType);
-  const patternHoursLines = selectedBusinessType
-    ? summarizeOpeningHours(selectedBusinessType.pattern, {
+  // The row the database returned for the chosen code (null if it is not in the list).
+  const selectedBusinessType = findBusinessType(businessTypes, businessType);
+  // The starter pattern is the app's bundled mapping for that code. A database code
+  // with no bundled pattern yields null, and the step says so instead of inventing one.
+  const selectedPattern = selectedBusinessType
+    ? findBusinessPattern(selectedBusinessType.typeCode)
+    : null;
+  const selectedBusinessTypeLabel = selectedBusinessType
+    ? businessTypeLabel(selectedBusinessType, locale)
+    : '';
+  const patternHoursLines = selectedPattern
+    ? summarizeOpeningHours(selectedPattern.pattern, {
       dayNames,
       closedLabel: tBusinessType('closedDay'),
     })
     : [];
 
-  const selectBusinessType = (typeId: BusinessTypeId) => {
-    setBusinessType(typeId);
-    const definition = getBusinessType(typeId);
-    if (definition) {
-      // Prefill the free-text category from the chosen type; still editable.
-      setBusinessCategory(tBusinessType(`${definition.messageKey}.label`));
-    }
+  // Reads the type list from the database view once, on mount. The client is created
+  // here — the same `createClient()` the rest of this page uses — and passed into the
+  // reader, which cannot import it itself (see lib/business-type-view.ts). The list is
+  // shown only when the read succeeded; `empty` and `unavailable` render the explanatory
+  // state below instead of a list, and no embedded list is used as a fallback.
+  useEffect(() => {
+    let isCurrent = true;
+
+    const loadTypes = async () => {
+      const result = await loadBusinessTypes(createClient());
+      if (!isCurrent) return;
+      setBusinessTypes(result.types);
+      setBusinessTypeStatus(result.status);
+    };
+
+    void loadTypes();
+
+    return () => {
+      isCurrent = false;
+    };
+  }, []);
+
+  const selectBusinessType = (type: BusinessTypeListItem) => {
+    setBusinessType(type.typeCode);
+    // Prefill the free-text category from the chosen type's database label; still editable.
+    setBusinessCategory(businessTypeLabel(type, locale));
   };
 
   // UI state
@@ -210,7 +259,19 @@ function RegisterFormContent() {
   const handleFinalSubmit = async () => {
     setErrorMessage('');
 
-    const intent = buildSignupIntent({ businessType, selectedPlan });
+    // The type row must be one the database view returned. Nothing is submitted for
+    // a code the list did not contain.
+    if (!selectedBusinessType) {
+      setErrorMessage(t('businessTypeRequired'));
+      return;
+    }
+
+    const intent = buildSignupIntent({
+      type: selectedBusinessType,
+      label: selectedBusinessTypeLabel,
+      source: BUSINESS_TYPE_VIEW_QUALIFIED,
+      selectedPlan,
+    });
     if (!intent) {
       setErrorMessage(t('businessTypeRequired'));
       return;
@@ -230,7 +291,12 @@ function RegisterFormContent() {
       promptpayName: promptpayName.trim(),
       idempotencyKey: crypto.randomUUID(),
       businessType: intent.pattern.business_type,
-      businessTypeKey: intent.pattern.business_type_key,
+      businessTypeLabel: intent.pattern.business_type_label,
+      businessTypeEmoji: intent.pattern.business_type_emoji,
+      businessTypeDisplayOrder: intent.pattern.business_type_display_order,
+      businessTypeSource: intent.pattern.business_type_source,
+      patternMessageKey: selectedPattern?.messageKey ?? null,
+      patternSource: intent.pattern.pattern_source,
       patternId: intent.pattern.pattern_id,
       patternVersion: intent.pattern.pattern_version,
       patternServiceCount: intent.pattern.pattern_service_count,
@@ -351,42 +417,71 @@ function RegisterFormContent() {
 
                   <p className="text-[11px] text-slate-400">{t('businessTypeSelectHint')}</p>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {businessTypes.map((type) => {
-                      const isSelected = businessType === type.id;
-                      return (
-                        <button
-                          key={type.id}
-                          type="button"
-                          aria-pressed={isSelected}
-                          onClick={() => selectBusinessType(type.id)}
-                          className={`text-left rounded-2xl p-4 border transition-all space-y-1.5 ${
-                            isSelected
-                              ? 'bg-slate-900 border-2 border-emerald-500 shadow-lg shadow-emerald-950/40'
-                              : 'bg-slate-950 border-slate-800 hover:border-slate-700'
-                          }`}
-                        >
-                          <span className="flex items-center justify-between gap-2">
-                            <span className="font-bold text-sm text-white">
-                              {tBusinessType(`${type.messageKey}.label`)}
-                            </span>
-                            {isSelected && (
-                              <span className="text-[10px] font-bold text-emerald-400 flex items-center gap-1">
-                                <CheckCircle2 className="w-3.5 h-3.5" />
-                                {t('businessTypeSelectedBadge')}
+                  {/* WUD-UI-TYPES: the options are the rows the database view returned.
+                      Nothing is rendered from an embedded list. */}
+                  {businessTypes.length > 0 && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {businessTypes.map((type) => {
+                        const isSelected = businessType === type.typeCode;
+                        const pattern = findBusinessPattern(type.typeCode);
+                        return (
+                          <button
+                            key={type.typeCode}
+                            type="button"
+                            aria-pressed={isSelected}
+                            onClick={() => selectBusinessType(type)}
+                            className={`text-left rounded-2xl p-4 border transition-all space-y-1.5 ${
+                              isSelected
+                                ? 'bg-slate-900 border-2 border-emerald-500 shadow-lg shadow-emerald-950/40'
+                                : 'bg-slate-950 border-slate-800 hover:border-slate-700'
+                            }`}
+                          >
+                            <span className="flex items-center justify-between gap-2">
+                              <span className="font-bold text-sm text-white">
+                                <span aria-hidden="true" className="mr-1.5">{type.emoji}</span>
+                                {businessTypeLabel(type, locale)}
                               </span>
-                            )}
-                          </span>
-                          <span className="block text-[11px] text-slate-400">
-                            {tBusinessType(`${type.messageKey}.description`)}
-                          </span>
-                          <span className="block text-[10px] text-slate-500 font-mono">
-                            {type.pattern.services.length} {t('businessTypePatternServicesTitle')}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
+                              {isSelected && (
+                                <span className="text-[10px] font-bold text-emerald-400 flex items-center gap-1">
+                                  <CheckCircle2 className="w-3.5 h-3.5" />
+                                  {t('businessTypeSelectedBadge')}
+                                </span>
+                              )}
+                            </span>
+                            {/* Pattern preview copy exists only for codes the app
+                                bundles a pattern for; a code without one says so. */}
+                            <span className="block text-[11px] text-slate-400">
+                              {pattern
+                                ? tBusinessType(`${pattern.messageKey}.description`)
+                                : t('businessTypePatternUnavailable')}
+                            </span>
+                            <span className="block text-[10px] text-slate-500 font-mono">
+                              {pattern
+                                ? `${pattern.pattern.services.length} ${t('businessTypePatternServicesTitle')}`
+                                : type.typeCode}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Honest states: the list could not be shown, and no list is invented. */}
+                  {businessTypeStatus === 'loading' && (
+                    <p role="status" className="rounded-xl border border-slate-800 bg-slate-950 p-3 text-xs text-slate-400">
+                      {t('businessTypeLoading')}
+                    </p>
+                  )}
+                  {businessTypeStatus === 'empty' && (
+                    <p role="status" className="rounded-xl border border-slate-800 bg-slate-950 p-3 text-xs text-slate-400">
+                      {t('businessTypeEmpty')}
+                    </p>
+                  )}
+                  {businessTypeStatus === 'unavailable' && (
+                    <p role="status" className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-300">
+                      {t('businessTypeUnavailable')}
+                    </p>
+                  )}
 
                   {/* Pattern preview: exactly what signup will prefill, still editable */}
                   {selectedBusinessType && (
@@ -394,38 +489,47 @@ function RegisterFormContent() {
                       <p className="font-bold text-emerald-400 text-xs flex items-center gap-1.5">
                         <Sparkles className="w-4 h-4 text-emerald-400" />
                         {t('businessTypePatternPreviewTitle', {
-                          type: tBusinessType(`${selectedBusinessType.messageKey}.label`),
+                          type: selectedBusinessTypeLabel || selectedBusinessType.typeCode,
                         })}
                       </p>
 
-                      <div>
-                        <p className="text-[11px] font-semibold text-slate-300">
-                          {t('businessTypePatternServicesTitle')}
-                        </p>
-                        <ul className="text-[11px] text-slate-300 space-y-1 pt-1">
-                          {selectedBusinessType.pattern.services.map((service) => (
-                            <li key={service.key} className="flex items-center justify-between gap-3">
-                              <span>{tBusinessType(`${selectedBusinessType.messageKey}.services.${service.key}`)}</span>
-                              <span className="font-mono text-amber-400">{service.durationMinutes} min</span>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
+                      {selectedPattern ? (
+                        <>
+                          <div>
+                            <p className="text-[11px] font-semibold text-slate-300">
+                              {t('businessTypePatternServicesTitle')}
+                            </p>
+                            <ul className="text-[11px] text-slate-300 space-y-1 pt-1">
+                              {selectedPattern.pattern.services.map((service) => (
+                                <li key={service.key} className="flex items-center justify-between gap-3">
+                                  <span>{tBusinessType(`${selectedPattern.messageKey}.services.${service.key}`)}</span>
+                                  <span className="font-mono text-amber-400">{service.durationMinutes} min</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
 
-                      <div>
-                        <p className="text-[11px] font-semibold text-slate-300">
-                          {t('businessTypePatternHoursTitle')}
-                        </p>
-                        <ul className="text-[11px] text-slate-400 pt-1 space-y-0.5 font-mono">
-                          {patternHoursLines.map((line) => (
-                            <li key={line}>{line}</li>
-                          ))}
-                        </ul>
-                      </div>
+                          <div>
+                            <p className="text-[11px] font-semibold text-slate-300">
+                              {t('businessTypePatternHoursTitle')}
+                            </p>
+                            <ul className="text-[11px] text-slate-400 pt-1 space-y-0.5 font-mono">
+                              {patternHoursLines.map((line) => (
+                                <li key={line}>{line}</li>
+                              ))}
+                            </ul>
+                          </div>
 
-                      <p className="text-[10px] text-slate-400">{t('businessTypePatternEditableNote')}</p>
+                          <p className="text-[10px] text-slate-400">{t('businessTypePatternEditableNote')}</p>
+                        </>
+                      ) : (
+                        <p className="text-[11px] text-slate-400">{t('businessTypePatternUnavailable')}</p>
+                      )}
                     </div>
                   )}
+
+                  {/* Where the list comes from, stated on the screen. */}
+                  <p className="text-[10px] text-slate-500">{t('businessTypeSourceNote')}</p>
                 </div>
               )}
 
