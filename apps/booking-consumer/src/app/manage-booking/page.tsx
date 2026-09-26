@@ -1,6 +1,7 @@
 'use client';
 
 import { Suspense, useState } from 'react';
+import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 
@@ -9,6 +10,7 @@ import { supabase } from '@/lib/supabase';
 
 function ManageBookingForm() {
   const t = useTranslations('manageBooking');
+  const tc = useTranslations('common');
   const params = useSearchParams();
   const bookingId = params.get('bookingId') ?? '';
   const token = params.get('token') ?? '';
@@ -50,6 +52,9 @@ function ManageBookingForm() {
         <button disabled={busy || !reason.trim() || !date || !time} onClick={reschedule} className="rounded-xl bg-emerald-500 p-3 font-semibold text-slate-950 disabled:opacity-40">{t('reschedule')}</button>
       </div>
       {message && <p className="rounded-xl border border-slate-700 bg-slate-900 p-3 text-sm">{message}</p>}
+      <Link href="/support" data-testid="support-entry-link" className="inline-block text-xs text-slate-400 underline hover:text-emerald-400">
+        {tc('supportLink')}
+      </Link>
     </main>
   );
 }

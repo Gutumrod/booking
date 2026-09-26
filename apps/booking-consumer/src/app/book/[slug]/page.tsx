@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
+import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { 
@@ -860,8 +861,15 @@ function BookingRoute({ slug }: { slug: string }) {
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-slate-900 py-3 px-4 text-center text-[11px] text-slate-600">
-        {t('footer', { brand: tc('brandName') })}
+      <footer className="border-t border-slate-900 py-3 px-4 text-center text-[11px] text-slate-600 space-y-1.5">
+        <p>{t('footer', { brand: tc('brandName') })}</p>
+        <Link
+          href="/support"
+          data-testid="support-entry-link"
+          className="inline-block text-slate-400 underline hover:text-emerald-400"
+        >
+          {tc('supportLink')}
+        </Link>
       </footer>
     </div>
   );
