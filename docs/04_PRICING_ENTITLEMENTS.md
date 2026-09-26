@@ -5,6 +5,9 @@
 2026-08-28 provisional pilot price points for the BK01 plans named below.
 **Public paid launch:** BLOCKED until the BK-A feature gates and the remaining
 entitlements listed as PENDING below are approved.
+**Database enforcement of the limits below:** **NOT APPLIED** — the limits are evaluated in
+TypeScript only today; the migration that enforces them in the database is written and
+BLOCKED on Lane B. See `docs/house-swarm-1/WUC-UI-TRUTH.md`.
 
 ## Source of the numbers in this document
 Every price and limit marked *(A-2)* below is taken verbatim from the Owner's
@@ -47,7 +50,9 @@ Notes on the table:
 - Registration UI must not imply an annual discount that checkout cannot fulfill.
 
 ## Booking fair use
-Free is a hard, approved wall: a Free shop takes 50 bookings per calendar month *(A-2)*.
+Free is a hard, approved wall **in the contract**: a Free shop is meant to take 50 bookings per
+calendar month *(A-2)*. The database does not implement that today (it caps a lifetime 50 with no
+monthly reset), so the wall is intended, not live.
 For Basic, "effectively unlimited" means BK01 does not stop a normal primary-ICP merchant
 at 50, 100 or 500 bookings. A high operational ceiling/rate guard may be enforced for abuse,
 runaway automation or platform protection, but it must not be marketed as a normal paid quota
@@ -82,11 +87,29 @@ and must be documented before enforcement.
 - Exact monthly Pro allowance and top-up price are `PENDING COST EVIDENCE`; they cannot be
   marketed until provider unit cost and failure policy are documented.
 
+## Current enforcement status (read with every table above)
+The limits in this document are the **intended contract**, approved by the Owner. They are
+**not yet what the database enforces**. As of review round 2 (finding F-1) the database:
+- caps `basic_490` at **100** bookings per month (the retired wall — contradicts "no ceiling"),
+- caps `free_trial` at **50 bookings for the whole lifetime**, with no monthly reset,
+- has **no shop limit and no service limit** at all, and
+- still defaults the shop row to a **14-day** `trial_ends_at` that can close booking.
+
+A migration that makes the database match this document has been written separately and has
+**NOT** been applied (apply is BLOCKED on Lane B). Until it is applied, no admin or customer
+surface may state or imply that these limits are enforced by the server or the database.
+
 ## Free plan semantics
 - Free is **not a trial**: it is a permanent plan with the 50 bookings / 1 shop / 3 services
-  limits *(A-2)*. Whether a separate 14-day Basic trial is still needed is an open Owner
-  question — see §Open questions.
-- The limits are enforced server-side; a UI-only limit is not acceptable (LOCKED rule L-11).
+  limits *(A-2)*. A separate 14-day Basic trial is kept: the Owner answered **O-2** on
+  2026-09-26 — keep the 14-day Basic trial as a promotional entry to Basic, separate from Free
+  forever, and when it ends without payment the shop drops to Free automatically and is not
+  closed (`STATUS-HOUSE.md` Addendum A-3). What the trial grants in detail is **B1, still
+  unanswered** — treat it as a changeable `*` placeholder, not as a settled entitlement.
+- The limits must be enforced server-side; a UI-only limit is not acceptable (LOCKED rule L-11).
+  **They are not enforced there yet** — see "Current enforcement status" above. The admin copy
+  and the code comments now say so plainly
+  (`docs/house-swarm-1/WUC-UI-TRUTH.md`).
 - A shop over a Free limit must be told plainly why the action failed and what upgrading does.
 - Free does not silently convert to paid: only a completed Stripe checkout/subscription event
   changes the plan.

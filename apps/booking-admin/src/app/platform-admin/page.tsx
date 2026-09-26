@@ -23,6 +23,18 @@ const BOOKING_SITE_URL = (process.env.NEXT_PUBLIC_BOOKING_SITE_URL || 'http://lo
  * are kept because the database stores them, but the numeric suffix is NOT a
  * price: Basic is ฿390 and Pro has no approved price at all, so Pro is labelled
  * as not-sellable rather than given a number (Owner decision 2026-09-26, A-2).
+ *
+ * This switch labels what a shop's stored plan id MEANS commercially. It is
+ * display only. The plan id also still drives entitlement in SQL, where
+ * `free_trial` / `basic_490` / `pro_990` map to the retired 50-lifetime /
+ * 100 / 500 booking walls and a 5 / 5 / 10 staff cap — a label here does not
+ * mean the database grants what the label implies. Database enforcement is
+ * PENDING (migration written, NOT applied; review round 2, finding F-1).
+ *
+ * `*` = still an unanswered Owner item, so treat it as a changeable placeholder:
+ * the Basic staff count ("up to 5") is A2 in
+ * OWNER-LOCK-BK01-PACKS-2026-09-26.md and was NOT answered (A1/A2/A3/A4/A5, B1,
+ * B3–B5, C1–C4 and D1–D3 are all still open; only B2 is answered).
  */
 function planLabel(plan: string | null) {
   switch (plan) {
@@ -297,7 +309,13 @@ export default function PlatformSuperAdminPage() {
                             {/* Pro is listed for truthful display of a legacy
                                 Pro shop only, and is disabled so an operator
                                 can never assign it: it is not on sale and has
-                                no Owner-approved price (A-2). */}
+                                no Owner-approved price (A-2).
+                                Labelling only: the value written here is still
+                                the value the database keys its (retired)
+                                booking and staff caps on, so assigning a plan
+                                does not make the DB grant what the label says.
+                                DB enforcement of the approved limits is PENDING
+                                — migration written, NOT applied. */}
                             <option value="free_trial">🎁 Free</option>
                             <option value="basic_490">⚡ Basic ฿{BASIC_PLAN_PRICE_THB}</option>
                             <option value="pro_990" disabled>🚀 Pro (ยังไม่เปิดขาย)</option>

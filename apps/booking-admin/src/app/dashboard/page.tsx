@@ -1868,6 +1868,13 @@ export default function AdminDashboard() {
                 </div>
               </div>
 
+              {/*
+                BASIC TIER — ฿390/month or $11/month is a locked commercial
+                fact (A-2). The "no booking cap" wording is intent, not reality
+                yet: the database still blocks `basic_490` at 100 bookings per
+                month, and the migration that removes that cap is written but NOT
+                applied (review round 2, finding F-1).
+              */}
               <div className="bg-slate-900 border border-slate-700 rounded-2xl p-6 flex flex-col justify-between space-y-6 relative hover:border-slate-600 transition-all">
                 <div className="space-y-4">
                   <div className="flex justify-between items-start">

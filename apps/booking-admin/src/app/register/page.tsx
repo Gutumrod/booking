@@ -168,9 +168,13 @@ function RegisterFormContent() {
     setErrorMessage('');
     setIsSubmitting(true);
 
-    // This account is about to own one shop (the one being created) and zero
-    // services, so the Free plan is allowed only while those two approved
-    // limits still hold. Pro is never selectable, so it can never reach here.
+    // Intended-contract check only, NOT enforcement: `evaluatePlanLimit` is a
+    // pure function and the usage passed below is hard-coded 0, so it never sees
+    // real data. Nothing on the server or in the database enforces the Free shop
+    // or service limit today (review round 2, finding F-1 — the SQL error codes
+    // SHOP_LIMIT_EXCEEDED / SERVICE_LIMIT_EXCEEDED do not exist in any
+    // migration), and the migration that would add them is written but NOT
+    // applied. Pro is never selectable, so it can never reach here.
     const shopDecision = evaluatePlanLimit(selectedPlan, 'shops', 0);
     const serviceDecision = evaluatePlanLimit(selectedPlan, 'services', 0);
     if (!shopDecision.allowed || !serviceDecision.allowed) {
@@ -433,7 +437,10 @@ function RegisterFormContent() {
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    {/* FREE TIER — the Owner-approved default and entry plan */}
+                    {/* FREE TIER — the Owner-approved entry plan. The card says
+                        what the Free plan will entitle a shop to; the database
+                        does not enforce any of it yet (see
+                        docs/house-swarm-1/WUC-UI-TRUTH.md). */}
                     <div
                       onClick={() => setSelectedPlan('free_trial')}
                       className={`cursor-pointer rounded-2xl p-4 border transition-all space-y-3 relative ${
@@ -458,7 +465,10 @@ function RegisterFormContent() {
                       </p>
                     </div>
 
-                    {/* BASIC TIER */}
+                    {/* BASIC TIER — ฿390/month is a locked commercial fact.
+                        The "no booking cap" line is intent, not reality yet:
+                        the database still blocks Basic at 100 bookings until
+                        the pending migration is applied. */}
                     <div
                       onClick={() => setSelectedPlan('basic_490')}
                       className={`cursor-pointer rounded-2xl p-4 border transition-all space-y-3 relative ${
