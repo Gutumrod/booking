@@ -6,6 +6,10 @@ import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { createClient } from '@/lib/supabase/client';
 import { LanguageToggle } from '@/components/language-toggle';
+import {
+  BASIC_PLAN_PRICE_THB,
+  evaluatePlanLimit,
+} from '@/lib/commercial-contract';
 import { 
   Store, Mail, Sparkles, ArrowRight, ArrowLeft, QrCode, CreditCard,
   ShieldCheck, Building, CheckCircle2, Globe
@@ -46,8 +50,11 @@ function RegisterFormContent() {
   const [password, setPassword] = useState('');
 
   // Step 2: Plan Selection
+  // Only the Free plan (default) and Basic are selectable. Pro is present in the
+  // product but must not be presented as purchasable (Owner decision 2026-09-26,
+  // A-2), so a `?plan=pro_990` link can never preselect it.
   const [selectedPlan, setSelectedPlan] = useState<'free_trial' | 'basic_490' | 'pro_990'>(() =>
-    planParam === 'basic_490' || planParam === 'pro_990' || planParam === 'free_trial'
+    planParam === 'basic_490' || planParam === 'free_trial'
       ? planParam
       : 'free_trial'
   );
@@ -160,6 +167,17 @@ function RegisterFormContent() {
   const handleFinalSubmit = async () => {
     setErrorMessage('');
     setIsSubmitting(true);
+
+    // This account is about to own one shop (the one being created) and zero
+    // services, so the Free plan is allowed only while those two approved
+    // limits still hold. Pro is never selectable, so it can never reach here.
+    const shopDecision = evaluatePlanLimit(selectedPlan, 'shops', 0);
+    const serviceDecision = evaluatePlanLimit(selectedPlan, 'services', 0);
+    if (!shopDecision.allowed || !serviceDecision.allowed) {
+      setErrorMessage(t('registerFailed'));
+      setIsSubmitting(false);
+      return;
+    }
 
     const registration: PendingRegistration = {
       shopName: shopName.trim(),
@@ -415,7 +433,7 @@ function RegisterFormContent() {
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    {/* FREE TRIAL TIER */}
+                    {/* FREE TIER — the Owner-approved default and entry plan */}
                     <div
                       onClick={() => setSelectedPlan('free_trial')}
                       className={`cursor-pointer rounded-2xl p-4 border transition-all space-y-3 relative ${
@@ -435,6 +453,9 @@ function RegisterFormContent() {
                         <li>{t('planFreeQ2')}</li>
                         <li>{t('planFreeQ3')}</li>
                       </ul>
+                      <p className="text-[10px] font-semibold text-amber-300 border-t border-slate-800/80 pt-2">
+                        {t('planFreeExcluded')}
+                      </p>
                     </div>
 
                     {/* BASIC TIER */}
@@ -451,7 +472,7 @@ function RegisterFormContent() {
                         {selectedPlan === 'basic_490' && <CheckCircle2 className="w-4 h-4 text-emerald-400" />}
                       </div>
                       <p className="text-xl font-extrabold text-white font-mono">
-                        ฿490 <span className="text-[10px] font-normal text-slate-400">{t('perMonth')}</span>
+                        ฿{BASIC_PLAN_PRICE_THB} <span className="text-[10px] font-normal text-slate-400">{t('perMonth')}</span>
                       </p>
                       <p className="text-[11px] text-slate-400">{t('planBasicDesc')}</p>
                       <ul className="text-[10px] space-y-1.5 text-slate-300 border-t border-slate-800/80 pt-2">
@@ -461,31 +482,24 @@ function RegisterFormContent() {
                       </ul>
                     </div>
 
-                    {/* PRO TIER */}
+                    {/* PRO TIER — exists in the product, explicitly NOT purchasable */}
                     <div
-                      onClick={() => setSelectedPlan('pro_990')}
-                      className={`cursor-pointer rounded-2xl p-4 border transition-all space-y-3 relative ${
-                        selectedPlan === 'pro_990'
-                          ? 'bg-slate-900 border-2 border-emerald-500 shadow-lg shadow-emerald-950/40'
-                          : 'bg-slate-950 border-slate-800 hover:border-slate-700'
-                      }`}
+                      aria-disabled="true"
+                      className="rounded-2xl p-4 border border-slate-800 bg-slate-950 opacity-70 cursor-not-allowed transition-all space-y-3 relative"
                     >
-                      <span className="absolute -top-2.5 right-3 bg-emerald-500 text-slate-950 text-[9px] font-extrabold px-2 py-0.5 rounded-full">
+                      <span className="absolute -top-2.5 right-3 bg-slate-700 text-slate-100 text-[9px] font-extrabold px-2 py-0.5 rounded-full">
                         {t('planProBadge')}
                       </span>
                       <div className="flex justify-between items-center">
                         <h3 className="font-bold text-sm text-white">{t('planProTitle')}</h3>
-                        {selectedPlan === 'pro_990' && <CheckCircle2 className="w-4 h-4 text-emerald-400" />}
                       </div>
-                      <p className="text-xl font-extrabold text-emerald-400 font-mono">
-                        ฿990 <span className="text-[10px] font-normal text-slate-400">{t('perMonth')}</span>
+                      <p className="text-xl font-extrabold text-slate-400 font-mono">
+                        {t('notSellableBadge')}
                       </p>
                       <p className="text-[11px] text-slate-400">{t('planProDesc')}</p>
-                      <ul className="text-[10px] space-y-1.5 text-slate-300 border-t border-slate-800/80 pt-2">
-                        <li>{t('planProQ1')}</li>
-                        <li>{t('planProQ2')}</li>
-                        <li>{t('planProQ3')}</li>
-                      </ul>
+                      <p className="text-[10px] font-semibold text-amber-300 border-t border-slate-800/80 pt-2">
+                        {t('planProNote')}
+                      </p>
                     </div>
                   </div>
                 </div>

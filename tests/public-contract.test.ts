@@ -15,14 +15,25 @@ test('current public surfaces contain no annual checkout or remote PromptPay QR 
   assert.doesNotMatch(surfaces, /annual|yearly|4900|9900/i);
 });
 
-test('current package copy states provisional pricing and no paid booking wall', () => {
+test('current package copy states the Owner-approved Free and Basic plans', () => {
   for (const path of ['apps/booking-admin/messages/th.json', 'apps/booking-admin/messages/en.json']) {
     const messages = JSON.parse(read(path));
     const dashboard = JSON.stringify(messages.dashboard);
-    assert.match(dashboard, /pilot|นำร่อง/i);
+    // The retired pilot reference pricing (฿490 / ฿990) is gone; the approved
+    // ฿390 Basic price and the Free 50-booking limit are stated instead.
+    assert.doesNotMatch(dashboard, /490|990/);
+    assert.match(dashboard, /390/);
+    assert.match(dashboard, /50/);
     assert.doesNotMatch(dashboard, /100%|guaranteed/i);
     assert.doesNotMatch(dashboard, /100 bookings|500 bookings|100 คิว|500 คิว/i);
   }
+});
+
+test('the register page cannot preselect Pro from a URL parameter', () => {
+  const register = read('apps/booking-admin/src/app/register/page.tsx');
+  assert.match(register, /planParam === 'basic_490' \|\| planParam === 'free_trial'/);
+  assert.doesNotMatch(register, /planParam === 'pro_990'/);
+  assert.match(register, /evaluatePlanLimit/);
 });
 
 test('merchant LINE credentials remain server-only', () => {

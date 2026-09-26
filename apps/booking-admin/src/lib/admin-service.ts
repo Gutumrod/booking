@@ -592,7 +592,7 @@ export async function requestAccountClosure(shopId: string, reason: string): Pro
   return String(data);
 }
 
-export async function startBillingCheckout(plan: 'basic_490' | 'pro_990'): Promise<string> {
+export async function startBillingCheckout(plan: 'basic_490'): Promise<string> {
   const response = await fetch('/api/billing/checkout', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
