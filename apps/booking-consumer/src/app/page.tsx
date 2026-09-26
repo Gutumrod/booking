@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { CalendarCheck, ShieldCheck, QrCode, Sparkles } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { LanguageToggle } from '@/components/language-toggle';
+import { LegalLinks } from '@/components/legal-document';
 
 export default function Home() {
   const t = useTranslations('landing');
@@ -47,6 +48,8 @@ export default function Home() {
         >
           {t('demoCta')}
         </Link>
+
+        <LegalLinks className="pt-2 text-[11px]" />
       </div>
     </div>
   );
