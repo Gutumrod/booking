@@ -134,8 +134,14 @@
       "slipTooLarge": "The slip file must be 5 MB or smaller.",
       "slipUrlFailed": "Could not create the slip URL.",
       "shopBlockedService": "This shop is not accepting online bookings right now.",
-      "paymentNotConfigured": "This shop requires a deposit but hasn't finished its payment setup yet. Please contact the shop to book."
-    }
+      "paymentNotConfigured": "This shop requires a deposit but hasn't finished its payment setup yet. Please contact the shop to book.",
+      "serviceOutsidePlan": "This service is outside the entitlement of the plan this shop is on, so it cannot be booked online yet. Please choose another service.",
+      "staffOutsidePlan": "This staff member is outside the entitlement of the plan this shop is on, so they cannot be selected yet. Please choose another staff member."
+    },
+    "entitlementOverPlan": "Above this plan's entitlement",
+    "entitlementSystemOff": "Switched off by the system",
+    "entitlementOwnerOff": "Switched off by the shop owner",
+    "entitlementNotInUse": "Not in use"
   },
   "manageBooking": {
     "title": "Manage your booking",

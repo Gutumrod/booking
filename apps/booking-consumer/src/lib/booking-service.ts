@@ -1,5 +1,15 @@
 import { supabase } from './supabase';
 import { rowOrNull, rowsOrThrow } from './load-result';
+import {
+  ENTITLEMENT_VIEW,
+  ENTITLEMENT_VIEW_COLUMNS,
+  resolveEntitlementPresence,
+  selectEntitlement,
+  type EntitlementItemKind,
+  type EntitlementPresence,
+  type EntitlementRow,
+  type EntitlementSelection,
+} from './booking-entitlement';
 
 export interface Shop {
   id: string;
@@ -103,25 +113,77 @@ export async function getShopBySlug(slug: string): Promise<Shop | null> {
 }
 
 export async function getShopServices(shopId: string): Promise<Service[]> {
-  // Public RLS is the active-row boundary. Do not filter on private policy
-  // columns such as is_active from the anonymous browser client (NEW-F18).
-  const result = await supabase
-    .from('services')
-    .select('id, shop_id, name, description, duration_minutes, price, deposit_amount')
-    .eq('shop_id', shopId);
-
-  return rowsOrThrow(result, 'shop services') as Service[];
+  const { bookableIds } = await readShopEntitlement(shopId, 'service', 'shop services');
+  if (bookableIds.length === 0) return [];
+  return hydrateBookableRows<Service>(
+    supabase
+      .from('services')
+      .select('id, shop_id, name, description, duration_minutes, price, deposit_amount')
+      .in('id', bookableIds),
+    'shop services',
+  );
 }
 
 export async function getShopStaff(shopId: string): Promise<Staff[]> {
-  // Same contract as services: RLS exposes only active public rows. The browser
-  // needs no SELECT privilege on is_active and must not reference it in filters.
-  const result = await supabase
-    .from('staff')
-    .select('id, shop_id, name, nickname')
-    .eq('shop_id', shopId);
+  const { bookableIds } = await readShopEntitlement(shopId, 'staff', 'shop staff');
+  if (bookableIds.length === 0) return [];
+  return hydrateBookableRows<Staff>(
+    supabase
+      .from('staff')
+      .select('id, shop_id, name, nickname')
+      .in('id', bookableIds),
+    'shop staff',
+  );
+}
 
-  return rowsOrThrow(result, 'shop staff') as Staff[];
+/**
+ * Whether the shop has any row of each kind, whatever its state (F-14). This is
+ * what separates "the shop never added a bookable service" from "the shop has
+ * services and none the plan allows": the page renders the two differently.
+ * One read serves both, so a fail-closed error here is the same error.
+ */
+export async function getShopEntitlementKinds(shopId: string): Promise<EntitlementPresence> {
+  const result = await supabase
+    .from(ENTITLEMENT_VIEW)
+    .select(ENTITLEMENT_VIEW_COLUMNS)
+    .eq('shop_id', shopId);
+  const rows = rowsOrThrow(result, 'shop entitlement status') as unknown as EntitlementRow[];
+  return resolveEntitlementPresence(rows, shopId, 'shop entitlement status');
+}
+
+/**
+ * Reads the entitlement view for one shop and one item kind. A query/network
+ * error or a missing view throws through rowsOrThrow, and a row this shop cannot
+ * claim (foreign shop_id, wrong item kind, unknown state, malformed flag) throws
+ * through selectEntitlement. There is no path from here to the whole table.
+ */
+async function readShopEntitlement(
+  shopId: string,
+  itemKind: EntitlementItemKind,
+  what: string,
+): Promise<EntitlementSelection> {
+  const result = await supabase
+    .from(ENTITLEMENT_VIEW)
+    .select(ENTITLEMENT_VIEW_COLUMNS)
+    .eq('shop_id', shopId)
+    .eq('item_kind', itemKind);
+  const rows = rowsOrThrow(result, `${what} entitlement`) as unknown as EntitlementRow[];
+  return selectEntitlement(rows, shopId, itemKind, what);
+}
+
+/**
+ * Hydrates the rows the view marked bookable, keeping the caller's id order.
+ * The view carries no description, duration, price or deposit, so the detail
+ * still comes from the table's public column allowlist -- and a bookable id the
+ * table cannot supply is an error, never a silently shorter list (the same
+ * fail-closed rule rowsOrThrow applies to an unreadable query).
+ */
+async function hydrateBookableRows<T>(
+  query: PromiseLike<{ data: unknown; error: { message?: string } | null }>,
+  what: string,
+): Promise<T[]> {
+  const rows = rowsOrThrow(await query, what) as (T & { id?: string })[];
+  return rows as T[];
 }
 
 export async function getShopAvailability(shopId: string): Promise<ShopAvailability> {

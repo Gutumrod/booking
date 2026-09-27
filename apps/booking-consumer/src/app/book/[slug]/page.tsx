@@ -10,7 +10,7 @@ import {
   Copy, Download, Check, ShieldAlert, Send, PhoneCall, Phone, RefreshCw, Loader2
 } from 'lucide-react';
 import {
-  getShopBySlug, getShopServices, getShopStaff, getShopAvailability, createBookingHold,
+  getShopBySlug, getShopServices, getShopStaff, getShopAvailability, getShopEntitlementKinds, createBookingHold,
   submitDepositSlip, uploadDepositSlip, Shop, Service, Staff, HoldResponse,
   StaffSchedule, ShopHoliday,
 } from '../../../lib/booking-service';
@@ -111,6 +111,12 @@ function BookingRoute({ slug }: { slug: string }) {
   const [shopHolidays, setShopHolidays] = useState<ShopHoliday[]>([]);
   const [isLoadingShop, setIsLoadingShop] = useState(true);
   const [loadError, setLoadError] = useState(false);
+  // F-14: whether the shop has any row of each kind at all. The two choice lists
+  // are entitlement-filtered, so an empty list alone cannot tell "the shop added
+  // nothing" from "the shop has rows and none of them is bookable right now";
+  // these two flags are the view's own answer, and the page states differ.
+  const [serviceKindPresent, setServiceKindPresent] = useState(true);
+  const [staffKindPresent, setStaffKindPresent] = useState(true);
 
   const [step, setStep] = useState<number>(1);
   const [selectedService, setSelectedService] = useState<Service | null>(null);
@@ -142,7 +148,7 @@ function BookingRoute({ slug }: { slug: string }) {
   useEffect(() => {
     // isLoadingShop starts true: this component instance only ever serves one slug.
     const isCurrent = requestGate.start();
-    void loadBookingRoute(slug, { getShopBySlug, getShopServices, getShopStaff, getShopAvailability })
+    void loadBookingRoute(slug, { getShopBySlug, getShopServices, getShopStaff, getShopEntitlementKinds, getShopAvailability })
       .then((data) => {
         if (!isCurrent()) return;
         setShop(data.shop);
@@ -151,6 +157,8 @@ function BookingRoute({ slug }: { slug: string }) {
         setStaffSchedules(data.schedules);
         setShopHolidays(data.holidays);
         setLoadError(data.loadError);
+        setServiceKindPresent(data.serviceKindPresent);
+        setStaffKindPresent(data.staffKindPresent);
         setSelectedService(data.services[0] ?? null);
         setIsLoadingShop(false);
       });
@@ -205,6 +213,8 @@ function BookingRoute({ slug }: { slug: string }) {
     staffCount: staffList.length,
     scheduleCount: staffSchedules.length,
     everyServicePaymentBlocked: services.length > 0 && services.every(isServiceBlocked),
+    serviceKindPresent,
+    staffKindPresent,
   });
   // Post-hold payment instruction: ok only when a format-valid recipient number
   // + configured account name + a positive server amount all hold and the QR
@@ -296,6 +306,36 @@ function BookingRoute({ slug }: { slug: string }) {
     slot => slot.time === selectedTime && slot.isAvailable
   );
 
+  // Reload one complete snapshot for this slug through the same route loader the
+  // initial effect uses. F-14: when the database refuses a hold because the
+  // chosen row is outside the shop's entitlement, the choice list on screen is
+  // stale by definition, so it is re-read rather than left as it was. The
+  // database guard stays the only authority: this function re-reads, it never
+  // decides what is bookable.
+  const reloadChoices = async (): Promise<void> => {
+    const isCurrent = requestGate.start();
+    const data = await loadBookingRoute(slug, {
+      getShopBySlug, getShopServices, getShopStaff, getShopEntitlementKinds, getShopAvailability,
+    });
+    if (!isCurrent()) return;
+    setShop(data.shop);
+    setServices(data.services);
+    setStaffList(data.staff);
+    setStaffSchedules(data.schedules);
+    setShopHolidays(data.holidays);
+    setLoadError(data.loadError);
+    setServiceKindPresent(data.serviceKindPresent);
+    setStaffKindPresent(data.staffKindPresent);
+    // A selection the database no longer offers is dropped, not kept on screen.
+    setSelectedService((current) => {
+      if (!current) return data.services[0] ?? null;
+      return data.services.some((service) => service.id === current.id) ? current : (data.services[0] ?? null);
+    });
+    setSelectedStaff((current) => (
+      current && data.staff.some((member) => member.id === current.id) ? current : null
+    ));
+  };
+
   const handleCreateHold = async () => {
     if (shop?.is_accepting_online_bookings === false) {
       setErrorMessage(t('errors.shopBlocked'));
@@ -365,7 +405,21 @@ function BookingRoute({ slug }: { slug: string }) {
         throw new Error(t('errors.invalidBookingStatus'));
       }
     } catch (err: unknown) {
-      setErrorMessage(getErrorMessage(err, t('errors.createHoldFailed')));
+      // F-14: the database is the only authority on entitlement. When it refuses
+      // a hold because the chosen service or staff member is outside the plan,
+      // the customer must see a message they can act on, and the choice list on
+      // screen must be re-read so a stale option is not left selectable. No
+      // client-side entitlement rule is applied here -- the codes are only read.
+      const refusal = getErrorMessage(err, '');
+      if (refusal.includes('SERVICE_OUTSIDE_PLAN')) {
+        setErrorMessage(t('errors.serviceOutsidePlan'));
+        await reloadChoices();
+      } else if (refusal.includes('STAFF_OUTSIDE_PLAN')) {
+        setErrorMessage(t('errors.staffOutsidePlan'));
+        await reloadChoices();
+      } else {
+        setErrorMessage(getErrorMessage(err, t('errors.createHoldFailed')));
+      }
     } finally {
       setIsSubmitting(false);
     }

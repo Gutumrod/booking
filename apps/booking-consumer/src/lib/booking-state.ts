@@ -36,6 +36,12 @@ export interface BookingStateInput {
    * to the selected service before any hold is created (Codex R2-4 / F6).
    */
   everyServicePaymentBlocked: boolean;
+  /**
+   * F-14. The shop has at least one service / staff row of its own, whatever
+   * that row's entitlement state. Absent is read as true (see below).
+   */
+  serviceKindPresent?: boolean;
+  staffKindPresent?: boolean;
 }
 
 export function resolveBookingPageState(input: BookingStateInput): BookingPageState {
@@ -43,8 +49,19 @@ export function resolveBookingPageState(input: BookingStateInput): BookingPageSt
   if (input.loadError) return 'LOAD_ERROR';
   if (!input.shop) return 'SHOP_NOT_FOUND';
   if (input.shop.is_accepting_online_bookings === false) return 'BOOKING_DISABLED';
-  if (input.serviceCount === 0) return 'NO_SERVICES';
-  if (input.staffCount === 0) return 'NO_STAFF';
+  const serviceKindPresent = input.serviceKindPresent ?? true;
+  const staffKindPresent = input.staffKindPresent ?? true;
+  // F-14: since the lists are entitlement-filtered, an empty list no longer
+  // proves the shop added nothing. NO_SERVICES / NO_STAFF assert exactly that
+  // ("this shop hasn't added any bookable services yet"), so an empty list is
+  // only that state when the shop has no row of the kind at all. A shop that has
+  // rows but can offer none of them right now is the existing BOOKING_DISABLED
+  // state ("this shop is not accepting online bookings right now"), which is
+  // true and is not new buyer-facing wording. The two flags default to true, the
+  // conservative reading, so a caller that cannot answer keeps this state.
+  if (input.serviceCount === 0 && !serviceKindPresent) return 'NO_SERVICES';
+  if (input.staffCount === 0 && !staffKindPresent) return 'NO_STAFF';
+  if (input.serviceCount === 0 || input.staffCount === 0) return 'BOOKING_DISABLED';
   if (input.scheduleCount === 0) return 'NO_SCHEDULE';
   if (input.everyServicePaymentBlocked) return 'PAYMENT_NOT_CONFIGURED';
   return 'OK';

@@ -40,6 +40,11 @@ import { computeReadiness, isShopReady, needsMerchantAttention, type ReadinessKe
 import { TimeField } from '@/components/time-field';
 import { mergeServerSchedules } from '@/lib/schedule-merge';
 import { BASIC_PLAN_PRICE_THB } from '@/lib/commercial-contract';
+import {
+  resolveEntitlementStatusLabel,
+  type EntitlementStatusLabels,
+  type EntitlementStatusRow,
+} from '@/lib/entitlement-status';
 import { 
   Calendar, Users, DollarSign, Eye, Clock,
   Settings, AlertCircle, Plus, ShieldCheck,
@@ -107,6 +112,17 @@ function getSubscriptionStatusDetails(status: DashboardSubscription['status'], t
   }
 }
 
+/**
+ * F-14: the chip tone for a non-bookable row -- an exclusion over the plan, a
+ * switch-off the system made, or one the owner made / that carries no recorded
+ * reason. Colour only; the wording comes from resolveEntitlementStatusLabel.
+ */
+function entitlementStatusChipTone(status: EntitlementStatusRow): string {
+  if (status.state === 'plan_excluded') return 'border-amber-500/30 bg-amber-500/10 text-amber-300';
+  if (status.systemDisabled === true) return 'border-sky-500/30 bg-sky-500/10 text-sky-300';
+  return 'border-slate-700 bg-slate-800 text-slate-400';
+}
+
 export default function AdminDashboard() {
   const t = useTranslations('dashboard');
   const tCommon = useTranslations('common');
@@ -116,6 +132,15 @@ export default function AdminDashboard() {
   const currentLayoutShopIdRef = useRef<string | null>(layoutShopIdentity.shopId);
   const appliedShopIdRef = useRef('');
   const DAY_NAMES = t.raw('dayNames') as string[];
+  // F-14: the four status-chip wordings, from this app's own catalogue. The
+  // view's state is the only input to the resolver; nothing here is derived
+  // from a plan limit, cap, price or pack number.
+  const entitlementStatusLabels: EntitlementStatusLabels = {
+    overPlan: t('entitlementOverPlan'),
+    systemParked: t('entitlementSystemOff'),
+    ownerOff: t('entitlementOwnerOff'),
+    notInUse: t('entitlementNotInUse'),
+  };
 
   const [activeTab, setActiveTab] = useState<'bookings' | 'schedules' | 'services' | 'staff' | 'settings' | 'billing'>('bookings');
   const [bookings, setBookings] = useState<Booking[]>([]);
@@ -1401,6 +1426,21 @@ export default function AdminDashboard() {
                   <div>
                     <p className="font-bold text-sm text-white">{st.name}</p>
                     <p className="text-slate-400 text-[11px]">{st.role} {t('contactPrefix')}{st.phone}</p>
+                    {/* F-14: this staff row's own entitlement fact. A staff row
+                        carries system_disabled NULL in the view, so only the
+                        neutral not-in-use label can appear -- no reason is
+                        invented for it. A bookable row renders no chip. */}
+                    {(() => {
+                      const status = st.entitlementStatus;
+                      if (!status) return null;
+                      const label = resolveEntitlementStatusLabel(status, entitlementStatusLabels);
+                      if (!label) return null;
+                      return (
+                        <span className={`mt-1 inline-block rounded border px-2 py-0.5 text-[10px] font-bold ${entitlementStatusChipTone(status)}`}>
+                          {label}
+                        </span>
+                      );
+                    })()}
                   </div>
                   <div className="flex items-center gap-3">
                     {shopRole === 'owner' && (
@@ -1632,6 +1672,21 @@ export default function AdminDashboard() {
                       <div>
                         <h3 className="font-bold text-sm text-white">{sv.name}</h3>
                         {!sv.isActive && <span className="mt-1 inline-block rounded bg-slate-800 px-2 py-0.5 text-[10px] font-bold text-slate-400">{t('serviceClosed')}</span>}
+                        {/* F-14: the three distinguishable facts for this row --
+                            over the plan's entitlement, switched off by the
+                            system, switched off by the owner. Wording only; the
+                            pre-existing toggle stays the only control. */}
+                        {(() => {
+                          const status = sv.entitlementStatus;
+                          if (!status) return null;
+                          const label = resolveEntitlementStatusLabel(status, entitlementStatusLabels);
+                          if (!label) return null;
+                          return (
+                            <span className={`mt-1 inline-block rounded border px-2 py-0.5 text-[10px] font-bold ${entitlementStatusChipTone(status)}`}>
+                              {label}
+                            </span>
+                          );
+                        })()}
                         <p className="text-xs text-slate-400 mt-0.5 leading-relaxed">{sv.description}</p>
                       </div>
                       <span className="text-xs font-bold text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-lg border border-emerald-500/20 font-mono">

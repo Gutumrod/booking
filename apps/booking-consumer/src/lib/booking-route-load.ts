@@ -7,6 +7,13 @@
 // createRequestGate() gives each load an identity so a late response from an
 // older slug (or an unmounted page) can never overwrite the current route.
 //
+// F-14 adds one fact to the snapshot: because the two choice lists are now
+// entitlement-filtered, an empty list no longer means "the shop added nothing".
+// `serviceKindPresent` / `staffKindPresent` carry the shop's own answer (it has
+// rows of that kind, whatever their state), which is what lets the page keep the
+// "never added" copy for a genuinely empty shop and use the booking-disabled
+// copy for a shop whose rows are all excluded or switched off.
+//
 // Pure and framework-free for unit testing from `tests/`; accessors are passed
 // in so no Supabase client is needed here.
 
@@ -16,6 +23,8 @@ export interface BookingRouteAccessors {
   getShopBySlug(slug: string): Promise<Shop | null>;
   getShopServices(shopId: string): Promise<Service[]>;
   getShopStaff(shopId: string): Promise<Staff[]>;
+  /** Whether the shop has any service / staff row at all, bookable or not. */
+  getShopEntitlementKinds(shopId: string): Promise<{ service: boolean; staff: boolean }>;
   getShopAvailability(shopId: string): Promise<ShopAvailability>;
 }
 
@@ -25,10 +34,27 @@ export interface BookingRouteData {
   staff: Staff[];
   schedules: StaffSchedule[];
   holidays: ShopHoliday[];
+  /**
+   * The shop has rows of this kind, whatever their state. False only for a shop
+   * with no such row at all. Defaults to true so a data source that cannot
+   * answer keeps the conservative reading.
+   */
+  serviceKindPresent: boolean;
+  staffKindPresent: boolean;
   loadError: boolean;
 }
 
-const EMPTY: Omit<BookingRouteData, 'shop' | 'loadError'> = { services: [], staff: [], schedules: [], holidays: [] };
+const EMPTY: Omit<BookingRouteData, 'shop' | 'loadError'> = {
+  services: [],
+  staff: [],
+  schedules: [],
+  holidays: [],
+  // No rows were read, so nothing may be asserted about kinds; the page only
+  // reaches its list states with a loaded snapshot, and every error path below
+  // resets these to true so no "the shop has none" claim can be fabricated.
+  serviceKindPresent: true,
+  staffKindPresent: true,
+};
 
 export async function loadBookingRoute(slug: string, api: BookingRouteAccessors): Promise<BookingRouteData> {
   try {
@@ -39,10 +65,11 @@ export async function loadBookingRoute(slug: string, api: BookingRouteAccessors)
     if (!shop || shop.is_accepting_online_bookings === false) {
       return { ...EMPTY, shop, loadError: false };
     }
-    const [services, staff, availability] = await Promise.all([
+    const [services, staff, availability, kinds] = await Promise.all([
       api.getShopServices(shop.id),
       api.getShopStaff(shop.id),
       api.getShopAvailability(shop.id),
+      api.getShopEntitlementKinds(shop.id),
     ]);
     return {
       shop,
@@ -50,6 +77,10 @@ export async function loadBookingRoute(slug: string, api: BookingRouteAccessors)
       staff,
       schedules: availability.schedules,
       holidays: availability.holidays,
+      // The kind flags are only ever false when the view said so: a shop that
+      // has rows never loses them to an empty filtered list.
+      serviceKindPresent: kinds.service || services.length > 0,
+      staffKindPresent: kinds.staff || staff.length > 0,
       loadError: false,
     };
   } catch (error) {

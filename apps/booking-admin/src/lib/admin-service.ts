@@ -1,5 +1,11 @@
 import { supabase } from './supabase';
 import { selectActiveMembership } from './shop-selection';
+import {
+  indexEntitlementStatusByItemId,
+  type EntitlementItemKind,
+  type EntitlementState,
+  type EntitlementStatusRow,
+} from './entitlement-status';
 
 export type BookingStatus =
   | 'hold'
@@ -60,6 +66,12 @@ export interface DashboardService {
   // explicit 0 (Codex F4).
   deposit: number | null;
   isActive: boolean;
+  /**
+   * F-14: why this row can or cannot be booked right now, from the read-only
+   * view local_service.bk01_shop_entitlement_status. null when the view carries
+   * no row for this service (nothing may be claimed about it).
+   */
+  entitlementStatus: EntitlementStatusRow | null;
 }
 
 export interface DashboardStaff {
@@ -68,6 +80,8 @@ export interface DashboardStaff {
   phone: string;
   role: string;
   isActive: boolean;
+  /** F-14: as DashboardService.entitlementStatus; always itemKind 'staff'. */
+  entitlementStatus: EntitlementStatusRow | null;
 }
 
 export interface DashboardScheduleDay {
@@ -178,6 +192,24 @@ interface RawStaff {
   is_active: boolean;
 }
 
+/**
+ * One row of the read-only view local_service.bk01_shop_entitlement_status
+ * (F-14), as the database returns it. The view holds no plan limit, cap, price
+ * or pack: it carries the resolved state and, for a service, whether the switch
+ * was the system's; a staff row's system_disabled is NULL because the staff
+ * table holds no such fact.
+ */
+interface RawEntitlementStatus {
+  shop_id: string;
+  item_kind: EntitlementItemKind;
+  item_id: string;
+  item_name: string;
+  is_active: boolean;
+  plan_entitled: boolean;
+  state: EntitlementState;
+  system_disabled: boolean | null;
+}
+
 interface RawSchedule {
   staff_id: string;
   day_of_week: number;
@@ -223,7 +255,7 @@ export async function fetchAdminDashboardData(): Promise<AdminDashboardData> {
     throw new Error(membershipError?.message || 'ไม่พบสิทธิ์ร้านค้าของบัญชีนี้');
   }
 
-  const [shopResult, bookingsResult, servicesResult, staffResult, schedulesResult, holidaysResult, subscriptionResult] = await Promise.all([
+  const [shopResult, bookingsResult, servicesResult, staffResult, entitlementResult, schedulesResult, holidaysResult, subscriptionResult] = await Promise.all([
     supabase
       .from('shops')
       .select('id, name, slug, phone, address, promptpay_number, promptpay_name, line_oa_id, require_deposit, default_deposit_amount')
@@ -260,6 +292,15 @@ export async function fetchAdminDashboardData(): Promise<AdminDashboardData> {
       .eq('shop_id', membership.shop_id)
       .order('is_active', { ascending: false })
       .order('created_at', { ascending: true }),
+    // F-14: the read-only view that decides why a row can or cannot be booked,
+    // for the SAME selected shop as every other read here. This is a read of the
+    // view the migration lane named (local_service schema, as the client is
+    // configured), never of the raw tables it derives from, and it carries the
+    // view's own state -- no plan limit, cap or price is read or derived here.
+    supabase
+      .from('bk01_shop_entitlement_status')
+      .select('shop_id, item_kind, item_id, item_name, is_active, plan_entitled, state, system_disabled, created_at')
+      .eq('shop_id', membership.shop_id),
     supabase
       .from('staff_schedules')
       .select('staff_id, day_of_week, is_working_day, work_start, work_end, break_start, break_end')
@@ -296,8 +337,28 @@ export async function fetchAdminDashboardData(): Promise<AdminDashboardData> {
     throw new Error(staffResult.error.message);
   }
 
+  // F-14: a view read that cannot be vouched for is an error, never a null
+  // status per row. Throwing here reaches the dashboard's existing error path
+  // (the same one every other read uses), so no screen is ever produced with
+  // rows whose reason is silently missing.
+  if (entitlementResult.error) {
+    throw new Error(entitlementResult.error.message);
+  }
+
   if (schedulesResult.error) throw new Error(schedulesResult.error.message);
   if (holidaysResult.error) throw new Error(holidaysResult.error.message);
+
+  // Index the view rows by item id once, so each rendered row finds its own
+  // status (undefined when the view carries no row for it).
+  const entitlementStatusByItemId = indexEntitlementStatusByItemId(
+    ((entitlementResult.data ?? []) as unknown as RawEntitlementStatus[]).map((row) => ({
+      id: row.item_id,
+      itemKind: row.item_kind,
+      state: row.state,
+      systemDisabled: row.system_disabled,
+    })),
+  );
+  const entitlementStatusFor = (itemId: string) => entitlementStatusByItemId.get(itemId);
 
   const rawSubscription = subscriptionResult.data as RawSubscription | null;
   const subscription = rawSubscription ? {
@@ -314,6 +375,10 @@ export async function fetchAdminDashboardData(): Promise<AdminDashboardData> {
     phone: staffMember.phone ?? '-',
     role: staffMember.nickname || 'พนักงานให้บริการ',
     isActive: staffMember.is_active,
+    // F-14: this staff row's own view row, or null when the view has none. A
+    // staff row's system_disabled is NULL in the view, so the dashboard renders
+    // the neutral label for it and invents no reason.
+    entitlementStatus: entitlementStatusFor(staffMember.id) ?? null,
   }));
 
   const bookings = ((bookingsResult.data ?? []) as unknown as RawBooking[]).map((booking) => {
@@ -363,6 +428,10 @@ export async function fetchAdminDashboardData(): Promise<AdminDashboardData> {
       price: toAmount(service.price),
       deposit: service.deposit_amount == null ? null : toAmount(service.deposit_amount),
       isActive: service.is_active,
+      // F-14: this service row's own view row, or null when the view has none.
+      // state plan_excluded / switched_off plus system_disabled is the whole
+      // input; no plan limit or price is read anywhere on this path.
+      entitlementStatus: entitlementStatusFor(service.id) ?? null,
     })),
     staff: dashboardStaff,
     schedules: dashboardStaff.map((staffMember) => ({
