@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 import { validateBk01MigrationSql } from '../scripts/lib/bk01-migration-policy.mjs';
+import { validateBk01RuntimeAuthority } from '../scripts/lib/bk01-runtime-allowlist.mjs';
 
 const read = (path: string) => readFileSync(path, 'utf8');
 
@@ -93,6 +94,28 @@ test('Lane B (b): the rollback retires the legacy LOGIN role but never creates o
     /DROP ROLE bk01_migrator_login/,
     'rollback from a legacy environment must clean the retired login up',
   );
+});
+
+test('Lane B WU-2: runtime policy accepts only the exact role, schema and RPC boundary', () => {
+  const valid = `
+    GRANT bk01_runtime TO authenticator WITH INHERIT FALSE, SET TRUE;
+    GRANT USAGE ON SCHEMA local_service TO bk01_runtime;
+    GRANT EXECUTE ON FUNCTION local_service.claim_stripe_webhook_event(text,text,timestamptz) TO bk01_runtime;
+  `;
+  assert.equal(validateBk01RuntimeAuthority(valid, 'valid runtime boundary'), true);
+});
+
+test('Lane B WU-2: runtime policy rejects LOGIN, unlisted RPCs, table writes and foreign schemas', () => {
+  const invalid = [
+    'ALTER ROLE bk01_runtime LOGIN;',
+    'GRANT EXECUTE ON FUNCTION local_service.unlisted_rpc(uuid) TO bk01_runtime;',
+    'GRANT UPDATE ON TABLE local_service.bookings TO bk01_runtime;',
+    'GRANT USAGE ON SCHEMA ps01 TO bk01_runtime;',
+    'GRANT bk01_runtime TO service_role WITH INHERIT FALSE, SET TRUE;',
+  ];
+  for (const sql of invalid) {
+    assert.throws(() => validateBk01RuntimeAuthority(sql, 'crafted violating runtime grant'));
+  }
 });
 
 // ---------------------------------------------------------------------------

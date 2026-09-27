@@ -1,3 +1,5 @@
+import { validateBk01RuntimeAuthority } from './bk01-runtime-allowlist.mjs';
+
 // BK01 migration policy — the rule set the BK01 product-local stream must satisfy.
 //
 // Static only: this module reads SQL text. It never opens a database connection.
@@ -17,7 +19,6 @@
 // function through the Data API. Revoking from PUBLIC is not granting, so the
 // policy accepts PUBLIC as a REVOKE grantee while still rejecting GRANT ... TO
 // PUBLIC.
-
 const OWNED_SCHEMAS = new Set(['local_service', 'local_service_internal']);
 
 // Roles that may appear as grantees. PUBLIC is deliberately NOT here: it is
@@ -258,6 +259,7 @@ function assertAuthSchemaIndependence(sql, body, sourceName) {
 export function validateBk01MigrationSql(sql, sourceName = 'migration') {
   if (typeof sql !== 'string' || !sql.trim()) throw new Error(`${sourceName} is empty`);
   const body = stripComments(sql);
+  validateBk01RuntimeAuthority(sql, sourceName);
 
   for (const pattern of FORBIDDEN_GLOBAL) {
     if (pattern.test(body)) {

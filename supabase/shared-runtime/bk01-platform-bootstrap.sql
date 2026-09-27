@@ -38,14 +38,25 @@ BEGIN
   IF EXISTS (
     SELECT 1 FROM pg_roles
     WHERE rolname = 'bk01_runtime'
-      AND (rolcanlogin OR rolsuper OR rolcreatedb OR rolcreaterole OR rolbypassrls)
+      AND (rolcanlogin OR rolsuper OR rolcreatedb OR rolcreaterole OR rolinherit OR rolbypassrls OR rolreplication)
   ) THEN
     RAISE EXCEPTION 'Existing bk01_runtime has unsafe attributes';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticator') THEN
+    RAISE EXCEPTION 'authenticator is required for the bk01_runtime Data API boundary';
+  END IF;
+  IF EXISTS (
+    SELECT 1 FROM pg_auth_members m
+    JOIN pg_roles member ON member.oid = m.member
+    WHERE member.rolname = 'bk01_runtime'
+  ) THEN
+    RAISE EXCEPTION 'bk01_runtime must not be a member of another role';
   END IF;
 END
 $bk01_roles$;
 
 GRANT bk01_migrator TO postgres;
+GRANT bk01_runtime TO authenticator WITH INHERIT FALSE, SET TRUE;
 
 
 CREATE SCHEMA IF NOT EXISTS local_service_internal AUTHORIZATION bk01_migrator;
@@ -53,6 +64,12 @@ ALTER SCHEMA local_service OWNER TO bk01_migrator;
 ALTER SCHEMA local_service_internal OWNER TO bk01_migrator;
 REVOKE ALL ON SCHEMA local_service_internal FROM PUBLIC, anon, authenticated, service_role;
 GRANT USAGE ON SCHEMA local_service TO anon, authenticated, service_role;
+GRANT USAGE ON SCHEMA local_service TO bk01_runtime;
+GRANT EXECUTE ON FUNCTION local_service.authorize_booking_recovery_attempt(uuid,text) TO bk01_runtime;
+GRANT EXECUTE ON FUNCTION local_service.claim_due_line_notifications(integer) TO bk01_runtime;
+GRANT EXECUTE ON FUNCTION local_service.claim_stripe_webhook_event(text,text,timestamp with time zone) TO bk01_runtime;
+GRANT EXECUTE ON FUNCTION local_service.complete_line_notification(uuid,integer,text,timestamp with time zone,timestamp with time zone,text) TO bk01_runtime;
+GRANT EXECUTE ON FUNCTION local_service.sync_subscription_state_bk_a(text,bigint,uuid,text,text,text,text,bigint,boolean) TO bk01_runtime;
 
 -- NO grant is taken on schema auth or schema extensions. bk01_migrator must be able to
 -- prove it cannot resolve auth.*; that proof is in the guard block below.
@@ -940,6 +957,84 @@ BEGIN
   END IF;
 END
 $bk01_auth_boundary_guard$;
+
+
+DO $bk01_runtime_boundary_check$
+DECLARE v_exec_count integer; v_table_write_count integer;
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_roles
+    WHERE rolname='bk01_runtime'
+      AND (rolcanlogin OR rolsuper OR rolcreatedb OR rolcreaterole OR rolinherit OR rolbypassrls OR rolreplication)
+  ) THEN
+    RAISE EXCEPTION 'bk01_runtime role attributes are unsafe';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_auth_members m
+    JOIN pg_roles member ON member.oid=m.member
+    JOIN pg_roles granted ON granted.oid=m.roleid
+    WHERE member.rolname='authenticator' AND granted.rolname='bk01_runtime'
+      AND m.set_option AND NOT m.inherit_option
+  ) THEN
+    RAISE EXCEPTION 'authenticator membership for bk01_runtime is not SET-only';
+  END IF;
+  IF has_database_privilege('bk01_runtime', current_database(), 'CREATE')
+     OR has_schema_privilege('bk01_runtime','local_service','CREATE') THEN
+    RAISE EXCEPTION 'bk01_runtime has unexpected CREATE authority';
+  END IF;
+  IF has_schema_privilege('bk01_runtime','local_service_internal','USAGE') THEN
+    RAISE EXCEPTION 'bk01_runtime has unexpected product/managed schema reach';
+  END IF;
+  -- H2 treats pre-existing PUBLIC ACLs on managed net/cron/extensions at the Data API
+  -- boundary. Check that this bootstrap adds no direct USAGE ACL for the runtime role;
+  -- effective reach through PUBLIC is not a role-specific grant and is not narrowed here.
+  IF EXISTS (
+    SELECT 1
+    FROM pg_namespace n
+    JOIN pg_roles runtime ON runtime.rolname='bk01_runtime'
+    CROSS JOIN LATERAL aclexplode(coalesce(n.nspacl, acldefault('n',n.nspowner))) acl
+    WHERE n.nspname IN ('ps01','ps01_internal','mt01','mt01_private',
+      'wstera_platform_internal','auth','storage','extensions','net','cron')
+      AND acl.grantee=runtime.oid AND acl.privilege_type='USAGE'
+  ) THEN
+    RAISE EXCEPTION 'bk01_runtime has a direct USAGE ACL on a foreign or managed schema';
+  END IF;
+  SELECT count(*) INTO v_exec_count
+  FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+  WHERE n.nspname='local_service' AND has_function_privilege('bk01_runtime',p.oid,'EXECUTE');
+  IF EXISTS (
+    SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+    WHERE n.nspname='local_service' AND has_function_privilege('bk01_runtime',p.oid,'EXECUTE')
+      AND p.oid::regprocedure::text NOT IN (
+        'local_service.authorize_booking_recovery_attempt(uuid,text)',
+        'local_service.claim_due_line_notifications(integer)',
+        'local_service.claim_stripe_webhook_event(text,text,timestamp with time zone)',
+        'local_service.complete_line_notification(uuid,integer,text,timestamp with time zone,timestamp with time zone,text)',
+        'local_service.sync_subscription_state_bk_a(text,bigint,uuid,text,text,text,text,bigint,boolean)',
+        'local_service.audit_platform_admin_update()',
+        'local_service.enforce_booking_status_transition()',
+        'local_service.enforce_ticket_owner_admin()',
+        'local_service.enqueue_booking_notifications()',
+        'local_service.generate_booking_code()',
+        'local_service.generate_link_token()',
+        'local_service.is_shop_member(uuid)',
+        'local_service.suppress_new_overdue_line_reminder()'
+      )
+  ) OR v_exec_count <> 13 THEN
+    RAISE EXCEPTION 'bk01_runtime effective EXECUTE set differs from the exact approved identities (observed count %)', v_exec_count;
+  END IF;
+  SELECT count(*) INTO v_table_write_count
+  FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+  WHERE n.nspname='local_service' AND c.relkind IN ('r','p','v','m')
+    AND (has_table_privilege('bk01_runtime',c.oid,'INSERT')
+      OR has_table_privilege('bk01_runtime',c.oid,'UPDATE')
+      OR has_table_privilege('bk01_runtime',c.oid,'DELETE')
+      OR has_table_privilege('bk01_runtime',c.oid,'TRUNCATE'));
+  IF v_table_write_count <> 0 THEN
+    RAISE EXCEPTION 'bk01_runtime has direct local_service table write authority';
+  END IF;
+END
+$bk01_runtime_boundary_check$;
 
 
 CREATE TABLE IF NOT EXISTS local_service_internal.migration_baseline (

@@ -70,6 +70,16 @@ BEGIN
 END
 $bk01_restore_function_owners$;
 
+-- Remove only the runtime boundary grants introduced by this bootstrap. The role
+-- itself is pre-provisioned by House and is intentionally not dropped here.
+REVOKE EXECUTE ON FUNCTION local_service.authorize_booking_recovery_attempt(uuid,text) FROM bk01_runtime;
+REVOKE EXECUTE ON FUNCTION local_service.claim_due_line_notifications(integer) FROM bk01_runtime;
+REVOKE EXECUTE ON FUNCTION local_service.claim_stripe_webhook_event(text,text,timestamp with time zone) FROM bk01_runtime;
+REVOKE EXECUTE ON FUNCTION local_service.complete_line_notification(uuid,integer,text,timestamp with time zone,timestamp with time zone,text) FROM bk01_runtime;
+REVOKE EXECUTE ON FUNCTION local_service.sync_subscription_state_bk_a(text,bigint,uuid,text,text,text,text,bigint,boolean) FROM bk01_runtime;
+REVOKE USAGE ON SCHEMA local_service FROM bk01_runtime;
+REVOKE bk01_runtime FROM authenticator;
+
 ALTER SCHEMA local_service OWNER TO postgres;
 DROP SCHEMA IF EXISTS local_service_internal CASCADE;
 
