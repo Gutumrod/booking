@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { BK01_RUNTIME_FUNCTIONS, BK01_PUBLIC_LEGACY_EXECUTE_EXCEPTIONS, BK01_RUNTIME_EFFECTIVE_FUNCTIONS, validateBk01RuntimeAuthority } from './lib/bk01-runtime-allowlist.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
@@ -27,6 +28,8 @@ if (manifest.sourceSha256 !== legacyHash || manifest.frozenMigrationCount !== 30
 const bootstrap = read('supabase/shared-runtime/bk01-platform-bootstrap.sql');
 const rollback = read('supabase/shared-runtime/bk01-platform-bootstrap-rollback.sql');
 const contract = JSON.parse(read('supabase/shared-runtime/bk01-request-helper-contract.json'));
+validateBk01RuntimeAuthority(bootstrap, 'generated bootstrap');
+validateBk01RuntimeAuthority(rollback, 'generated rollback');
 
 // ---------------------------------------------------------------------------
 // Required structure
@@ -38,6 +41,9 @@ for (const needle of [
   'local_service_internal.migration_baseline',
   'local_service_internal.schema_migrations',
   'local_service_internal.request_user_id',
+  'bk01_runtime',
+  'WITH INHERIT FALSE, SET TRUE',
+  'rolcanlogin OR rolsuper OR rolcreatedb OR rolcreaterole OR rolinherit OR rolbypassrls OR rolreplication',
 ]) {
   if (!bootstrap.includes(needle)) fail(`Bootstrap missing required boundary: ${needle}`);
 }
@@ -90,6 +96,33 @@ if (/\bauth\s*\./i.test(helperMatch[0])) fail('The JWT identity helper reference
 const bootstrapCode = bootstrap.replace(/--[^\n]*/g, '');
 if (/GRANT\s+[^;]*?\bON\s+SCHEMA\s+(auth|extensions|storage|cron|net)[\s,;]/i.test(bootstrapCode)) {
   fail('Bootstrap grants on a managed schema; the fix must not depend on schema auth.');
+}
+for (const identity of BK01_RUNTIME_FUNCTIONS) {
+  if (!bootstrap.includes(`GRANT EXECUTE ON FUNCTION ${identity} TO bk01_runtime;`)) {
+    fail(`Runtime grant missing from generated bootstrap allowlist: ${identity}`);
+  }
+  if (!rollback.includes(`REVOKE EXECUTE ON FUNCTION ${identity} FROM bk01_runtime;`)) {
+    fail(`Runtime grant missing matching rollback revoke: ${identity}`);
+  }
+}
+for (const schema of ['ps01', 'ps01_internal', 'mt01', 'mt01_private', 'wstera_platform_internal', 'auth', 'storage', 'extensions', 'net', 'cron']) {
+  if (new RegExp(`GRANT\\s+[^;]*?\\bON\\s+SCHEMA\\s+${schema}\\b[^;]*?\\bTO\\s+bk01_runtime`, 'i').test(bootstrapCode)) {
+    fail(`Generated bootstrap grants bk01_runtime access to forbidden schema ${schema}.`);
+  }
+}
+if (!bootstrap.includes('has_function_privilege(\'bk01_runtime\',p.oid,\'EXECUTE\')')
+    || !bootstrap.includes('effective EXECUTE set differs from the exact approved identities')) {
+  fail('Generated bootstrap is missing the exact effective runtime EXECUTE identity guard.');
+}
+for (const identity of BK01_RUNTIME_EFFECTIVE_FUNCTIONS) {
+  if (!bootstrap.includes(`'${identity}'`)) fail(`Generated effective EXECUTE guard omits ${identity}`);
+}
+if (BK01_PUBLIC_LEGACY_EXECUTE_EXCEPTIONS.length !== 8
+    || BK01_RUNTIME_EFFECTIVE_FUNCTIONS.length !== BK01_RUNTIME_FUNCTIONS.length + 8) {
+  fail('Runtime legacy exception set or exact allowlist cardinality changed.');
+}
+if (!bootstrap.includes('has_table_privilege(\'bk01_runtime\',c.oid,\'INSERT\')')) {
+  fail('Generated bootstrap is missing the runtime direct-table-write guard.');
 }
 
 // ---------------------------------------------------------------------------

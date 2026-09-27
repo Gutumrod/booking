@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { BK01_RUNTIME_FUNCTIONS, BK01_RUNTIME_EFFECTIVE_FUNCTIONS } from './lib/bk01-runtime-allowlist.mjs';
 
 // ---------------------------------------------------------------------------
 // BK01 shared-runtime bootstrap generator.
@@ -270,14 +271,25 @@ BEGIN
   IF EXISTS (
     SELECT 1 FROM pg_roles
     WHERE rolname = 'bk01_runtime'
-      AND (rolcanlogin OR rolsuper OR rolcreatedb OR rolcreaterole OR rolbypassrls)
+      AND (rolcanlogin OR rolsuper OR rolcreatedb OR rolcreaterole OR rolinherit OR rolbypassrls OR rolreplication)
   ) THEN
     RAISE EXCEPTION 'Existing bk01_runtime has unsafe attributes';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticator') THEN
+    RAISE EXCEPTION 'authenticator is required for the bk01_runtime Data API boundary';
+  END IF;
+  IF EXISTS (
+    SELECT 1 FROM pg_auth_members m
+    JOIN pg_roles member ON member.oid = m.member
+    WHERE member.rolname = 'bk01_runtime'
+  ) THEN
+    RAISE EXCEPTION 'bk01_runtime must not be a member of another role';
   END IF;
 END
 $bk01_roles$;
 
 GRANT bk01_migrator TO postgres;
+GRANT bk01_runtime TO authenticator WITH INHERIT FALSE, SET TRUE;
 `;
 
 const privilegesBlock = `
@@ -286,6 +298,8 @@ ALTER SCHEMA local_service OWNER TO bk01_migrator;
 ALTER SCHEMA ${INTERNAL_SCHEMA} OWNER TO bk01_migrator;
 REVOKE ALL ON SCHEMA ${INTERNAL_SCHEMA} FROM PUBLIC, anon, authenticated, service_role;
 GRANT USAGE ON SCHEMA local_service TO anon, authenticated, service_role;
+GRANT USAGE ON SCHEMA local_service TO bk01_runtime;
+${BK01_RUNTIME_FUNCTIONS.map((identity) => `GRANT EXECUTE ON FUNCTION ${identity} TO bk01_runtime;`).join('\n')}
 
 -- NO grant is taken on schema auth or schema extensions. bk01_migrator must be able to
 -- prove it cannot resolve auth.*; that proof is in the guard block below.
@@ -557,9 +571,76 @@ END
 $bk01_function_boundary_check$;
 `;
 
+const runtimeBoundaryCheckBlock = `
+DO $bk01_runtime_boundary_check$
+DECLARE v_exec_count integer; v_table_write_count integer;
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_roles
+    WHERE rolname='bk01_runtime'
+      AND (rolcanlogin OR rolsuper OR rolcreatedb OR rolcreaterole OR rolinherit OR rolbypassrls OR rolreplication)
+  ) THEN
+    RAISE EXCEPTION 'bk01_runtime role attributes are unsafe';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_auth_members m
+    JOIN pg_roles member ON member.oid=m.member
+    JOIN pg_roles granted ON granted.oid=m.roleid
+    WHERE member.rolname='authenticator' AND granted.rolname='bk01_runtime'
+      AND m.set_option AND NOT m.inherit_option
+  ) THEN
+    RAISE EXCEPTION 'authenticator membership for bk01_runtime is not SET-only';
+  END IF;
+  IF has_database_privilege('bk01_runtime', current_database(), 'CREATE')
+     OR has_schema_privilege('bk01_runtime','local_service','CREATE') THEN
+    RAISE EXCEPTION 'bk01_runtime has unexpected CREATE authority';
+  END IF;
+  IF has_schema_privilege('bk01_runtime','local_service_internal','USAGE') THEN
+    RAISE EXCEPTION 'bk01_runtime has unexpected product/managed schema reach';
+  END IF;
+  -- H2 treats pre-existing PUBLIC ACLs on managed net/cron/extensions at the Data API
+  -- boundary. Check that this bootstrap adds no direct USAGE ACL for the runtime role;
+  -- effective reach through PUBLIC is not a role-specific grant and is not narrowed here.
+  IF EXISTS (
+    SELECT 1
+    FROM pg_namespace n
+    JOIN pg_roles runtime ON runtime.rolname='bk01_runtime'
+    CROSS JOIN LATERAL aclexplode(coalesce(n.nspacl, acldefault('n',n.nspowner))) acl
+    WHERE n.nspname IN ('ps01','ps01_internal','mt01','mt01_private',
+      'wstera_platform_internal','auth','storage','extensions','net','cron')
+      AND acl.grantee=runtime.oid AND acl.privilege_type='USAGE'
+  ) THEN
+    RAISE EXCEPTION 'bk01_runtime has a direct USAGE ACL on a foreign or managed schema';
+  END IF;
+  SELECT count(*) INTO v_exec_count
+  FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+  WHERE n.nspname='local_service' AND has_function_privilege('bk01_runtime',p.oid,'EXECUTE');
+  IF EXISTS (
+    SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+    WHERE n.nspname='local_service' AND has_function_privilege('bk01_runtime',p.oid,'EXECUTE')
+      AND p.oid::regprocedure::text NOT IN (
+${BK01_RUNTIME_EFFECTIVE_FUNCTIONS.map((identity) => `        '${identity}'`).join(',\n')}
+      )
+  ) OR v_exec_count <> ${BK01_RUNTIME_EFFECTIVE_FUNCTIONS.length} THEN
+    RAISE EXCEPTION 'bk01_runtime effective EXECUTE set differs from the exact approved identities (observed count %)', v_exec_count;
+  END IF;
+  SELECT count(*) INTO v_table_write_count
+  FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+  WHERE n.nspname='local_service' AND c.relkind IN ('r','p','v','m')
+    AND (has_table_privilege('bk01_runtime',c.oid,'INSERT')
+      OR has_table_privilege('bk01_runtime',c.oid,'UPDATE')
+      OR has_table_privilege('bk01_runtime',c.oid,'DELETE')
+      OR has_table_privilege('bk01_runtime',c.oid,'TRUNCATE'));
+  IF v_table_write_count <> 0 THEN
+    RAISE EXCEPTION 'bk01_runtime has direct local_service table write authority';
+  END IF;
+END
+$bk01_runtime_boundary_check$;
+`;
+
 const bootstrap = [
   header, rolesBlock, privilegesBlock, helperBlock, relOwnersBlock,
-  functionOwnersBlock, rewriteSection, authBoundaryGuard,
+  functionOwnersBlock, rewriteSection, authBoundaryGuard, runtimeBoundaryCheckBlock,
   ledgerBlock, boundaryCheckBlock, functionVerificationBlock,
 ].join('\n');
 
@@ -640,6 +721,12 @@ BEGIN
 END
 $bk01_restore_function_owners$;
 
+-- Remove only the runtime boundary grants introduced by this bootstrap. The role
+-- itself is pre-provisioned by House and is intentionally not dropped here.
+REVOKE EXECUTE ON FUNCTION ${BK01_RUNTIME_FUNCTIONS.join(' FROM bk01_runtime;\nREVOKE EXECUTE ON FUNCTION ')} FROM bk01_runtime;
+REVOKE USAGE ON SCHEMA local_service FROM bk01_runtime;
+REVOKE bk01_runtime FROM authenticator;
+
 ALTER SCHEMA local_service OWNER TO postgres;
 DROP SCHEMA IF EXISTS ${INTERNAL_SCHEMA} CASCADE;
 
@@ -708,7 +795,6 @@ fs.writeFileSync(manifestPath, `${JSON.stringify({
   frozenMigrationCount: files.length,
   sourceSha256: sourceHash,
   lastLegacyVersion,
-  generatedAt: new Date().toISOString(),
 }, null, 2)}\n`, 'utf8');
 
 console.log(`Generated ${path.relative(root, bootstrapPath)}`);

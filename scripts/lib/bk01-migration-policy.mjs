@@ -1,3 +1,5 @@
+import { validateBk01RuntimeAuthority } from './bk01-runtime-allowlist.mjs';
+
 const OWNED_SCHEMAS = new Set(['local_service', 'local_service_internal']);
 const ALLOWED_GRANTEES = new Set(['anon', 'authenticated', 'service_role', 'bk01_runtime']);
 
@@ -147,6 +149,7 @@ function assertAuthSchemaIndependence(sql, body, sourceName) {
 export function validateBk01MigrationSql(sql, sourceName = 'migration') {
   if (typeof sql !== 'string' || !sql.trim()) throw new Error(`${sourceName} is empty`);
   const body = stripComments(sql);
+  validateBk01RuntimeAuthority(sql, sourceName);
 
   for (const pattern of FORBIDDEN_GLOBAL) {
     if (pattern.test(body)) {

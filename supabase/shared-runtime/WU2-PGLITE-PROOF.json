@@ -1,0 +1,341 @@
+{
+  "generated_at": "2026-09-27T11:08:47.622Z",
+  "engine": "pglite (embedded postgres)",
+  "subject": "supabase/shared-runtime/bk01-platform-bootstrap.sql",
+  "frozen_chain_files": 30,
+  "frozen_chain_functions": 61,
+  "junction_a_transferred_functions": 58,
+  "checks": [
+    {
+      "name": "the real frozen BK01 chain (30 migrations) loads into Postgres",
+      "ok": true,
+      "detail": "30 files applied, 0 errors"
+    },
+    {
+      "name": "BASELINE reproduces Junction A: a transferred function fails on auth.uid()",
+      "ok": true,
+      "detail": "permission denied for schema auth"
+    },
+    {
+      "name": "generated bootstrap applies cleanly to a real Postgres with the real chain",
+      "ok": true,
+      "detail": "48802 bytes applied"
+    },
+    {
+      "name": "effective bk01_runtime EXECUTE identities equal exact 5+8 allowlist",
+      "ok": true,
+      "detail": "expected=13; observed=13"
+    },
+    {
+      "name": "non-vacuity rejects a 9th PUBLIC-executable function",
+      "ok": true,
+      "detail": "temporary local_service.wu2_extra_probe() PUBLIC grant was detected then removed"
+    },
+    {
+      "name": "non-vacuity rejects an extra function granted to bk01_runtime",
+      "ok": true,
+      "detail": "temporary direct grant was detected then revoked"
+    },
+    {
+      "name": "helper behaviour table matches the shipped contract (all 7 cases)",
+      "ok": true,
+      "detail": "no_claim=null  empty_claim=null  empty_json=null  valid_sub=11111111-2222-3333-4444-555555555555  missing_sub=null  empty_sub=ERROR  sub_not_uuid=ERROR"
+    },
+    {
+      "name": "helper fails closed on a malformed (non-uuid) claim",
+      "ok": true,
+      "detail": "invalid input syntax for type uuid: \"not-a-uuid\""
+    },
+    {
+      "name": "helper equals auth.uid() on every claim shape",
+      "ok": true,
+      "detail": "no_claim:=  empty_claim:=  empty_json:=  valid_sub:=  missing_sub:=  empty_sub:=  sub_not_uuid:="
+    },
+    {
+      "name": "rewritten is_shop_member works as bk01_migrator and returns the correct answer",
+      "ok": true,
+      "detail": "member=true  non-member=false"
+    },
+    {
+      "name": "no rewritten function raises 42501 on schema auth",
+      "ok": true,
+      "detail": "16 identities exercised; non-auth errors (NULL args) = 16"
+    },
+    {
+      "name": "no TRANSFERRED local_service function resolves schema auth after the bootstrap",
+      "ok": true,
+      "detail": "catalog scan clean; declared exceptions still carrying auth.users by design = 1"
+    },
+    {
+      "name": "the declared ownership-exception inventory equals the measured shared-surface set",
+      "ok": true,
+      "detail": "declared=3 measured=3"
+    },
+    {
+      "name": "no bk01* role is a LOGIN role",
+      "ok": true,
+      "detail": "bk01_migrator(canlogin=false) bk01_runtime(canlogin=false)"
+    },
+    {
+      "name": "helper is not executable by any Data API role",
+      "ok": true,
+      "detail": "{\"anon_exec\":false,\"authed_exec\":false,\"svc_exec\":false}"
+    },
+    {
+      "name": "bk01_runtime is NOLOGIN while authenticator can SET ROLE to it",
+      "ok": true,
+      "detail": "current_user=bk01_runtime; rolcanlogin=false; direct credential handshake is not available in PGlite"
+    },
+    {
+      "name": "bk01_runtime can EXECUTE each of its five allowlisted RPCs",
+      "ok": true,
+      "detail": "local_service.authorize_booking_recovery_attempt: callable | local_service.claim_due_line_notifications: callable | local_service.claim_stripe_webhook_event: callable | local_service.complete_line_notification: callable | local_service.sync_subscription_state_bk_a: callable"
+    },
+    {
+      "name": "bk01_runtime cannot read/write the stand-in PS01 relation",
+      "ok": true,
+      "detail": "denied:select denied:insert denied:update denied:delete"
+    },
+    {
+      "name": "bk01_runtime has no direct reach to stand-in net/cron objects",
+      "ok": true,
+      "detail": "denied:net.http_request_queue denied:cron.job; PGlite does not model PostgREST exposed-schema filtering or Supabase managed PUBLIC ACLs"
+    },
+    {
+      "name": "runtime has zero direct table-write grants and SET-only authenticator membership",
+      "ok": true,
+      "detail": "table_write_objects=0; membership={\"set_option\":true,\"inherit_option\":false}"
+    },
+    {
+      "name": "bootstrap rollback removes its grants, membership and migrator objects, retaining the pre-existing runtime role",
+      "ok": true,
+      "detail": "{\"schema_usage\":false,\"rpc_exec\":false,\"migrator_exists\":false,\"internal_schema_exists\":false,\"runtime_exists\":true}; memberships/grants restored=true"
+    }
+  ],
+  "helper_contract_observed": [
+    {
+      "case": "no_claim",
+      "declared": null,
+      "actual": null,
+      "raised": null
+    },
+    {
+      "case": "empty_claim",
+      "declared": null,
+      "actual": null,
+      "raised": null
+    },
+    {
+      "case": "empty_json",
+      "declared": null,
+      "actual": null,
+      "raised": null
+    },
+    {
+      "case": "valid_sub",
+      "declared": "11111111-2222-3333-4444-555555555555",
+      "actual": "11111111-2222-3333-4444-555555555555",
+      "raised": null
+    },
+    {
+      "case": "missing_sub",
+      "declared": null,
+      "actual": null,
+      "raised": null
+    },
+    {
+      "case": "empty_sub",
+      "declared": "error",
+      "actual": "error",
+      "raised": "invalid input syntax for type uuid: \"\""
+    },
+    {
+      "case": "sub_not_uuid",
+      "declared": "error",
+      "actual": "error",
+      "raised": "invalid input syntax for type uuid: \"not-a-uuid\""
+    }
+  ],
+  "auth_uid_equivalence": [
+    {
+      "case": "no_claim",
+      "auth_uid": "null",
+      "helper": "null",
+      "equal": true
+    },
+    {
+      "case": "empty_claim",
+      "auth_uid": "null",
+      "helper": "null",
+      "equal": true
+    },
+    {
+      "case": "empty_json",
+      "auth_uid": "null",
+      "helper": "null",
+      "equal": true
+    },
+    {
+      "case": "valid_sub",
+      "auth_uid": "11111111-2222-3333-4444-555555555555",
+      "helper": "11111111-2222-3333-4444-555555555555",
+      "equal": true
+    },
+    {
+      "case": "missing_sub",
+      "auth_uid": "null",
+      "helper": "null",
+      "equal": true
+    },
+    {
+      "case": "empty_sub",
+      "auth_uid": "ERROR",
+      "helper": "ERROR",
+      "equal": true
+    },
+    {
+      "case": "sub_not_uuid",
+      "auth_uid": "ERROR",
+      "helper": "ERROR",
+      "equal": true
+    }
+  ],
+  "per_function_exercise": [
+    {
+      "identity": "local_service.apply_topup(uuid,integer,integer)",
+      "error": "syntax error at or near \"select\""
+    },
+    {
+      "identity": "local_service.approve_booking_deposit(uuid)",
+      "error": "syntax error at or near \"select\""
+    },
+    {
+      "identity": "local_service.audit_platform_admin_update()",
+      "error": "syntax error at or near \"select\""
+    },
+    {
+      "identity": "local_service.cancel_booking(uuid,text)",
+      "error": "syntax error at or near \"select\""
+    },
+    {
+      "identity": "local_service.current_staff_id(uuid)",
+      "error": "syntax error at or near \"select\""
+    },
+    {
+      "identity": "local_service.enforce_booking_status_transition()",
+      "error": "syntax error at or near \"select\""
+    },
+    {
+      "identity": "local_service.export_core_business_data(uuid)",
+      "error": "syntax error at or near \"select\""
+    },
+    {
+      "identity": "local_service.extend_booking_hold(uuid)",
+      "error": "syntax error at or near \"select\""
+    },
+    {
+      "identity": "local_service.get_entitlement_usage(uuid)",
+      "error": "syntax error at or near \"select\""
+    },
+    {
+      "identity": "local_service.has_shop_role(uuid,text[])",
+      "error": "syntax error at or near \"select\""
+    },
+    {
+      "identity": "local_service.is_platform_admin()",
+      "error": "syntax error at or near \"select\""
+    },
+    {
+      "identity": "local_service.is_shop_member(uuid)",
+      "error": "syntax error at or near \"select\""
+    },
+    {
+      "identity": "local_service.provision_owner_shop(text,text,text,text,text,text,text,text,uuid)",
+      "error": "syntax error at or near \"select\""
+    },
+    {
+      "identity": "local_service.reject_deposit_slip(uuid,text)",
+      "error": "syntax error at or near \"select\""
+    },
+    {
+      "identity": "local_service.request_account_closure(uuid,text)",
+      "error": "syntax error at or near \"select\""
+    },
+    {
+      "identity": "local_service.set_booking_outcome(uuid,text,text)",
+      "error": "syntax error at or near \"select\""
+    }
+  ],
+  "runtime_allowlist_observed": [
+    {
+      "name": "local_service.authorize_booking_recovery_attempt",
+      "ok": true,
+      "error": null
+    },
+    {
+      "name": "local_service.claim_due_line_notifications",
+      "ok": true,
+      "error": null
+    },
+    {
+      "name": "local_service.claim_stripe_webhook_event",
+      "ok": true,
+      "error": null
+    },
+    {
+      "name": "local_service.complete_line_notification",
+      "ok": true,
+      "error": null
+    },
+    {
+      "name": "local_service.sync_subscription_state_bk_a",
+      "ok": true,
+      "error": null
+    }
+  ],
+  "cross_product_denials": [
+    {
+      "statement": "select * from ps01.runtime_boundary_probe",
+      "denied": true
+    },
+    {
+      "statement": "insert into ps01.runtime_boundary_probe values (2, 'blocked')",
+      "denied": true
+    },
+    {
+      "statement": "update ps01.runtime_boundary_probe set note='blocked' where id=1",
+      "denied": true
+    },
+    {
+      "statement": "delete from ps01.runtime_boundary_probe where id=1",
+      "denied": true
+    }
+  ],
+  "managed_surface_denials": [
+    {
+      "statement": "select * from net.http_request_queue",
+      "denied": true
+    },
+    {
+      "statement": "select * from cron.job",
+      "denied": true
+    }
+  ],
+  "rollback_observed": {
+    "schema_usage": false,
+    "rpc_exec": false,
+    "migrator_exists": false,
+    "internal_schema_exists": false,
+    "runtime_exists": true
+  },
+  "pre_bootstrap_snapshot": {
+    "memberships": "",
+    "schema_grants": "",
+    "function_grants": ""
+  },
+  "post_rollback_snapshot": {
+    "memberships": "",
+    "schema_grants": "",
+    "function_grants": ""
+  }
+}
