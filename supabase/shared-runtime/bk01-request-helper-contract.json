@@ -1,0 +1,99 @@
+{
+  "helper": "local_service_internal.request_user_id()",
+  "replaces": "auth.uid()",
+  "equality_claim": "returns the same value auth.uid() returns for the same request",
+  "equals_auth_uid": true,
+  "reads": [
+    "request.jwt.claim.sub",
+    "request.jwt.claims ->> 'sub'"
+  ],
+  "returns": "uuid",
+  "volatility": "STABLE",
+  "security": "INVOKER (default)",
+  "search_path": "pg_catalog",
+  "granted_to": [
+    "bk01_migrator"
+  ],
+  "revoked_from": [
+    "PUBLIC",
+    "anon",
+    "authenticated",
+    "service_role"
+  ],
+  "cases": [
+    {
+      "case": "no_claim",
+      "setting": null,
+      "expected": null,
+      "fail_closed": false,
+      "note": "unauthenticated request"
+    },
+    {
+      "case": "empty_claim",
+      "setting": "",
+      "expected": null,
+      "fail_closed": false,
+      "note": "empty string collapses to NULL"
+    },
+    {
+      "case": "empty_json",
+      "setting": "{}",
+      "expected": null,
+      "fail_closed": false,
+      "note": "no sub key"
+    },
+    {
+      "case": "valid_sub",
+      "setting": "{\"sub\":\"11111111-2222-3333-4444-555555555555\"}",
+      "expected": "11111111-2222-3333-4444-555555555555",
+      "fail_closed": false
+    },
+    {
+      "case": "missing_sub",
+      "setting": "{\"other\":\"x\"}",
+      "expected": null,
+      "fail_closed": false
+    },
+    {
+      "case": "empty_sub",
+      "setting": "{\"sub\":\"\"}",
+      "expected": "error",
+      "fail_closed": true,
+      "note": "measured: Supabase auth.uid() casts the COALESCED value, and empty string is not NULL, so \"\"::uuid raises. The helper reproduces that exactly — a per-branch cast would have returned NULL and diverged."
+    },
+    {
+      "case": "sub_not_uuid",
+      "setting": "{\"sub\":\"not-a-uuid\"}",
+      "expected": "error",
+      "fail_closed": true,
+      "note": "malformed claim raises, never a silent NULL"
+    }
+  ],
+  "generated_from": {
+    "frozen_migrations_sha256": "812b4656b5fcc65d881afd1712581d7c4ba0fd37f39a35c9d7d7d6173b695f5a",
+    "frozen_migration_count": 30
+  },
+  "rewritten_identities": [
+    "local_service.apply_topup(uuid,integer,integer)",
+    "local_service.approve_booking_deposit(uuid)",
+    "local_service.audit_platform_admin_update()",
+    "local_service.cancel_booking(uuid,text)",
+    "local_service.current_staff_id(uuid)",
+    "local_service.enforce_booking_status_transition()",
+    "local_service.export_core_business_data(uuid)",
+    "local_service.extend_booking_hold(uuid)",
+    "local_service.get_entitlement_usage(uuid)",
+    "local_service.has_shop_role(uuid,text[])",
+    "local_service.is_platform_admin()",
+    "local_service.is_shop_member(uuid)",
+    "local_service.provision_owner_shop(text,text,text,text,text,text,text,text,uuid)",
+    "local_service.reject_deposit_slip(uuid,text)",
+    "local_service.request_account_closure(uuid,text)",
+    "local_service.set_booking_outcome(uuid,text,text)"
+  ],
+  "ownership_exception_identities": [
+    "local_service.link_staff_user(uuid,text)",
+    "local_service.submit_deposit_slip(uuid,text,text,text)",
+    "local_service.submit_deposit_slip(uuid,text,text)"
+  ]
+}

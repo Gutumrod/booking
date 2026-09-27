@@ -44,7 +44,10 @@ test('generated bootstrap contains bounded roles and no embedded credential', ()
   const bootstrap = read('supabase/shared-runtime/bk01-platform-bootstrap.sql');
   const manifest = JSON.parse(read('supabase/shared-runtime/bk01-legacy-baseline.json'));
   assert.match(bootstrap, /CREATE ROLE bk01_migrator NOLOGIN/);
-  assert.match(bootstrap, /CREATE ROLE bk01_migrator_login LOGIN/);
+  // Lane B criterion (b) / H2: no BK01 product database LOGIN may exist.
+  assert.doesNotMatch(bootstrap, /create\s+role\s+bk01_migrator_login/i);
+  assert.doesNotMatch(bootstrap, /\bCREATE ROLE\s+\S+\s+[^;]*\bLOGIN\b/i);
+  assert.match(bootstrap, /GRANT bk01_migrator TO postgres/);
   assert.match(bootstrap, /local_service_internal\.schema_migrations/);
   assert.doesNotMatch(bootstrap, /\bPASSWORD\b/i);
   assert.equal(manifest.frozenMigrationCount, 30);
@@ -55,4 +58,17 @@ test('product Supabase config is explicitly local-only', () => {
   const config = read('supabase/config.toml');
   assert.match(config, /LOCAL DEVELOPMENT ONLY/);
   assert.match(config, /DO NOT run `supabase config push`/);
+});
+
+// N-4: the operator credential must not authorize product SQL to change session identity.
+test('BK01 policy rejects session authorization changes in all modifier forms', () => {
+  for (const sql of [
+    'SET SESSION AUTHORIZATION postgres;',
+    'SET SESSION SESSION AUTHORIZATION postgres;',
+    'SET LOCAL SESSION AUTHORIZATION postgres;',
+    'RESET SESSION AUTHORIZATION;',
+    'SET /* modifier */ LOCAL SESSION AUTHORIZATION DEFAULT;',
+  ]) {
+    assert.throws(() => validateBk01MigrationSql(sql, 'session-identity.sql'), /forbidden/);
+  }
 });

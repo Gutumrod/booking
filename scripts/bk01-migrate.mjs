@@ -23,8 +23,8 @@ if (!['plan', 'apply'].includes(mode)) {
   fail('Usage: node scripts/bk01-migrate.mjs <plan|apply>');
 }
 
-const databaseUrl = process.env.BK01_MIGRATOR_DATABASE_URL?.trim();
-if (!databaseUrl) fail('BK01_MIGRATOR_DATABASE_URL is required.');
+const databaseUrl = process.env.BK01_PLATFORM_DATABASE_URL?.trim();
+if (!databaseUrl) fail('BK01_PLATFORM_DATABASE_URL is required.');
 const environment = process.env.BK01_SHARED_RUNTIME_ENV?.trim().toLowerCase();
 if (!environment) fail('BK01_SHARED_RUNTIME_ENV is required.');
 
@@ -32,14 +32,25 @@ let parsedUrl;
 try {
   parsedUrl = new URL(databaseUrl);
 } catch {
-  fail('BK01_MIGRATOR_DATABASE_URL must be a valid PostgreSQL connection URL.');
+  fail('BK01_PLATFORM_DATABASE_URL must be a valid PostgreSQL connection URL.');
 }
 if (!['postgres:', 'postgresql:'].includes(parsedUrl.protocol)) {
-  fail('BK01_MIGRATOR_DATABASE_URL must use postgresql:// or postgres://.');
+  fail('BK01_PLATFORM_DATABASE_URL must use postgresql:// or postgres://.');
 }
+
+// Lane B criterion (b) / H2: BK01 has no product database LOGIN. The operator connects
+// with the platform credential and the runner narrows authority with SET LOCAL ROLE
+// bk01_migrator inside the transaction, so the product never holds a reusable credential.
 const sessionLogin = decodeURIComponent(parsedUrl.username).split('.')[0];
-if (sessionLogin !== 'bk01_migrator_login') {
-  fail(`Migration URL must authenticate as bk01_migrator_login, got ${sessionLogin || '<empty>'}.`);
+const OPERATOR_LOGINS = (process.env.BK01_OPERATOR_LOGINS ?? 'postgres').split(',').map((s) => s.trim()).filter(Boolean);
+if (sessionLogin === 'bk01_migrator') {
+  fail('Connect with the platform operator credential; the runner narrows to bk01_migrator itself.');
+}
+if (!OPERATOR_LOGINS.includes(sessionLogin)) {
+  fail(
+    `BK01_PLATFORM_DATABASE_URL must authenticate as a platform operator login ` +
+      `(${OPERATOR_LOGINS.join(', ')}), got ${sessionLogin || '<empty>'}.`,
+  );
 }
 
 const expectedProjectRef = process.env.BK01_EXPECTED_PROJECT_REF?.trim();
@@ -88,7 +99,7 @@ const sql = postgres(databaseUrl, {
   onnotice: () => {},
 });
 
-async function verifyBoundary(tx) {
+async function verifyBoundary(tx, operatorLogin) {
   const rows = await tx.unsafe(`
     select
       current_user,
@@ -99,17 +110,23 @@ async function verifyBoundary(tx) {
       has_schema_privilege(current_user, 'public', 'CREATE') as public_create,
       case when to_regnamespace('ps01') is null then false else has_schema_privilege(current_user, 'ps01', 'USAGE') end as ps01_usage,
       case when to_regnamespace('ps01_internal') is null then false else has_schema_privilege(current_user, 'ps01_internal', 'USAGE') end as ps01_internal_usage,
-      case when to_regnamespace('storage') is null then false else has_schema_privilege(current_user, 'storage', 'USAGE') end as storage_usage
+      case when to_regnamespace('storage') is null then false else has_schema_privilege(current_user, 'storage', 'USAGE') end as storage_usage,
+      case when to_regnamespace('auth') is null then false else has_schema_privilege(current_user, 'auth', 'USAGE') end as auth_usage
   `);
   const state = rows[0];
   if (!state || state.current_user !== 'bk01_migrator') {
     fail(`Expected current_user=bk01_migrator after SET ROLE, got ${state?.current_user ?? '<none>'}.`);
   }
-  if (state.session_user !== 'bk01_migrator_login') {
-    fail(`Expected session_user=bk01_migrator_login, got ${state.session_user}.`);
+  // The session belongs to the platform operator; only the role is narrowed. This is what
+  // replaces the retired product LOGIN: no credential is ever issued to the product.
+  if (state.session_user !== operatorLogin) {
+    fail(`Expected session_user=${operatorLogin} (platform operator), got ${state.session_user}.`);
   }
   if (state.product_owner !== 'bk01_migrator' || state.internal_owner !== 'bk01_migrator') {
     fail('BK01 schema ownership boundary is not established.');
+  }
+  if (state.auth_usage) {
+    fail('BK01 migrator holds USAGE on schema auth; the bootstrap remediation is not in place.');
   }
   if (state.db_create || state.public_create || state.ps01_usage || state.ps01_internal_usage || state.storage_usage) {
     fail('BK01 migrator has authority outside the approved product boundary.');
@@ -134,7 +151,7 @@ async function run() {
   await sql.begin(async (tx) => {
     if (mode === 'plan') await tx.unsafe('SET TRANSACTION READ ONLY');
     await tx.unsafe('SET LOCAL ROLE bk01_migrator');
-    await verifyBoundary(tx);
+    await verifyBoundary(tx, sessionLogin);
     await tx.unsafe("SELECT pg_advisory_xact_lock(hashtextextended('bk01:shared-runtime:migrations', 0))");
 
     const appliedRows = await tx.unsafe(`

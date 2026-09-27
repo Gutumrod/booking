@@ -1,0 +1,11 @@
+{
+  "name": "bk01-lane-b-source-proof",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "proof": "node wu1_e2e.mjs"
+  },
+  "dependencies": {
+    "@electric-sql/pglite": "0.5.8"
+  }
+}
