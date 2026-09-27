@@ -215,12 +215,17 @@ test('Lane B (b): policy rejects auth.uid() in the product migration stream', ()
     /auth\.uid|request_user_id/,
   );
 
-  // an explicitly declared exception is the only way through
+  // an explicitly declared exception is the only way through — and the
+  // declaration does not excuse the file from F-6: a CREATE OR REPLACE with a
+  // new signature is a NEW function object with its own default PUBLIC EXECUTE,
+  // so the sample must carry the matching REVOKE for the auth.uid() rule to be
+  // the rule that is actually being exercised here.
   assert.equal(
     validateBk01MigrationSql(
       `-- BK01-ALLOW-AUTH-UID: get_entitlement_usage
 create or replace function local_service.get_entitlement_usage(p_shop_id uuid)
-returns json language sql as $$ select auth.uid()::text::json $$;`,
+returns json language sql as $$ select auth.uid()::text::json $$;
+revoke all on function local_service.get_entitlement_usage(uuid) from public;`,
       'declared.sql',
     ),
     true,

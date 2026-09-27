@@ -2125,7 +2125,7 @@ DECLARE
     v_used INTEGER;
     v_remaining_main INT;
 BEGIN
-    IF auth.uid() IS NULL THEN
+    IF local_service_internal.request_user_id() IS NULL THEN
         RAISE EXCEPTION USING ERRCODE = '42501', MESSAGE = 'Authentication required';
     END IF;
 
@@ -2278,7 +2278,7 @@ SECURITY DEFINER
 SET search_path = pg_catalog, local_service
 AS $$
 DECLARE
-    v_user_id UUID := auth.uid();
+    v_user_id UUID := local_service_internal.request_user_id();
     v_shop_id UUID;
     v_shop_slug TEXT;
     v_owned_shops INTEGER;
