@@ -1,5 +1,8 @@
 -- PLATFORM-ADMIN ROLLBACK FOR BK01 MIGRATION-BOUNDARY BOOTSTRAP ONLY.
 -- Valid only before any product-local BK01 migration has been applied.
+--
+-- Also retires bk01_migrator_login where it exists: H2 forbids a direct product
+-- database LOGIN in the shared project.
 DO $bk01_rollback_guard$
 DECLARE applied_count integer;
 BEGIN
@@ -14,6 +17,25 @@ BEGIN
   END IF;
 END
 $bk01_rollback_guard$;
+
+DO $bk01_retire_product_login$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname='bk01_migrator_login') THEN
+    IF EXISTS (SELECT 1 FROM pg_stat_activity WHERE usename='bk01_migrator_login') THEN
+      RAISE EXCEPTION 'Active bk01_migrator_login session(s); drain before retiring';
+    END IF;
+    EXECUTE 'REVOKE ALL ON SCHEMA local_service FROM bk01_migrator_login';
+    EXECUTE 'REVOKE ALL ON SCHEMA local_service_internal FROM bk01_migrator_login';
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname='bk01_migrator') THEN
+      EXECUTE 'REVOKE bk01_migrator FROM bk01_migrator_login';
+    END IF;
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname='bk01_runtime') THEN
+      EXECUTE 'REVOKE bk01_runtime FROM bk01_migrator_login';
+    END IF;
+    EXECUTE 'DROP ROLE bk01_migrator_login';
+  END IF;
+END
+$bk01_retire_product_login$;
 
 DO $bk01_restore_rel_owners$
 DECLARE r record;
@@ -54,18 +76,12 @@ DROP SCHEMA IF EXISTS local_service_internal CASCADE;
 DO $bk01_drop_roles$
 BEGIN
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname='bk01_migrator') THEN
-    REVOKE USAGE ON SCHEMA auth, extensions FROM bk01_migrator;
     REVOKE ALL ON SCHEMA local_service FROM bk01_migrator;
-  END IF;
-  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname='bk01_migrator_login')
-     AND EXISTS (SELECT 1 FROM pg_roles WHERE rolname='bk01_migrator') THEN
-    REVOKE bk01_migrator FROM bk01_migrator_login;
-  END IF;
-  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname='bk01_migrator') THEN
     REVOKE bk01_migrator FROM postgres;
   END IF;
 END
 $bk01_drop_roles$;
 
-DROP ROLE IF EXISTS bk01_migrator_login;
 DROP ROLE IF EXISTS bk01_migrator;
+-- bk01_runtime is NOT dropped here: it is a runtime identity owned by the Data API
+-- lane, not by this bootstrap.
