@@ -332,9 +332,74 @@ ORDER BY display_order ASC, type_code ASC;
 
 REVOKE ALL ON TABLE local_service.app_business_types FROM PUBLIC, anon, authenticated;
 GRANT SELECT ON TABLE local_service.app_business_types TO authenticated;
+-- F-12: the signup page reads the type list BEFORE a session exists, so anon
+-- needs this projection, not the table. Exactly one new grant, on exactly this
+-- one view; the source table local_service.business_types keeps its
+-- REVOKE ... FROM anon, authenticated and its service_role-only GRANT ALL above,
+-- and no role and no global ACL is touched here.
+GRANT SELECT ON TABLE local_service.app_business_types TO anon;
 
 COMMENT ON VIEW local_service.app_business_types IS
     'N-4 read surface: the business type list the signup UI must render, sourced from local_service.business_types so the database stays the single source of type codes. Columns: type_code, emoji, label_th, label_en, display_order.';
+
+-- N-5 / F-13: the starter-services projection the signup can read as anon.
+--
+-- WHY A SEPARATE VIEW INSTEAD OF WIDENING app_business_types: the type list is
+-- one row per type and this is one row per starter service, so folding it in
+-- would either repeat every emoji/label per service or turn the type list into a
+-- one-row-per-service list — the consuming UI lane reads the type list as a list
+-- of types. A separate projection also keeps the FIELD ALLOWLISTS independent:
+-- app_business_types can never start leaking a price, and this view can never
+-- start leaking a type-list column, because neither is in the other's SELECT.
+-- app_business_types is therefore EXTENDED only by the anon grant, never by a
+-- column.
+--
+-- SOURCED FROM THE SAME DATA provision_owner_shop CONSUMES — and from nothing
+-- else. provision_owner_shop walks business_types.starter_pattern -> 'services'
+-- with jsonb_array_elements (JSON array order) and writes, per element:
+--   services.name             = element ->> 'name'
+--   services.duration_minutes = COALESCE((element ->> 'duration_minutes')::INTEGER, 30)
+-- This view is that walk, in that order, over exactly those two expressions, and
+-- it is restricted to active business types — the same restriction
+-- provision_owner_shop applies when it selects the type row.
+--
+-- FIELD ALLOWLIST — exactly these four columns, and nothing else:
+--   type_code         the business type the starter services belong to
+--   service_order     0-based position in the type's starter_pattern JSON array,
+--                     which is the order provision_owner_shop creates them in
+--   service_name      the STORED service name (Thai, as seeded)
+--   duration_minutes  the stored duration, defaulted to 30 exactly as
+--                     provision_owner_shop defaults it
+--
+-- NOT EXPOSED, deliberately: price, deposit_amount, staff_role_label, and the
+-- raw starter_pattern JSONB column in any form. Those exist in the table and are
+-- simply not selected here, so the projection cannot leak them.
+--
+-- CRITICAL FACTUAL CONSTRAINT, stated here rather than worked around: the seeded
+-- starter_pattern carries a single Thai service NAME and a duration per service.
+-- There is no English service name in the database, there are no opening hours
+-- anywhere in the seed, and provision_owner_shop creates no opening hours. No
+-- English name, no per-language split, no fallback and no opening hours are
+-- invented below; the consumer must not expect them from this surface. Whether
+-- per-language starter copy and opening hours exist is a DB/Owner decision.
+CREATE OR REPLACE VIEW local_service.app_business_type_starter_services AS
+SELECT
+    bt.type_code,
+    (svc.ordinality - 1)::INTEGER AS service_order,
+    svc.value ->> 'name' AS service_name,
+    COALESCE((svc.value ->> 'duration_minutes')::INTEGER, 30) AS duration_minutes
+FROM local_service.business_types AS bt
+CROSS JOIN LATERAL jsonb_array_elements(
+        COALESCE(bt.starter_pattern -> 'services', '[]'::JSONB)
+    ) WITH ORDINALITY AS svc(value, ordinality)
+WHERE bt.is_active = true
+ORDER BY bt.display_order ASC, bt.type_code ASC, svc.ordinality ASC;
+
+REVOKE ALL ON TABLE local_service.app_business_type_starter_services FROM PUBLIC, anon, authenticated;
+GRANT SELECT ON TABLE local_service.app_business_type_starter_services TO anon;
+
+COMMENT ON VIEW local_service.app_business_type_starter_services IS
+    'F-13 signup read surface: the starter service names and durations a new shop would receive for a type, in the JSON array order provision_owner_shop applies them, active types only. Columns: type_code, service_order, service_name, duration_minutes. No price, no deposit_amount, no staff_role_label, no starter_pattern.';
 
 ALTER TABLE local_service.shops
     ADD COLUMN business_type_code TEXT
@@ -1321,6 +1386,185 @@ REVOKE ALL ON FUNCTION local_service.set_service_active(UUID, BOOLEAN) FROM PUBL
 GRANT EXECUTE ON FUNCTION local_service.set_service_active(UUID, BOOLEAN) TO authenticated;
 
 -- ============================================================================
+-- I.6 F-11 READ SURFACE — which rows the plan makes bookable, which it has
+--     closed, and why a closed row is closed
+-- ============================================================================
+
+-- The entitlement decision lives in exactly ONE place per kind, and it is
+-- READ-ONLY: both helpers below select, and nothing else. They are the same
+-- ordering the restore routine I.1 uses — created_at ASC then id ASC — with one
+-- deliberate difference: the row set here is the shop's ACTIVE rows only.
+-- Reason: a service or a staff member the OWNER switched off must not consume
+-- the allowance (a Free shop with 3 services, one switched off, still has room
+-- for the third it can actually book), and an inactive row cannot be booked at
+-- all, so it can never be a member of a bookable set.
+--
+-- The limit is resolved at read time through bk01_shop_limits, which is itself
+-- bk01_shop_effective_plan: a shop whose 14-day trial lapsed with no plan-change
+-- call resolves to FREE here, with no new plan logic and with no call to the
+-- convergence routine (I.2/I.3) — the automatic restore stays out of this path,
+-- so F-7 stays closed. Nothing below writes local_service.services or
+-- local_service.staff.
+--
+-- A NULL limit is treated as 0 (no entitled rows), which is the fail-closed
+-- direction and the same treatment I.1 applies to a NULL services_limit.
+CREATE OR REPLACE FUNCTION local_service.bk01_entitled_service_ids(p_shop_id UUID)
+RETURNS TABLE(service_id UUID)
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = pg_catalog, local_service
+AS $$
+    SELECT s.id
+      FROM local_service.services AS s
+     WHERE s.shop_id = p_shop_id
+       AND s.is_active = true
+     ORDER BY s.created_at ASC, s.id ASC
+     LIMIT COALESCE((
+         SELECT p.services_limit
+           FROM local_service.bk01_shop_limits(p_shop_id) AS p
+     ), 0);
+$$;
+
+-- No GRANT follows, and that is the file's own precedent for a function no
+-- client role calls: the trigger functions in G and H end at their REVOKE for
+-- exactly this reason. The only callers here are objects owned by this
+-- migration's own role (the booking function below, which is SECURITY DEFINER,
+-- and the view in this section), and an object's owner keeps EXECUTE after a
+-- REVOKE from other roles. Naming a client role would make the entitlement
+-- reader directly callable, which is the wider surface this section exists to
+-- avoid; the narrow surface is the VIEW.
+REVOKE ALL ON FUNCTION local_service.bk01_entitled_service_ids(UUID) FROM PUBLIC, anon, authenticated, service_role;
+
+CREATE OR REPLACE FUNCTION local_service.bk01_entitled_staff_ids(p_shop_id UUID)
+RETURNS TABLE(staff_id UUID)
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = pg_catalog, local_service
+AS $$
+    SELECT st.id
+      FROM local_service.staff AS st
+     WHERE st.shop_id = p_shop_id
+       AND st.is_active = true
+     ORDER BY st.created_at ASC, st.id ASC
+     LIMIT COALESCE((
+         SELECT p.staff_limit
+           FROM local_service.bk01_shop_limits(p_shop_id) AS p
+     ), 0);
+$$;
+
+REVOKE ALL ON FUNCTION local_service.bk01_entitled_staff_ids(UUID) FROM PUBLIC, anon, authenticated, service_role;
+
+COMMENT ON FUNCTION local_service.bk01_entitled_service_ids(UUID) IS
+    'F-11 read-time entitlement set: the shop''s ACTIVE services ordered by created_at ASC, id ASC, of which the first services_limit are inside the plan. Read-only; no convergence and no write.';
+COMMENT ON FUNCTION local_service.bk01_entitled_staff_ids(UUID) IS
+    'F-11 read-time entitlement set: the shop''s ACTIVE staff ordered by created_at ASC, id ASC, of which the first staff_limit are inside the plan. Read-only; no convergence and no write.';
+
+-- The ONE read-only surface the public listing (anon) and the dashboard
+-- (authenticated) both call. It answers, per shop, which services and which
+-- staff are bookable right now and which the plan has closed, and — for a
+-- service — whether the row is off because the OWNER switched it off or because
+-- the SYSTEM did (services.entitlement_disabled, F-7).
+--
+-- FIELD ALLOWLIST — exactly these nine columns, and nothing else:
+--   shop_id        the shop the row belongs to
+--   item_kind      'service' or 'staff'
+--   item_id        services.id / staff.id
+--   item_name      services.name / staff.name (already public: the frozen
+--                  column-level grants expose both names to anon)
+--   is_active      the raw row state, so the consumer sees the fact, not only
+--                  the derived label
+--   plan_entitled  TRUE when the row is active AND inside the plan's entitled
+--                  set for the shop right now — the exact predicate the booking
+--                  path applies
+--   state          'bookable' | 'plan_excluded' | 'switched_off'; see below
+--   system_disabled services.entitlement_disabled for a service; NULL for a
+--                  staff row, because the staff table records no reason. NULL
+--                  means "the database does not hold this fact for this row" —
+--                  it is not a claim that the owner switched the row off.
+--   created_at     the row's created_at, i.e. the column the entitlement
+--                  ordering is built on
+--
+-- WHAT IT DELIBERATELY DOES NOT EXPOSE: no plan code, no limit number, no
+-- price, no deposit amount, no booking or customer data, no shop_settings, no
+-- starter_pattern, no row that is not a service or a staff member of the shop
+-- named in shop_id.
+--
+-- state semantics:
+--   'bookable'      active AND inside the entitled set; the booking path accepts
+--   'plan_excluded' ACTIVE but outside the entitled set — the plan's temporary
+--                   exclusion, which the booking path refuses with
+--                   SERVICE_OUTSIDE_PLAN / STAFF_OUTSIDE_PLAN. This is the state
+--                   a shop is in when its trial lapsed without a plan-change
+--                   call, before any convergence has run.
+--   'switched_off'  the row is not active. For a SERVICE, system_disabled
+--                   distinguishes the owner's own switch-off (false) from a
+--                   system switch-off (true). For a STAFF row system_disabled is
+--                   NULL, because local_service.staff carries no such marker —
+--                   so for staff the database does not distinguish the two, and
+--                   this surface says so instead of guessing.
+CREATE OR REPLACE VIEW local_service.bk01_shop_entitlement_status AS
+SELECT
+    svc.shop_id AS shop_id,
+    'service'::TEXT AS item_kind,
+    svc.id AS item_id,
+    svc.name AS item_name,
+    svc.is_active AS is_active,
+    (svc.is_active = true
+     AND svc.id IN (
+         SELECT e.service_id
+           FROM local_service.bk01_entitled_service_ids(svc.shop_id) AS e
+     )) AS plan_entitled,
+    CASE
+        WHEN svc.is_active = true
+             AND svc.id IN (
+                 SELECT e.service_id
+                   FROM local_service.bk01_entitled_service_ids(svc.shop_id) AS e
+             ) THEN 'bookable'
+        WHEN svc.is_active = true THEN 'plan_excluded'
+        ELSE 'switched_off'
+    END AS state,
+    svc.entitlement_disabled AS system_disabled,
+    svc.created_at AS created_at
+FROM local_service.services AS svc
+UNION ALL
+SELECT
+    st.shop_id,
+    'staff'::TEXT AS item_kind,
+    st.id AS item_id,
+    st.name AS item_name,
+    st.is_active AS is_active,
+    (st.is_active = true
+     AND st.id IN (
+         SELECT e.staff_id
+           FROM local_service.bk01_entitled_staff_ids(st.shop_id) AS e
+     )) AS plan_entitled,
+    CASE
+        WHEN st.is_active = true
+             AND st.id IN (
+                 SELECT e.staff_id
+                   FROM local_service.bk01_entitled_staff_ids(st.shop_id) AS e
+             ) THEN 'bookable'
+        WHEN st.is_active = true THEN 'plan_excluded'
+        ELSE 'switched_off'
+    END AS state,
+    NULL::BOOLEAN AS system_disabled,
+    st.created_at AS created_at
+FROM local_service.staff AS st;
+
+-- SELECT only, to the two roles the packet names, and no write privilege of any
+-- kind. The REVOKE ... FROM PUBLIC, anon, authenticated is the file's own
+-- convention and closes the default privileges a new object can arrive with;
+-- the GRANT then re-opens exactly SELECT, for exactly these two roles. There is
+-- no INSERT, UPDATE or DELETE grant here, and none is implied by SELECT.
+REVOKE ALL ON TABLE local_service.bk01_shop_entitlement_status FROM PUBLIC, anon, authenticated;
+GRANT SELECT ON TABLE local_service.bk01_shop_entitlement_status TO anon, authenticated;
+
+COMMENT ON VIEW local_service.bk01_shop_entitlement_status IS
+    'F-11 read surface for the public listing and the dashboard: per shop, which services and which staff are bookable, which the plan has excluded (state = plan_excluded) and which are off (state = switched_off, with system_disabled distinguishing a system switch-off from the owner''s own for a service). Read-only, SELECT-only, and exposes no plan code, limit number, price, deposit or customer data.';
+
+-- ============================================================================
 -- J. PROMPTPAY DEPOSITS ARE NOT AVAILABLE ON FREE
 -- ============================================================================
 
@@ -1349,6 +1593,18 @@ GRANT EXECUTE ON FUNCTION local_service.set_service_active(UUID, BOOLEAN) TO aut
 -- billing lane calls from the subscription write. A service the owner switched
 -- off stays off here, because this path no longer touches the services table at
 -- all.
+--
+-- A fourth change (F-11): this path now REFUSES a service or a staff member
+-- that lies outside the shop's effective plan entitlement, because an anon
+-- caller could otherwise book a row the plan has excluded — which is exactly
+-- what an expired-trial shop that never called the plan-change path looks like.
+-- The refusal is an error, never a delete: SERVICE_OUTSIDE_PLAN for the
+-- service, STAFF_OUTSIDE_PLAN for the staff member. The entitlement is computed
+-- READ-ONLY from the effective plan (I.6) and this path still writes nothing to
+-- local_service.services or local_service.staff, and still does not run the
+-- automatic restore, so F-7 stays closed. On the auto-select path the
+-- entitlement condition is INSIDE the candidate query, so an out-of-entitlement
+-- staff member is never chosen and then rejected — it is never a candidate.
 --
 -- Everything else — fail-closed staff scheduling, the overlap exclusion, stale
 -- hold expiry, the staff selection heuristic, the returned JSON — is carried
@@ -1388,6 +1644,7 @@ DECLARE
     v_end_time TIME;
     v_constraint_name TEXT;
     v_limits RECORD;
+    v_plan TEXT;
 BEGIN
     IF NULLIF(btrim(p_customer_name), '') IS NULL THEN
         RAISE EXCEPTION 'Customer name is required';
@@ -1411,6 +1668,28 @@ BEGIN
       AND is_active = true;
     IF v_service.id IS NULL THEN
         RAISE EXCEPTION 'Service not found or inactive';
+    END IF;
+
+    -- F-11: the entitlements are resolved from the EFFECTIVE plan at read time,
+    -- read-only. Nothing here writes local_service.services, nothing here runs
+    -- the automatic restore (I.2/I.3) — which is what keeps F-7 closed — and the
+    -- entitled set is the shop's ACTIVE services ordered created_at ASC, id ASC,
+    -- of which the first services_limit are inside the plan. A service the OWNER
+    -- switched off is not active, so it does not consume the allowance; it is
+    -- also unbookable one check above, which is why the two facts can never
+    -- disagree. A shop whose 14-day trial lapsed with no plan-change call
+    -- resolves to FREE here through bk01_shop_effective_plan, so its 4th service
+    -- is outside the entitlement and is refused below.
+    v_plan := local_service.bk01_shop_effective_plan(p_shop_id);
+
+    IF NOT EXISTS (
+        SELECT 1
+          FROM local_service.bk01_entitled_service_ids(p_shop_id) AS e
+         WHERE e.service_id = p_service_id
+    ) THEN
+        RAISE EXCEPTION USING
+            ERRCODE = 'P0001',
+            MESSAGE = 'SERVICE_OUTSIDE_PLAN';
     END IF;
 
     SELECT * INTO v_shop
@@ -1494,6 +1773,11 @@ BEGIN
           )
           AND EXISTS (
               SELECT 1
+              FROM local_service.bk01_entitled_staff_ids(p_shop_id) AS e
+              WHERE e.staff_id = st.id
+          )
+          AND EXISTS (
+              SELECT 1
               FROM local_service.staff_schedules s
               WHERE s.staff_id = st.id
                 AND s.day_of_week = v_day_of_week
@@ -1537,6 +1821,21 @@ BEGIN
               AND st.is_active = true
         ) THEN
             RAISE EXCEPTION 'Selected staff not found or inactive';
+        END IF;
+        -- F-11: the customer-chosen staff path applies the same entitlement
+        -- predicate as the auto-select path. bk01_entitled_staff_ids is the
+        -- shop's ACTIVE staff ordered created_at ASC, id ASC, first staff_limit
+        -- entitled; an expired trial with no plan-change call resolves to FREE
+        -- (staff_limit 1) through bk01_shop_effective_plan, so the 2nd staff
+        -- member is refused here.
+        IF NOT EXISTS (
+            SELECT 1
+            FROM local_service.bk01_entitled_staff_ids(p_shop_id) AS e
+            WHERE e.staff_id = v_chosen_staff_id
+        ) THEN
+            RAISE EXCEPTION USING
+                ERRCODE = 'P0001',
+                MESSAGE = 'STAFF_OUTSIDE_PLAN';
         END IF;
         IF EXISTS (
             SELECT 1

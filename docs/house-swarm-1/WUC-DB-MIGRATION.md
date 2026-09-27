@@ -1243,3 +1243,414 @@ without editing logic.
 - The only files this unit wrote are: this note (appended §11) and, outside the repository, scratch
   output files under `$LOCALAPPDATA/Temp/r4e-*` and the scratch harness
   `$LOCALAPPDATA/Temp/r4e-public-cases.mjs`. Nothing else in the repository was written.
+
+## 12. R5 close-out — the F-11/F-12/F-13 surfaces, the view-column reader repair, and the before/after proof
+
+Appended by work unit **H1-R5-DB-CLOSE** (correlation id `house-swarm-1-r5-db-close-20260926`) on top
+of the complete R4-E revision, so §0–§11 above are the earlier note byte for byte. Nothing above this
+line was rewritten, restructured or deleted; this lane's only edit to this file is this append. §8's
+region hash and §10's region hash still describe their own regions exactly, for the same reason they
+did after §9 and §11 were appended: a new section below them changes no byte of what is above them.
+
+### 12.1 The three fixes this lane closes out (F-11, F-12, F-13)
+
+The migration `supabase/bk01-migrations/20260926120000_bk01_entitlement_packs.sql` is **not changed by
+this lane** — see §12.9. The three fixes it already carries are:
+
+**F-11 — a READ-ONLY effective-plan booking guard, on both create_booking_hold paths.** The guard
+refuses a booking whose service or whose staff member is outside the shop's *effective* plan
+entitlement. "Effective" is resolved at read time by `local_service.bk01_shop_effective_plan`, so a
+shop whose subscription row still says `basic_490` / `trialing` and whose 14-day trial has lapsed
+resolves to `free` and is gated by the free plan's limits (services_limit 3, staff_limit 1) **before
+any plan-change call has run**. Two paths, both guarded:
+
+- the **customer-chosen staff** path — a chosen `p_staff_id` that is not in
+  `local_service.bk01_entitled_staff_ids(p_shop_id)` raises `MESSAGE = 'STAFF_OUTSIDE_PLAN'`;
+- the **auto-select** path — the entitlement condition is **inside the candidate query**, so an
+  out-of-entitlement staff member is never a candidate at all and there is no "chosen then refused"
+  case: the member beyond the cap cannot be picked even when it is the only one free;
+
+with the same shape on the service branch (`MESSAGE = 'SERVICE_OUTSIDE_PLAN'`, membership of
+`local_service.bk01_entitled_service_ids(p_shop_id)`). The refusal is an **error, never a delete**, and
+the path writes nothing to `local_service.services` or `local_service.staff` and does not call
+`bk01_reapply_shop_entitlements` / `bk01_restore_services_within_limit`, so F-7 stays closed.
+
+**F-11 — the read surface.** `local_service.bk01_shop_entitlement_status` (one view, two `UNION ALL`
+branches: services and staff) is what the public listing and the dashboard call. It exposes exactly
+nine columns — `shop_id, item_kind, item_id, item_name, is_active, plan_entitled, state,
+system_disabled, created_at` — and `state` is the distinction the packet requires:
+`bookable` / `plan_excluded` (active but beyond the plan's allowance, so the row itself stays active)
+/ `switched_off` (the row is not active). For a service, `system_disabled` tells the owner's own
+switch-off (`false`) from a system switch-off (`true`); for a staff row it is
+`NULL::BOOLEAN`, because `local_service.staff` carries no such marker, so the surface says the fact is
+absent instead of guessing a reason. No plan code, no limit number, no price, no deposit, no customer
+data and no booking data is selected; the only tables it reads are `local_service.services` and
+`local_service.staff`.
+
+**F-12 — anon SELECT on the business-type projection only.** `local_service.app_business_types` (the
+N-4 five-column list `type_code, emoji, label_th, label_en, display_order`, active rows, fixed order)
+gains exactly one new grant, `GRANT SELECT ON TABLE local_service.app_business_types TO anon;` — the
+signup page reads the type list before a session exists. The source table
+`local_service.business_types` keeps its posture (`REVOKE ALL ... FROM anon, authenticated` and
+`GRANT ALL ... TO service_role`), and no role and no global ACL is touched. Anon therefore reaches the
+**projection only**, never the data.
+
+**F-13 — the starter-services projection.** `local_service.app_business_type_starter_services` is the
+signup's anon-readable list of the starter services a new shop would receive for a type, in the JSON
+array order `provision_owner_shop` applies them, active types only. Its four columns are exactly
+`type_code, service_order, service_name, duration_minutes`, and the two value columns are the same two
+expressions `provision_owner_shop` writes:
+`svc.value ->> 'name' AS service_name` and
+`COALESCE((svc.value ->> 'duration_minutes')::INTEGER, 30) AS duration_minutes`. It selects no
+`price`, no `deposit_amount`, no `staff_role_label` and not the raw `starter_pattern` JSONB column.
+
+**WHY A SEPARATE STARTER-SERVICES VIEW, and not a widened `app_business_types`** (the migration states
+this at the view, and it is the reason a reviewing lane should not fold the two together): the type
+list is **one row per type** and the starter projection is **one row per starter service**, so folding
+them in would either repeat every emoji/label once per service or turn the type list into a
+one-row-per-service list — which breaks the consuming UI lane, that reads the type list as a list of
+types. Keeping them separate also keeps the two **field allowlists independent**: `app_business_types`
+can never start leaking a price and the starter view can never start leaking a type-list column,
+because neither column is in the other's SELECT. `app_business_types` is extended by the F-12 **grant**
+only, never by a column.
+
+### 12.2 The entitlement ordering, quoted from the migration
+
+Both entitled-set functions order and cut off identically; this is the exact text in the file
+(`bk01_entitled_service_ids` at the `services` table, `bk01_entitled_staff_ids` at `staff`):
+
+```sql
+SELECT s.id
+  FROM local_service.services AS s
+ WHERE s.shop_id = p_shop_id
+   AND s.is_active = true
+ ORDER BY s.created_at ASC, s.id ASC
+ LIMIT COALESCE((
+     SELECT p.services_limit
+       FROM local_service.bk01_shop_limits(p_shop_id) AS p
+ ), 0);
+```
+
+```sql
+SELECT st.id
+  FROM local_service.staff AS st
+ WHERE st.shop_id = p_shop_id
+   AND st.is_active = true
+ ORDER BY st.created_at ASC, st.id ASC
+ LIMIT COALESCE((
+     SELECT p.staff_limit
+       FROM local_service.bk01_shop_limits(p_shop_id) AS p
+ ), 0);
+```
+
+Three consequences are load-bearing and are all asserted by the boundary tests: the count is taken
+over **ACTIVE rows only**, so a row the **owner** switched off does not consume the allowance; the
+ordering is deterministic (`created_at ASC` then `id ASC`), so "the 4th of 3" is a stable row and not
+a race; and a **NULL limit becomes 0** entitled rows, which is the fail-closed direction. The staff
+row carries no `entitlement_disabled` column — a real limit of the data, not an oversight — which is
+why the read surface reports `system_disabled` as `NULL` for staff.
+
+### 12.3 The names and grants of each surface added
+
+| Surface | Kind | Exact grant (as written in the migration) |
+|---|---|---|
+| `local_service.bk01_shop_entitlement_status` | VIEW | `REVOKE ALL ON TABLE ... FROM PUBLIC, anon, authenticated;` then `GRANT SELECT ON TABLE local_service.bk01_shop_entitlement_status TO anon, authenticated;` |
+| `local_service.app_business_types` | VIEW (N-4, extended by F-12) | `REVOKE ALL ON TABLE ... FROM PUBLIC, anon, authenticated;` then `GRANT SELECT ... TO authenticated;` **and** `GRANT SELECT ON TABLE local_service.app_business_types TO anon;` |
+| `local_service.app_business_type_starter_services` | VIEW (F-13) | `REVOKE ALL ON TABLE ... FROM PUBLIC, anon, authenticated;` then `GRANT SELECT ON TABLE local_service.app_business_type_starter_services TO anon;` |
+| `local_service.bk01_entitled_service_ids(UUID)` | FUNCTION (F-11) | `REVOKE ALL ON FUNCTION ... FROM PUBLIC, anon, authenticated, service_role;` — no grant to any client role |
+| `local_service.bk01_entitled_staff_ids(UUID)` | FUNCTION (F-11) | `REVOKE ALL ON FUNCTION ... FROM PUBLIC, anon, authenticated, service_role;` — no grant to any client role |
+
+`anon`'s readable view set in this file is therefore the enumerated pair
+`app_business_type_starter_services` and `app_business_types` — the boundary test asserts that list as
+data, so a future grant cannot widen anon's reach silently.
+
+### 12.4 The reader repair in `tests/bk01-entitlement-boundary.test.ts` (two failing tests + one latent)
+
+Two allowlist tests were failing **because of their own reader, not the migration**. The reader
+(`columnAliases`) matched `/\bAS ([a-z_]+)/` over the view body and discarded every match whose
+preceding text ended with `)`. It therefore only ever survived a single-line SELECT list of bare
+column references. It misread:
+
+- `bk01_shop_entitlement_status`, where `plan_entitled` and `state` are **expressions** whose alias is
+  the column name — it reported 8 of the 9 real columns; and
+- `app_business_type_starter_services`, whose SELECT list is written **across multiple lines** and has
+  two aliased expressions — it reported 2 of the 4 real columns.
+
+The repair reads the view's **real declared column list**: it locates the view body, finds the view's
+own **top-level** SELECT lists by keyword balance (SELECT … FROM, and UNION ALL branches), splits each
+list on **top-level** commas, and reads each item's exposed name — the alias for `AS <name>` (or the
+SQL-standard trailing name), otherwise the final name of a bare column reference. An expression with
+no alias is reported as an error rather than silently dropped. It also distinguishes a column alias
+from a relation alias (`FROM x AS svc`, `) AS e`, `) AS svc(...)`) and from a name inside a nested
+subquery, neither of which the old `/\bAS ([a-z_]+)/` scan could do.
+
+Repairing the first assertion exposed a **third, latent** naive read in the same test: the "only
+tables it reads" assertion was `Array.from(viewSql.matchAll(/FROM local_service\.([a-z_]+)/g))`, and the
+surface's subqueries read `FROM local_service.bk01_entitled_service_ids(svc.shop_id) AS e` — a
+set-returning **function** call, from which the scan read the prefix `bk` as if it were a table. That
+assertion had never run, because the allowlist `deepEqual` above it always threw first. It is now read
+as relations (`relationNames`), which excludes function calls and keeps the same two-object allowlist,
+written schema-qualified (`local_service.services`, `local_service.staff`) so that a read of any
+**other** schema would be visible where the old text scan could not see it either.
+
+No assertion was weakened, no test was deleted, and no allowlist of forbidden names was introduced: the
+allowlists are the same two lists, now read from the real column lists. The views were not changed.
+
+### 12.5 Fail-before and pass-after — two real runs, one variable
+
+The pre-fix migration is the copy that was inside `scripts/tmp-r5-before-1`
+(sha256 `44eaa5c218e6bf193fef2f187cce8797f659510baf0e6cfaa487bfcc310a442d`, 92,754 bytes). The
+work-unit revision's migration is sha256
+`6f7b3df239d432f3e5f21bba245da1054d75a18d65a7f5161f02e29348266aa8` (108,971 bytes). The test file is
+held **identical in both runs**, so the only variable is the migration text.
+
+```
+$ cd .../before-1790431636 && node --no-warnings --test --experimental-test-isolation=none tests/bk01-entitlement-boundary.test.ts
+ℹ tests 40
+ℹ pass 30
+ℹ fail 10
+exit code 1
+
+$ cd .../after-1790431636 && node --no-warnings --test --experimental-test-isolation=none tests/bk01-entitlement-boundary.test.ts
+ℹ tests 40
+ℹ pass 40
+ℹ fail 0
+exit code 0
+```
+
+The two layouts were assembled by copying the pre-fix migration out of the mirror and the work-unit
+migration out of the repository, each into a repository-shaped scratch root under
+`$LOCALAPPDATA/Temp/swarm-r5-db-close/`, which is outside the repository. Nothing was applied and no
+database was contacted; these are static file readers.
+
+### 12.6 Which parts of the five named tests are decision logic and which are text-anchored
+
+The pre-fix migration **still carries every decision the tests model** — the free/basic/trial plan rows,
+the 50/51 booking boundary, the Thai calendar month, the effective-plan resolver, the 3-service and
+1-shop gates. What it lacks is the F-11/F-12/F-13 **objects**, so every assertion that reads an
+object's text fails there **by construction** (the pre-fix SQL text is absent from the copy). Per test:
+
+| Test (as named in the packet) | Pure decision logic — passes against the pre-fix SQL | Text-anchored — fails against the pre-fix SQL | Pre-fix result (observed) |
+|---|---|---|---|
+| **expired-trial 4th-service refusal** (`F-11 an expired trial with no plan-change call cannot book the 4th service`) | all of it: `effectivePlan` resolving a lapsed `basic_490`/`trialing` to `free`, `entitledIds` ordering by `created_at, id` and cutting at 3, and `bookingServiceGate('svc-4', …) = 'SERVICE_OUTSIDE_PLAN'`. **These pass pre-fix** | three `require_` needles: `MESSAGE = 'SERVICE_OUTSIDE_PLAN'`, `FROM local_service.bk01_entitled_service_ids(p_shop_id) AS e`, `WHERE e.service_id = p_service_id` | ✖ FAIL — `migration is missing: MESSAGE = 'SERVICE_OUTSIDE_PLAN'` |
+| **staff-beyond-cap refusal** (`F-11 a staff member beyond the effective cap cannot be booked`) | all of it: staff cap 1 on free, `entitledIds(staff,…) = ['stf-1']`, `bookingStaffGate('stf-1')='accepted'` vs `('stf-2')='STAFF_OUTSIDE_PLAN'`, and Basic accepting the same member. **These pass pre-fix** | three needles: `MESSAGE = 'STAFF_OUTSIDE_PLAN'`, `FROM local_service.bk01_entitled_staff_ids(p_shop_id) AS e`, `WHERE e.staff_id = v_chosen_staff_id` | ✖ FAIL — `migration is missing: MESSAGE = 'STAFF_OUTSIDE_PLAN'` |
+| **auto-select entitlement filter** (`F-11 auto-select never selects a staff member beyond the entitlement`) | the modelled outcome: with the oldest member owner-switched-off, the cap of 1 falls on `stf-2`, and the selected candidate is inside the entitlement by construction. **Passes pre-fix** | the candidate-query slice of `create_booking_hold`: `SELECT 1 FROM local_service.bk01_entitled_staff_ids(p_shop_id) AS e WHERE e.staff_id = st.id` before `LIMIT 1`, and no `STAFF_OUTSIDE_PLAN` in that branch | ✖ FAIL — `the candidate query must filter on the entitlement set itself` |
+| **anon read boundary** (`F-12 anon reads the business-type projection and still cannot read the source table or any other object`) | the enumeration of anon-granted surfaces is computed from the file, so the *set* rule (no grant on the source table, no grant on `shops`, no ALTER DEFAULT PRIVILEGES) is decision logic; the seeded type codes it compares against are pre-fix data and **pass pre-fix** | every grant statement it reads, including the one that fails first: `GRANT SELECT ON TABLE local_service.app_business_types TO anon;` | ✖ FAIL — `migration is missing: GRANT SELECT ON TABLE local_service.app_business_types TO anon;` (as is `N-4`, the same needle) |
+| **projected service list agreeing with `provision_owner_shop`** (`F-13 the projected service list agrees row for row with what provision_owner_shop creates, capped by services_limit`) | the seed-driven comparison: the barber list, the `other` type's single `บริการหลัก`, the Basic(50)/Free(3) truncation, and `provisionedStarterNames` reproducing `provision_owner_shop`'s loop. **Passes pre-fix**, because the seed data is pre-fix data | the migration needles: `ORDER BY bt.display_order ASC, bt.type_code ASC, svc.ordinality ASC`, `WITH ORDINALITY` | ✖ FAIL — `migration is missing: ORDER BY bt.display_order ASC, bt.type_code ASC, svc.ordinality ASC` |
+
+Two further tests of the same three fixes also fail pre-fix on text only:
+`F-11 no rows are deleted by the entitlement refusal or by either read surface`
+(`expected both readers in the file`), `F-11 the read surface is narrow …`
+(`migration is missing: CREATE OR REPLACE VIEW local_service.bk01_shop_entitlement_status AS`),
+`F-13 the starter-services projection is an allowlist …`
+(`migration is missing: CREATE OR REPLACE VIEW local_service.app_business_type_starter_services AS`) and
+`F-13 an inactive business type contributes no starter rows to either projection`
+(`migration is missing: WHERE bt.is_active = true`). That is the ten.
+
+### 12.7 The negative proof — the repaired assertions still fail on a GENUINE forbidden column
+
+The repair was proved not to be a weakening by adding a forbidden column **to a copy** of the
+migration (never to the repository file) and observing the tests fail. Four real runs, each in its own
+scratch root, each with the repository's test file copied in:
+
+```
+# NEG-1 (bk01_shop_entitlement_status): `(svc.price)::NUMERIC AS price` added to ONE branch
+$ node --no-warnings --test --experimental-test-isolation=none tests/bk01-entitlement-boundary.test.ts
+ℹ tests 40 / ℹ pass 39 / ℹ fail 1        exit code 1
+✖ F-11 the read surface is narrow …  AssertionError: both branches must declare the same columns
+    [ 'shop_id', + 'price', 'item_kind', 'item_id', 'item_name', 'is_active', 'plan_entitled', …
+
+# NEG-2 (app_business_type_starter_services): `(svc.value ->> 'price') AS service_price` added
+$ node --no-warnings --test --experimental-test-isolation=none tests/bk01-entitlement-boundary.test.ts
+ℹ tests 40 / ℹ pass 39 / ℹ fail 1        exit code 1
+✖ F-13 the starter-services projection is an allowlist …
+    [ 'type_code', + 'service_price', 'service_order', 'service_name', 'duration_minutes' ]
+
+# NEG-3 (bk01_shop_entitlement_status): `(svc.deposit_amount)::NUMERIC AS deposit_amount` added
+$ node --no-warnings --test --experimental-test-isolation=none tests/bk01-entitlement-boundary.test.ts
+ℹ tests 40 / ℹ pass 39 / ℹ fail 1        exit code 1
+✖ F-11 the read surface is narrow …  AssertionError: both branches must declare the same columns
+    [ 'shop_id', + 'deposit_amount', 'item_kind', …
+
+# NEG-4 (the allowlist assertion itself): `AS price` added to BOTH UNION branches, so arity matches
+$ node --no-warnings --test --experimental-test-isolation=none tests/bk01-entitlement-boundary.test.ts
+ℹ tests 40 / ℹ pass 39 / ℹ fail 1        exit code 1
+✖ F-11 the read surface is narrow …  AssertionError: Expected values to be strictly deep-equal:
+    [ 'created_at', 'is_active', 'item_id', 'item_kind', 'item_name', 'plan_entitled', + 'price',
+      'shop_id', 'state', 'system_disabled ]
+```
+
+NEG-4 is the one that matters most: the forbidden column is present in **both** branches, so the
+branch-parity check cannot be what catches it — the **nine-column allowlist itself** reports `price`
+as exposed. The allowlist was not weakened, and adding a forbidden column really does fail it.
+
+All four scratch copies live under `$LOCALAPPDATA/Temp/swarm-r5-db-close/` (outside the repository) and
+the repository's migration was never touched.
+
+### 12.8 The migration policy check is invariant across the before/after pair
+
+The policy check was run three times, and the verdict is the **same** on the pre-fix copy and on the
+work-unit file — which is the expected result, because the policy governs qualification, schemas and
+grantees rather than the F-11/F-12/F-13 objects:
+
+```
+$ node scripts/check-bk01-migration-policy.mjs .../before-1790431636/supabase/bk01-migrations
+PASS  20260926120000_bk01_entitlement_packs.sql
+Policy check PASS: 1/1 migration file(s) accepted.        exit code 0
+
+$ node scripts/check-bk01-migration-policy.mjs .../after-1790431636/supabase/bk01-migrations
+PASS  20260926120000_bk01_entitlement_packs.sql
+Policy check PASS: 1/1 migration file(s) accepted.        exit code 0
+
+$ node scripts/check-bk01-migration-policy.mjs
+PASS  20260926120000_bk01_entitlement_packs.sql
+Policy check PASS: 1/1 migration file(s) accepted.        exit code 0
+```
+
+### 12.9 Every gate, re-run after the repair — real counts
+
+```
+$ node scripts/check-bk01-migration-policy.mjs                                  exit code 0
+Policy check PASS: 1/1 migration file(s) accepted.           (0 failed)
+
+$ node scripts/verify-bk01-shared-runtime.mjs                                   exit code 0
+BK01 shared-runtime repository verification PASS
+Frozen legacy migrations: 30
+Legacy source SHA-256: 812b4656b5fcc65d881afd1712581d7c4ba0fd37f39a35c9d7d7d6173b695f5a
+
+$ node --no-warnings --test --experimental-test-isolation=none tests/shared-runtime-migration.test.ts
+ℹ tests 11 / ℹ pass 11 / ℹ fail 0                                exit code 0
+
+$ node --no-warnings --test --experimental-test-isolation=none tests/bk01-entitlement-boundary.test.ts
+ℹ tests 40 / ℹ pass 40 / ℹ fail 0                                exit code 0
+
+$ npm test
+ℹ tests 163 / ℹ suites 0 / ℹ pass 163 / ℹ fail 0
+ℹ cancelled 0 / ℹ skipped 0 / ℹ todo 0                          exit code 0
+```
+
+The two repaired tests, before and after the reader repair, on the work-unit migration:
+
+```
+before the repair:  ℹ tests 40 / ℹ pass 38 / ℹ fail 2           exit code 1
+  ✖ F-11 the read surface is narrow …  (actual was missing 'plan_entitled')
+  ✖ F-13 the starter-services projection is an allowlist …  (actual was missing 'type_code','duration_minutes')
+after  the repair:  ℹ tests 40 / ℹ pass 40 / ℹ fail 0           exit code 0
+  ✔ F-11 the read surface is narrow: SELECT only, no plan internals, no money, no customer data
+  ✔ F-13 the starter-services projection is an allowlist of fields that exist and that provision_owner_shop uses
+```
+
+### 12.10 The leftover mirror is deleted
+
+The directory the work unit calls "this lane's leftover mirror to use for the fail-before run and then
+delete" is `scripts/tmp-r5-before-1`: the lane's leftover pre-fix mirror, holding a pre-fix copy of the
+migration (92,754 bytes / sha256 `44eaa5c2…`), the pre-fix test file, the policy module and the note.
+Its contents were hashed and recorded **first**, then it was deleted file by file (its four files, then
+its directories) with the mirror path re-checked afterwards:
+
+```
+$ find scripts/tmp-r5-before-1 -type f -exec sha256sum {} \;
+daab3234073e4460128b52cf1f40d69cf3ab065c26034a28fafefa8b40e33ee6 *.../docs/house-swarm-1/WUC-DB-MIGRATION.md
+4ad1a76a9a299cd4654bc25953e2478ad62e70ed4f5a18e718d31d93da9ef86a *.../scripts/lib/bk01-migration-policy.mjs
+44eaa5c218e6bf193fef2f187cce8797f659510baf0e6cfaa487bfcc310a442d *.../supabase/bk01-migrations/20260926120000_bk01_entitlement_packs.sql
+c641b7f12fba61fa613902200ed7fcd8b06c1f35e8008efa119fe3de03cdc142 *.../tests/bk01-entitlement-boundary.test.ts
+
+$ rm -f scripts/tmp-r5-before-1/<each of the four files> ; rmdir <each of its directories>   exit code 0
+$ [ -e scripts/tmp-r5-before-1 ] ; echo "MIRROR: REMOVED"
+MIRROR: REMOVED
+
+$ find . -path ./node_modules -prune -o -path ./.git -prune -o -type f -name "tmp-*" -print
+(no output) — no tmp- artifact remains anywhere in the worktree
+
+$ git status --porcelain
+ M supabase/bk01-migrations/20260926120000_bk01_entitlement_packs.sql
+ M tests/bk01-entitlement-boundary.test.ts
+```
+
+The mirror held the only pre-fix copy in the repository; with it gone, the worktree's uncommitted set
+is the two files this lane was authorised to touch.
+
+### 12.11 Artifact hashes and byte counts, measured after this lane's edits
+
+| Artifact | sha256 | bytes |
+|---|---|---|
+| `supabase/bk01-migrations/20260926120000_bk01_entitlement_packs.sql` | `6f7b3df239d432f3e5f21bba245da1054d75a18d65a7f5161f02e29348266aa8` | 108,971 |
+| `tests/bk01-entitlement-boundary.test.ts` | `ed4e89272afaa7faf8f0be008b63c3e294f03dbf32b7a8f7f8be993319f14579` | 91,675 |
+| `docs/house-swarm-1/WUC-DB-MIGRATION.md` | `daab3234073e4460128b52cf1f40d69cf3ab065c26034a28fafefa8b40e33ee6` | 82,780 (before this append) |
+
+This lane changed **only the test file** and **appended this section**. The migration's bytes were not
+touched: its sha256 and byte count when this unit started were
+`6f7b3df239d432f3e5f21bba245da1054d75a18d65a7f5161f02e29348266aa8` / 108,971 — byte-identical to the
+values above — and its mtime (`2026-09-26 20:52:45 +07`) predates this unit's first edit. It differs
+from its HEAD revision only because the R5 predecessor's F-11/F-12/F-13 revision is itself uncommitted
+in this worktree:
+
+```
+$ git show HEAD:supabase/bk01-migrations/20260926120000_bk01_entitlement_packs.sql | sha256sum
+44eaa5c218e6bf193fef2f187cce8797f659510baf0e6cfaa487bfcc310a442d *-
+$ sha256sum supabase/bk01-migrations/20260926120000_bk01_entitlement_packs.sql
+6f7b3df239d432f3e5f21bba245da1054d75a18d65a7f5161f02e29348266aa8 *...
+```
+
+So the file differs from its **pre-fix state** (`44eaa5c2…`, the HEAD/mirror revision) because the
+F-11/F-12/F-13 work landed there before this unit, and it does **not** differ relative to the revision
+this lane started from (`6f7b3df2…`, unchanged across the whole unit).
+
+### 12.12 Open inputs — stated as DECISIONS, not solved here
+
+These are inputs to the database and to the Owner, recorded as decisions to be made rather than
+problems this migration pretends to have solved:
+
+- **The sample prices and deposit amounts in the seed are NOT Owner decisions and stay adjustable.**
+  `starter_pattern` carries, per service element, a `price` and a `deposit_amount`. These are sample
+  values a shop starts from; they are **data**, changeable by a data edit with no code change, and no
+  money value is compiled into any logic in this migration or exposed by any surface it adds (F-13
+  deliberately does not select them).
+- **The database holds no English service name and no opening-hours data, and
+  `provision_owner_shop` creates no opening hours.** The seed's `starter_pattern` holds only `name`,
+  `duration_minutes`, `price`, `deposit_amount` per service, plus one `staff_role_label` per type.
+  There is no `name_en` and no `opening_hours` anywhere in the seed, and the provisioning function
+  writes no opening-hours row. **Therefore the per-language starter copy and the opening hours the
+  signup wants are a database/Owner decision** — a decision for the Owner and a schema/data change,
+  not something this migration may invent, and not something the F-13 surface can supply.
+
+### 12.13 R5 boundary statement
+
+- **The migration's SQL text was not changed by this lane.** It is byte-identical to the revision this
+  unit started from (`6f7b3df2…` / 108,971 bytes); see §12.11.
+- **Nothing was applied.** No migration was executed against any environment, and this note makes no
+  claim about applied state in any environment.
+- **No database was contacted and no database connection was attempted.** No Docker, no `psql`, no
+  `pg_dump`, no `postgres` driver call, no database started.
+- **The `supabase` CLI was not invoked in any form**, and `db:bk01:apply`, `db:bk01:plan` and
+  `db:bk01:seed` were never run against any target. The only executable gate run was the repository's
+  own static verifier `scripts/verify-bk01-shared-runtime.mjs`, by path, with no target argument — the
+  same static, connection-free script §11 ran.
+- **No `.env` file was read, edited or created, and no secret was printed.**
+- **No commit and no push occurred.** Nothing under `.git` was written.
+- Nothing was written under `supabase/migrations/`, `supabase/shared-runtime/`, `supabase/config.toml`,
+  `apps/`, `node_modules` or `relay`.
+- The only files this unit wrote inside the repository are: `tests/bk01-entitlement-boundary.test.ts`
+  (the reader repair and the two view-column assertions) and this note (this appended §12). The only
+  other writes were scratch copies and logs under `$LOCALAPPDATA/Temp/swarm-r5-db-close/`, outside the
+  repository, plus the deletion of `scripts/tmp-r5-before-1`.
+- Pre-fix, negative-control and run-log copies of the migration all live under
+  `$LOCALAPPDATA/Temp/swarm-r5-db-close/` and are not part of the deliverable; no `tmp-` artifact
+  remains in the worktree.
+
+### 12.14 sha256 of this note (after the R5 close-out)
+
+The hash below is defined over the file's bytes **from the first byte up to (but excluding) the
+`## 12. R5 close-out` heading** — the frozen §0–§11 region of 1,245 lines / 82,780 bytes, which does
+not change when the value here is edited. It is reproducible with:
+
+```
+$ awk '/^## 12\. R5 close-out/{exit} {print}' docs/house-swarm-1/WUC-DB-MIGRATION.md | sha256sum
+daab3234073e4460128b52cf1f40d69cf3ab065c26034a28fafefa8b40e33ee6 *-
+```
+
+Region sha256 (this revision, observed): **daab3234073e4460128b52cf1f40d69cf3ab065c26034a28fafefa8b40e33ee6**
+
+Whole-file sha256 is deliberately **not** recorded here — writing it would change it, which is the
+self-reference §8 and §10 already explain. It is reported to the commander as a measurement taken at
+handover instead.
