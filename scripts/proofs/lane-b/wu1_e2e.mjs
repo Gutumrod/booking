@@ -20,10 +20,19 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { PGlite } from '@electric-sql/pglite';
-import { BK01_RUNTIME_EFFECTIVE_FUNCTIONS, validateBk01RuntimeEffectiveExecuteSet } from '../../lib/bk01-runtime-allowlist.mjs';
+import {
+  BK01_RUNTIME_BOOTSTRAP_FUNCTIONS,
+  BK01_PUBLIC_LEGACY_EXECUTE_EXCEPTIONS,
+  BK01_RUNTIME_EFFECTIVE_FUNCTIONS,
+  BK01_RUNTIME_ROUTE_FUNCTIONS,
+  validateBk01RuntimeEffectiveExecuteSet,
+} from '../../lib/bk01-runtime-allowlist.mjs';
 
 const REPO = path.resolve(process.argv[2] || fileURLToPath(new URL('../../../', import.meta.url)));
 const read = (p) => fs.readFileSync(path.join(REPO, p), 'utf8').replace(/\r\n/g, '\n');
+const proofOutputDir = process.env.BK01_PROOF_OUTPUT_DIR || path.join(REPO, 'supabase/shared-runtime');
+const proofOutputPath = path.join(proofOutputDir, 'WU2-PGLITE-PROOF.json');
+fs.mkdirSync(proofOutputDir, { recursive: true });
 
 const results = [];
 const record = (name, ok, detail) => {
@@ -74,6 +83,10 @@ const EXTENSION_STUBS = `
     language sql volatile as $$ select decode(repeat('ab', n), 'hex') $$;
   create or replace function public.uuid_generate_v4() returns uuid
     language sql volatile as $$ select pg_catalog.gen_random_uuid() $$;
+  -- PGlite lacks pgcrypto; this deterministic stub proves the stored hash shape,
+  -- not production cryptographic strength or token verification by Storage.
+  create or replace function extensions.digest(data bytea, algorithm text) returns bytea
+    language sql immutable as $$ select decode(repeat('ab',32), 'hex') $$;
 `;
 const EXT_PRELUDE = `select 1;`;
 
@@ -101,6 +114,8 @@ const MANAGED_STUBS = `
   create schema if not exists wstera_platform_internal;
   create table if not exists ps01.runtime_boundary_probe(id integer primary key, note text);
   insert into ps01.runtime_boundary_probe values (1, 'stand-in') on conflict do nothing;
+  create table if not exists mt01.runtime_boundary_probe(id integer primary key, note text);
+  insert into mt01.runtime_boundary_probe values (1, 'stand-in') on conflict do nothing;
   create schema if not exists net;
   create table if not exists net.http_request_queue(id integer primary key);
   create schema if not exists cron;
@@ -177,6 +192,12 @@ if (chainErrors.length) {
   process.exit(1);
 }
 
+// Active product migration stream. Applied only after the generated bootstrap has
+// created the BK01 migrator boundary and transferred the frozen chain ownership.
+const productMigrations = [
+  'supabase/bk01-migrations/20260926120000_bk01_entitlement_packs.sql',
+  'supabase/bk01-migrations/20260927120000_bk01_runtime_route_rpcs.sql',
+];
 const fnCount = (await q(`select count(*)::int as n from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='local_service' and p.prokind='f'`))[0].n;
 console.log(`        frozen chain produced ${fnCount} local_service functions`);
 
@@ -227,7 +248,7 @@ const preBootstrapSnapshot = (await q(`select
   coalesce((select string_agg(grantee.rolname || ':' || n.nspname || ':' || acl.privilege_type, ',' order by 1)
     from pg_namespace n cross join lateral aclexplode(coalesce(n.nspacl,acldefault('n',n.nspowner))) acl
     join pg_roles grantee on grantee.oid=acl.grantee where grantee.rolname='bk01_runtime'), '') as schema_grants,
-  coalesce((select string_agg(grantee.rolname || ':' || p.oid::regprocedure::text, ',' order by 1)
+  coalesce((select string_agg(grantee.rolname || ':' || p.oid::regprocedure::text, ',' order by grantee.rolname, p.oid::regprocedure::text)
     from pg_proc p join pg_namespace n on n.oid=p.pronamespace cross join lateral aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) acl
     join pg_roles grantee on grantee.oid=acl.grantee where grantee.rolname='bk01_runtime'), '') as function_grants`))[0];
 let bootstrapError = null;
@@ -249,15 +270,14 @@ if (bootstrapError !== null) {
       and has_function_privilege('bk01_runtime',p.oid,'EXECUTE')
     order by 1
   `);
-  let exact = true;
-  try { validateBk01RuntimeEffectiveExecuteSet(effectiveFunctions.map((item) => item.signature)); }
-  catch { exact = false; }
+  const preRouteExpected = [...BK01_RUNTIME_BOOTSTRAP_FUNCTIONS, ...BK01_PUBLIC_LEGACY_EXECUTE_EXCEPTIONS].sort();
+  const exact = JSON.stringify(effectiveFunctions.map((item) => item.signature).sort()) === JSON.stringify(preRouteExpected);
   record(
-    'effective bk01_runtime EXECUTE set equals five RPCs plus eight fixed PUBLIC legacy exceptions',
+    'pre-migration bk01_runtime EXECUTE set equals exact five bootstrap RPCs plus eight fixed PUBLIC exceptions',
     exact,
-    `expected=${BK01_RUNTIME_EFFECTIVE_FUNCTIONS.length}; observed=${effectiveFunctions.length}; identities=${effectiveFunctions.map((item) => item.signature).join(', ')}`,
+    `expected=${preRouteExpected.length}; observed=${effectiveFunctions.length}; identities=${effectiveFunctions.map((item) => item.signature).join(', ')}`,
   );
-  fs.writeFileSync(path.join(REPO, 'supabase/shared-runtime/WU2-PGLITE-PROOF.json'),
+  fs.writeFileSync(proofOutputPath,
     JSON.stringify({
       generated_at: new Date().toISOString(),
       engine: 'pglite (embedded postgres)',
@@ -269,7 +289,7 @@ if (bootstrapError !== null) {
       effective_runtime_execute_set: effectiveFunctions.map((item) => item.signature),
       bootstrap_error: bootstrapError,
     }, null, 2) + '\n', 'utf8');
-  console.log('wrote supabase/shared-runtime/WU2-PGLITE-PROOF.json');
+  console.log(`wrote ${proofOutputPath}`);
   await db.close();
   process.exit(1);
 }
@@ -278,11 +298,81 @@ const effectiveRuntimeSet = async () => (await q(`select p.oid::regprocedure::te
   from pg_proc p join pg_namespace n on n.oid=p.pronamespace
   where n.nspname='local_service' and p.prokind='f'
     and has_function_privilege('bk01_runtime',p.oid,'EXECUTE') order by 1`)).map((row) => row.signature);
+const preRouteRuntimeSet = await effectiveRuntimeSet();
+const preRouteExpected = [...BK01_RUNTIME_BOOTSTRAP_FUNCTIONS, ...BK01_PUBLIC_LEGACY_EXECUTE_EXCEPTIONS].sort();
+record('bootstrap accepts only the exact pre-route migration phase (5+8)',
+  JSON.stringify(preRouteRuntimeSet.slice().sort()) === JSON.stringify(preRouteExpected),
+  `expected=${preRouteExpected.length}; observed=${preRouteRuntimeSet.length}`);
+
+// Verify the generated platform bootstrap rollback before any product migration
+// has installed route RPC grants. Product migration grants are migration-owned.
+const rollback = read('supabase/shared-runtime/bk01-platform-bootstrap-rollback.sql');
+let rollbackError = null;
+try { await exec(rollback); }
+catch (e) { rollbackError = String(e.message).split('\n')[0]; }
+const afterRollback = (await q(`select
+  has_schema_privilege('bk01_runtime','local_service','USAGE') as schema_usage,
+  has_function_privilege('bk01_runtime','local_service.claim_due_line_notifications(integer)','EXECUTE') as rpc_exec,
+  exists(select 1 from pg_roles where rolname='bk01_migrator') as migrator_exists,
+  exists(select 1 from pg_namespace where nspname='local_service_internal') as internal_schema_exists,
+  exists(select 1 from pg_roles where rolname='bk01_runtime') as runtime_exists`))[0];
+const postRollbackSnapshot = (await q(`select
+  coalesce((select string_agg(member.rolname || '->' || granted.rolname || ':' || m.set_option || ':' || m.inherit_option, ',' order by 1)
+    from pg_auth_members m join pg_roles member on member.oid=m.member join pg_roles granted on granted.oid=m.roleid
+    where member.rolname in ('authenticator','bk01_runtime') or granted.rolname in ('authenticator','bk01_runtime')), '') as memberships,
+  coalesce((select string_agg(grantee.rolname || ':' || n.nspname || ':' || acl.privilege_type, ',' order by 1)
+    from pg_namespace n cross join lateral aclexplode(coalesce(n.nspacl,acldefault('n',n.nspowner))) acl
+    join pg_roles grantee on grantee.oid=acl.grantee where grantee.rolname='bk01_runtime'), '') as schema_grants,
+  coalesce((select string_agg(grantee.rolname || ':' || p.oid::regprocedure::text, ',' order by grantee.rolname, p.oid::regprocedure::text)
+    from pg_proc p join pg_namespace n on n.oid=p.pronamespace cross join lateral aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) acl
+    join pg_roles grantee on grantee.oid=acl.grantee where grantee.rolname='bk01_runtime'), '') as function_grants`))[0];
+record('platform bootstrap rollback removes only its pre-route grants and keeps runtime role',
+  rollbackError === null && afterRollback.schema_usage === false && afterRollback.rpc_exec === false
+    && afterRollback.migrator_exists === false && afterRollback.internal_schema_exists === false
+    && afterRollback.runtime_exists === true
+    && JSON.stringify(postRollbackSnapshot) === JSON.stringify(preBootstrapSnapshot),
+  rollbackError ?? `${JSON.stringify(afterRollback)}; snapshot restored=${JSON.stringify(postRollbackSnapshot) === JSON.stringify(preBootstrapSnapshot)}`);
+
+let rebootstrapError = null;
+try { await exec(bootstrap); }
+catch (e) { rebootstrapError = String(e.message).split('\n')[0]; }
+const rebootstrapSet = await effectiveRuntimeSet();
+record('platform bootstrap reapplies cleanly after its rollback', rebootstrapError === null
+  && JSON.stringify(rebootstrapSet.slice().sort()) === JSON.stringify(preRouteExpected),
+  rebootstrapError ?? `runtime EXECUTE identities=${rebootstrapSet.length}`);
+
+// Apply the active product stream through the bootstrapped migrator identity, in
+// timestamp order. The runtime boundary becomes exact 10+8 only after this commit.
+const productErrors = [];
+await exec('set role bk01_migrator');
+for (const file of productMigrations) {
+  try { await exec(read(file)); }
+  catch (e) { productErrors.push({ file, error: String(e.message).split('\n')[0] }); break; }
+}
+await exec('reset role');
+record('Swarm-1 and WU-B product migrations apply after frozen chain and bootstrap',
+  productErrors.length === 0,
+  productErrors.length ? productErrors.map((e) => `${e.file}: ${e.error}`).join(' | ') : productMigrations.join(' → '));
+if (productErrors.length) {
+  await db.close();
+  process.exit(1);
+}
+
 const actualRuntimeSet = await effectiveRuntimeSet();
 let exactRuntimeSet = true;
 try { validateBk01RuntimeEffectiveExecuteSet(actualRuntimeSet); } catch { exactRuntimeSet = false; }
-record('effective bk01_runtime EXECUTE identities equal exact 5+8 allowlist', exactRuntimeSet,
+record('post-migration bk01_runtime EXECUTE identities equal exact 10+8 allowlist', exactRuntimeSet,
   `expected=${BK01_RUNTIME_EFFECTIVE_FUNCTIONS.length}; observed=${actualRuntimeSet.length}`);
+const publicRouteReach = await q(`select p.oid::regprocedure::text as signature,
+  has_function_privilege('anon',p.oid,'EXECUTE') as anon_exec,
+  has_function_privilege('authenticated',p.oid,'EXECUTE') as authenticated_exec
+  from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+  where n.nspname='local_service' and p.oid::regprocedure::text = any(array[
+    ${BK01_RUNTIME_ROUTE_FUNCTIONS.map((identity) => `'${identity}'`).join(',')}
+  ]) order by 1`);
+record('anon and authenticated cannot EXECUTE any of the five new route RPCs',
+  publicRouteReach.length === 5 && publicRouteReach.every((row) => !row.anon_exec && !row.authenticated_exec),
+  `checked=${publicRouteReach.length}; anon=${publicRouteReach.filter((row) => row.anon_exec).length}; authenticated=${publicRouteReach.filter((row) => row.authenticated_exec).length}`);
 
 await exec('create function local_service.wu2_extra_probe() returns integer language sql as $$ select 1 $$');
 await exec('grant execute on function local_service.wu2_extra_probe() to public');
@@ -295,10 +385,10 @@ record('non-vacuity rejects a 9th PUBLIC-executable function', publicProbeReject
 
 await exec('grant execute on function local_service.wu2_extra_probe() to bk01_runtime');
 let explicitProbeRejected = false;
-try { validateBk01RuntimeEffectiveExecuteSet(await effectiveRuntimeSet(), 'extra explicit runtime grant probe'); }
+try { validateBk01RuntimeEffectiveExecuteSet(await effectiveRuntimeSet(), '11th explicit route RPC identity'); }
 catch { explicitProbeRejected = true; }
 await exec('revoke execute on function local_service.wu2_extra_probe() from bk01_runtime; drop function local_service.wu2_extra_probe()');
-record('non-vacuity rejects an extra function granted to bk01_runtime', explicitProbeRejected,
+record('non-vacuity rejects an 11th explicit bk01_runtime RPC grant', explicitProbeRejected,
   'temporary direct grant was detected then revoked');
 
 // ---------------------------------------------------------------------------
@@ -460,7 +550,37 @@ const runtimeFunctions = [
   ['local_service.claim_stripe_webhook_event', "'wu2-proof'::text, 'proof'::text, now()"],
   ['local_service.complete_line_notification', "'00000000-0000-0000-0000-000000000001'::uuid, 1::integer, 'failed'::text, null::timestamptz, null::timestamptz, 'proof'::text"],
   ['local_service.sync_subscription_state_bk_a', "'customer.subscription.updated'::text, 1::bigint, null::uuid, null::text, null::text, null::text, null::text, null::bigint, null::boolean"],
+  ['local_service.authorize_deposit_slip_upload', "null::uuid, null::text, 'image/png'::text, 1::bigint"],
+  ['local_service.bk01_finish_line_webhook_delivery', "null::text, null::uuid, 'processed'::text, null::text"],
+  ['local_service.bk01_line_bind_booking', "null::text, null::text, null::text, null::uuid, null::text"],
+  ['local_service.finish_stripe_webhook_event', "null::text, 'processed'::text, null::text"],
+  ['local_service.get_line_notification_delivery_context', 'null::uuid, null::integer'],
 ];
+
+// Minimal owned fixtures for positive and negative SQL-level route contract checks.
+await setSub(ownerId);
+await exec(`
+  update local_service.shops set line_oa_id='probe-line-oa' where id='${shopId}';
+  insert into local_service.customers(id,shop_id,name,phone)
+    values ('00000000-0000-0000-0000-000000000002','${shopId}','Probe Customer','0812345678');
+  insert into local_service.services(id,shop_id,name,duration_minutes,price)
+    values ('00000000-0000-0000-0000-000000000003','${shopId}','Probe Service',30,100);
+  insert into local_service.bookings(id,shop_id,customer_id,service_id,booking_date,start_time,end_time,
+      status,deposit_status,total_price,booking_code,link_token,link_token_expires_at,expires_at)
+    values ('00000000-0000-0000-0000-000000000004','${shopId}',
+      '00000000-0000-0000-0000-000000000002','00000000-0000-0000-0000-000000000003',
+      current_date,'10:00','10:30','hold','awaiting',100,'PROBE-BOOKING','TOKEN-123',now()+interval '1 hour',now()+interval '1 hour');
+  insert into local_service.stripe_webhook_events(id,type,created_at,processing_status,processing_started_at)
+    values ('evt-probe-finish','customer.subscription.updated',now(),'processing',now());
+  insert into local_service.line_notification_logs(id,shop_id,booking_id,event_type,recipient_type,status,
+      attempt_count,scheduled_for)
+    values ('00000000-0000-0000-0000-000000000005','${shopId}',
+      '00000000-0000-0000-0000-000000000004','booking_created','customer','pending',1,now());
+  insert into local_service.subscriptions(shop_id,stripe_customer_id,stripe_subscription_id,plan,status)
+    values ('${shopId}','cus-probe','sub-probe','basic_490','trialing')
+    on conflict (shop_id) do update set stripe_customer_id='cus-probe',
+      stripe_subscription_id='sub-probe',plan='basic_490',status='trialing';
+`);
 await exec('set role authenticator; set role bk01_runtime;');
 const runtimeCaller = (await q('select current_user as role'))[0].role;
 const loginState = (await q("select rolcanlogin from pg_roles where rolname='bk01_runtime'"))[0].rolcanlogin;
@@ -481,10 +601,98 @@ for (const [name, args] of runtimeFunctions) {
   }
 }
 record(
-  'bk01_runtime can EXECUTE each of its five allowlisted RPCs',
+  'bk01_runtime can EXECUTE each of its ten allowlisted RPCs',
   runtimeFunctionResults.every((item) => item.ok),
   runtimeFunctionResults.map((item) => `${item.name}: ${item.ok ? 'callable' : item.error}`).join(' | '),
 );
+
+const probeRun = async (sql) => {
+  try { return { rows: await q(sql), error: null }; }
+  catch (e) { return { rows: null, error: String(e.message).split('\n')[0] }; }
+};
+const adminQuery = async (sql) => {
+  await exec('reset role');
+  const rows = await q(sql);
+  await exec('set role authenticator; set role bk01_runtime');
+  return rows;
+};
+const lineArgs = `'line-event-proof'::text,'PROBE-BOOKING'::text,'TOKEN-123'::text,'${shopId}'::uuid,'U${'a'.repeat(32)}'::text`;
+const lineFirst = await probeRun(`select * from local_service.bk01_line_bind_booking(${lineArgs})`);
+const lineReplay = await probeRun(`select * from local_service.bk01_line_bind_booking(${lineArgs})`);
+const lineBadId = await probeRun(`select * from local_service.bk01_line_bind_booking('bad-id','PROBE-BOOKING','TOKEN-123','${shopId}','bad-user')`);
+const finishLine = lineFirst.rows?.[0]?.lease_token
+  ? await probeRun(`select local_service.bk01_finish_line_webhook_delivery('line-event-proof','${lineFirst.rows[0].lease_token}','processed',null) as done`)
+  : { rows: null, error: 'LINE bind did not return lease token' };
+const replayLineFinish = lineFirst.rows?.[0]?.lease_token
+  ? await probeRun(`select local_service.bk01_finish_line_webhook_delivery('line-event-proof','${lineFirst.rows[0].lease_token}','failed','retry') as done`)
+  : { rows: null, error: 'LINE bind did not return lease token' };
+const lineEventDebug = (await adminQuery(`select processing_status,last_error,booking_id,shop_id,lease_token from local_service.line_webhook_events where webhook_event_id='line-event-proof'`))[0];
+const lineEvents = lineEventDebug ? 1 : 0;
+record('LINE webhookEventId binds once, replay is suppressed, malformed LINE identity fails, lease cannot finish twice',
+  lineFirst.rows?.[0]?.claimed === true && lineReplay.rows?.[0]?.claimed === false
+    && lineBadId.error !== null && finishLine.rows?.[0]?.done === true
+    && replayLineFinish.rows?.[0]?.done === false && lineEvents === 1,
+  `first=${lineFirst.rows?.[0]?.claimed}; firstError=${lineFirst.error}; replay=${lineReplay.rows?.[0]?.claimed}; badIdentity=${lineBadId.error !== null}; finish=${finishLine.rows?.[0]?.done}; finishReplay=${replayLineFinish.rows?.[0]?.done}; event=${JSON.stringify(lineEventDebug)}`);
+
+const notificationAttempt = (await adminQuery(`select attempt_count from local_service.line_notification_logs where id='00000000-0000-0000-0000-000000000005'`))[0]?.attempt_count ?? 1;
+const contextOk = await probeRun(`select * from local_service.get_line_notification_delivery_context('00000000-0000-0000-0000-000000000005',${notificationAttempt})`);
+const contextStale = await probeRun(`select * from local_service.get_line_notification_delivery_context('00000000-0000-0000-0000-000000000005',${notificationAttempt + 1})`);
+record('notification context returns only the matching pending attempt',
+  contextOk.rows?.length === 1 && contextStale.rows?.length === 0,
+  `attempt=${notificationAttempt}; matching=${contextOk.rows?.length ?? 'error'}; stale=${contextStale.rows?.length ?? 'error'}`);
+
+const upload = await probeRun(`select * from local_service.authorize_deposit_slip_upload('00000000-0000-0000-0000-000000000004','TOKEN-123','image/png',1024)`);
+const uploadGrant = upload.rows?.[0];
+const storedGrant = uploadGrant ? (await adminQuery(`select object_path,content_type,size_bytes,expires_at,
+  length(grant_token_hash)=64 as token_hash_shape
+  from local_service.deposit_slip_upload_grants where id='${uploadGrant.grant_id}'`))[0] : null;
+const uploadBadMime = await probeRun(`select * from local_service.authorize_deposit_slip_upload('00000000-0000-0000-0000-000000000004','TOKEN-123','text/plain',1024)`);
+const uploadBadSize = await probeRun(`select * from local_service.authorize_deposit_slip_upload('00000000-0000-0000-0000-000000000004','TOKEN-123','image/png',5242881)`);
+await adminQuery(`update local_service.bookings set status='pending_review' where id='00000000-0000-0000-0000-000000000004'`);
+const uploadWrongState = await probeRun(`select * from local_service.authorize_deposit_slip_upload('00000000-0000-0000-0000-000000000004','TOKEN-123','image/png',1024)`);
+const uploadPathParts = uploadGrant?.object_path.split('/') ?? [];
+const uploadPathMatches = uploadPathParts[0] === '00000000-0000-0000-0000-000000000004'
+  && /^[0-9a-f-]{36}\.png$/.test(uploadPathParts[1] ?? '');
+const uploadExpiryValid = uploadGrant && Date.parse(uploadGrant.expires_at) > Date.now()
+  && Date.parse(uploadGrant.expires_at) <= Date.now() + 5 * 60_000;
+record('upload RPC derives exact booking path and records MIME/size/token hash/TTL; invalid type and size fail',
+  Boolean(uploadGrant && storedGrant?.object_path === uploadGrant.object_path
+    && uploadPathMatches
+    && storedGrant.content_type === 'image/png' && Number(storedGrant.size_bytes) === 1024
+    && storedGrant.token_hash_shape && uploadExpiryValid
+    && uploadBadMime.error !== null && uploadBadSize.error !== null && uploadWrongState.error !== null),
+  `issued=${Boolean(uploadGrant)}; stored=${JSON.stringify(storedGrant)}; path=${uploadGrant?.object_path ?? upload.error}; pathMatch=${uploadPathMatches}; expiryValid=${uploadExpiryValid}; badMime=${uploadBadMime.error !== null}; badSize=${uploadBadSize.error !== null}; wrongState=${uploadWrongState.error !== null}; DB-only proof does not test Storage consume/replay`);
+
+const stripeFirst = await probeRun(`select * from local_service.sync_subscription_state_bk_a('customer.subscription.updated',1750000000,'${shopId}','cus-probe','sub-probe','basic_490','active',1752592000,false)`);
+const stripeState1 = (await adminQuery(`select s.plan,s.status,s.current_period_end,s.cancel_at_period_end,s.last_stripe_event_created_at,
+  sh.subscription_status from local_service.subscriptions s join local_service.shops sh on sh.id=s.shop_id where s.shop_id='${shopId}'`))[0];
+const stripeSecond = await probeRun(`select * from local_service.sync_subscription_state_bk_a('customer.subscription.updated',1750000000,'${shopId}','cus-probe','sub-probe','basic_490','active',1752592000,false)`);
+const stripeState2 = (await adminQuery(`select s.plan,s.status,s.current_period_end,s.cancel_at_period_end,s.last_stripe_event_created_at,
+  sh.subscription_status from local_service.subscriptions s join local_service.shops sh on sh.id=s.shop_id where s.shop_id='${shopId}'`))[0];
+record('same Stripe event applied twice preserves identical subscription business state',
+  stripeFirst.rows?.[0]?.out_applied === true && stripeSecond.rows?.[0]?.out_applied === true
+    && JSON.stringify(stripeState1) === JSON.stringify(stripeState2),
+  `first=${stripeFirst.rows?.[0]?.out_applied}; second=${stripeSecond.rows?.[0]?.out_applied}; state_equal=${JSON.stringify(stripeState1) === JSON.stringify(stripeState2)}`);
+
+const stripeFinish = await probeRun(`select local_service.finish_stripe_webhook_event('evt-probe-finish','failed',
+  'Bearer secret abcdefghijklmnopqrstuvwxyz api_key=sk_live_probe owner@example.invalid 0812345678 ${'x'.repeat(560)}') as done`);
+const stripeError = (await adminQuery(`select processing_status,last_error,length(last_error) as error_length,
+  last_error not like '%secret abcdefghijklmnopqrstuvwxyz%' as token_redacted,
+  last_error not like '%sk_live_probe%' as api_key_redacted,
+  last_error not like '%owner@example.invalid%' as email_redacted,
+  last_error not like '%0812345678%' as phone_redacted
+  from local_service.stripe_webhook_events where id='evt-probe-finish'`))[0];
+const stripeFinishAgain = await probeRun(`select local_service.finish_stripe_webhook_event('evt-probe-finish','processed',null) as done`);
+const stripeWrongStatus = await probeRun(`select local_service.finish_stripe_webhook_event('evt-probe-finish','processing',null)`);
+record('Stripe finalizer caps/redacts error, and only finalizes a processing row once to processed/failed',
+  stripeFinish.rows?.[0]?.done === true && stripeError.processing_status === 'failed'
+    && stripeError.error_length <= 500 && stripeError.token_redacted && stripeError.api_key_redacted && stripeError.email_redacted && stripeError.phone_redacted
+    && stripeFinishAgain.rows?.[0]?.done === false && stripeWrongStatus.error !== null,
+  `done=${stripeFinish.rows?.[0]?.done}; state=${stripeError.processing_status}; chars=${stripeError.error_length}; redacted=${stripeError.token_redacted}/${stripeError.api_key_redacted}/${stripeError.email_redacted}/${stripeError.phone_redacted}; repeated=${stripeFinishAgain.rows?.[0]?.done}; invalidStatus=${stripeWrongStatus.error !== null}`);
+
+const runtimeDirectTable = await probeRun('select * from local_service.deposit_slip_upload_grants');
+record('bk01_runtime cannot access product tables directly',
+  runtimeDirectTable.error !== null && /permission denied|42501/i.test(runtimeDirectTable.error), runtimeDirectTable.error ?? 'DIRECT TABLE ACCESS ALLOWED');
 
 const crossProduct = [];
 for (const statement of [
@@ -492,12 +700,14 @@ for (const statement of [
   'insert into ps01.runtime_boundary_probe values (2, \'blocked\')',
   'update ps01.runtime_boundary_probe set note=\'blocked\' where id=1',
   'delete from ps01.runtime_boundary_probe where id=1',
+  'select * from mt01.runtime_boundary_probe',
+  'insert into mt01.runtime_boundary_probe values (2, \'blocked\')',
 ]) {
   try { await q(statement); crossProduct.push({ statement, denied: false }); }
   catch (e) { crossProduct.push({ statement, denied: /permission denied|42501/i.test(String(e.message)) }); }
 }
 record(
-  'bk01_runtime cannot read/write the stand-in PS01 relation',
+  'bk01_runtime cannot read/write the stand-in PS01/MT01 relations',
   crossProduct.every((item) => item.denied),
   crossProduct.map((item) => `${item.denied ? 'denied' : 'ALLOWED'}:${item.statement.split(' ')[0]}`).join(' '),
 );
@@ -534,35 +744,6 @@ record(
 );
 await exec('reset role; reset role;');
 
-const rollback = read('supabase/shared-runtime/bk01-platform-bootstrap-rollback.sql');
-let rollbackError = null;
-try { await exec(rollback); }
-catch (e) { rollbackError = String(e.message).split('\n')[0]; }
-const afterRollback = (await q(`select
-  has_schema_privilege('bk01_runtime','local_service','USAGE') as schema_usage,
-  has_function_privilege('bk01_runtime','local_service.claim_due_line_notifications(integer)','EXECUTE') as rpc_exec,
-  exists(select 1 from pg_roles where rolname='bk01_migrator') as migrator_exists,
-  exists(select 1 from pg_namespace where nspname='local_service_internal') as internal_schema_exists,
-  exists(select 1 from pg_roles where rolname='bk01_runtime') as runtime_exists`))[0];
-const postRollbackSnapshot = (await q(`select
-  coalesce((select string_agg(member.rolname || '->' || granted.rolname || ':' || m.set_option || ':' || m.inherit_option, ',' order by 1)
-    from pg_auth_members m join pg_roles member on member.oid=m.member join pg_roles granted on granted.oid=m.roleid
-    where member.rolname in ('authenticator','bk01_runtime') or granted.rolname in ('authenticator','bk01_runtime')), '') as memberships,
-  coalesce((select string_agg(grantee.rolname || ':' || n.nspname || ':' || acl.privilege_type, ',' order by 1)
-    from pg_namespace n cross join lateral aclexplode(coalesce(n.nspacl,acldefault('n',n.nspowner))) acl
-    join pg_roles grantee on grantee.oid=acl.grantee where grantee.rolname='bk01_runtime'), '') as schema_grants,
-  coalesce((select string_agg(grantee.rolname || ':' || p.oid::regprocedure::text, ',' order by 1)
-    from pg_proc p join pg_namespace n on n.oid=p.pronamespace cross join lateral aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) acl
-    join pg_roles grantee on grantee.oid=acl.grantee where grantee.rolname='bk01_runtime'), '') as function_grants`))[0];
-const grantsRestored = JSON.stringify(preBootstrapSnapshot) === JSON.stringify(postRollbackSnapshot);
-record(
-  'bootstrap rollback removes its grants, membership and migrator objects, retaining the pre-existing runtime role',
-  rollbackError === null && afterRollback.schema_usage === false && afterRollback.rpc_exec === false
-    && afterRollback.migrator_exists === false && afterRollback.internal_schema_exists === false
-    && afterRollback.runtime_exists === true && grantsRestored,
-  rollbackError ?? `${JSON.stringify(afterRollback)}; memberships/grants restored=${grantsRestored}`,
-);
-
 const ownership = await q(`select count(*)::int as non_migrator
   from pg_proc p join pg_namespace n on n.oid=p.pronamespace
   where n.nspname='local_service' and p.prokind='f' and pg_get_userbyid(p.proowner) <> 'bk01_migrator'`);
@@ -574,7 +755,7 @@ console.log('\n' + '='.repeat(74));
 console.log(`checks: ${results.length}   pass: ${results.length - failed.length}   fail: ${failed.length}`);
 if (failed.length) console.log('FAILED: ' + failed.map((f) => f.name).join(' | '));
 
-fs.writeFileSync(path.join(REPO, 'supabase/shared-runtime/WU2-PGLITE-PROOF.json'),
+fs.writeFileSync(proofOutputPath,
   JSON.stringify({
     generated_at: new Date().toISOString(),
     engine: 'pglite (embedded postgres)',
@@ -593,6 +774,6 @@ fs.writeFileSync(path.join(REPO, 'supabase/shared-runtime/WU2-PGLITE-PROOF.json'
     pre_bootstrap_snapshot: preBootstrapSnapshot,
     post_rollback_snapshot: postRollbackSnapshot,
   }, null, 2) + '\n', 'utf8');
-console.log('wrote supabase/shared-runtime/WU2-PGLITE-PROOF.json');
+console.log(`wrote ${proofOutputPath}`);
 await db.close();
 process.exit(failed.length ? 1 : 0);

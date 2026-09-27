@@ -4,7 +4,7 @@
 // authorized by this contract.
 export const BK01_RUNTIME_ROLE = 'bk01_runtime';
 export const BK01_RUNTIME_SCHEMA = 'local_service';
-export const BK01_RUNTIME_FUNCTIONS = Object.freeze([
+export const BK01_RUNTIME_BOOTSTRAP_FUNCTIONS = Object.freeze([
   'local_service.authorize_booking_recovery_attempt(uuid,text)',
   'local_service.claim_due_line_notifications(integer)',
   'local_service.claim_stripe_webhook_event(text,text,timestamp with time zone)',
@@ -12,8 +12,21 @@ export const BK01_RUNTIME_FUNCTIONS = Object.freeze([
   'local_service.sync_subscription_state_bk_a(text,bigint,uuid,text,text,text,text,bigint,boolean)',
 ]);
 
+export const BK01_RUNTIME_ROUTE_FUNCTIONS = Object.freeze([
+  'local_service.authorize_deposit_slip_upload(uuid,text,text,bigint)',
+  'local_service.bk01_finish_line_webhook_delivery(text,uuid,text,text)',
+  'local_service.bk01_line_bind_booking(text,text,text,uuid,text)',
+  'local_service.finish_stripe_webhook_event(text,text,text)',
+  'local_service.get_line_notification_delivery_context(uuid,integer)',
+]);
+
+export const BK01_RUNTIME_FUNCTIONS = Object.freeze([
+  ...BK01_RUNTIME_BOOTSTRAP_FUNCTIONS,
+  ...BK01_RUNTIME_ROUTE_FUNCTIONS,
+].sort());
+
 // Fixed legacy exception set accepted by the WSTERA House caretaker on 2026-09-27
-// (Lane B WU-2 round 2). Keep separate from the five explicit runtime RPC grants.
+// (Lane B WU-2 round 2). Keep separate from the ten explicit runtime RPC grants.
 export const BK01_PUBLIC_LEGACY_EXECUTE_EXCEPTIONS = Object.freeze([
   'local_service.audit_platform_admin_update()',
   'local_service.enforce_booking_status_transition()',

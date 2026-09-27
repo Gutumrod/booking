@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { BK01_RUNTIME_FUNCTIONS, BK01_PUBLIC_LEGACY_EXECUTE_EXCEPTIONS, BK01_RUNTIME_EFFECTIVE_FUNCTIONS, validateBk01RuntimeAuthority } from './lib/bk01-runtime-allowlist.mjs';
+import { BK01_RUNTIME_BOOTSTRAP_FUNCTIONS, BK01_RUNTIME_ROUTE_FUNCTIONS, BK01_RUNTIME_FUNCTIONS, BK01_PUBLIC_LEGACY_EXECUTE_EXCEPTIONS, BK01_RUNTIME_EFFECTIVE_FUNCTIONS, validateBk01RuntimeAuthority } from './lib/bk01-runtime-allowlist.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
@@ -97,12 +97,22 @@ const bootstrapCode = bootstrap.replace(/--[^\n]*/g, '');
 if (/GRANT\s+[^;]*?\bON\s+SCHEMA\s+(auth|extensions|storage|cron|net)[\s,;]/i.test(bootstrapCode)) {
   fail('Bootstrap grants on a managed schema; the fix must not depend on schema auth.');
 }
-for (const identity of BK01_RUNTIME_FUNCTIONS) {
+for (const identity of BK01_RUNTIME_BOOTSTRAP_FUNCTIONS) {
   if (!bootstrap.includes(`GRANT EXECUTE ON FUNCTION ${identity} TO bk01_runtime;`)) {
     fail(`Runtime grant missing from generated bootstrap allowlist: ${identity}`);
   }
   if (!rollback.includes(`REVOKE EXECUTE ON FUNCTION ${identity} FROM bk01_runtime;`)) {
     fail(`Runtime grant missing matching rollback revoke: ${identity}`);
+  }
+}
+const routeMigration = read('supabase/bk01-migrations/20260927120000_bk01_runtime_route_rpcs.sql');
+for (const identity of BK01_RUNTIME_ROUTE_FUNCTIONS) {
+  if (!routeMigration.includes(`GRANT EXECUTE ON FUNCTION ${identity} TO bk01_runtime;`)) {
+    fail(`Route migration grant missing from exact runtime allowlist: ${identity}`);
+  }
+  if (bootstrap.includes(`GRANT EXECUTE ON FUNCTION ${identity} TO bk01_runtime;`)
+      || rollback.includes(`REVOKE EXECUTE ON FUNCTION ${identity} FROM bk01_runtime;`)) {
+    fail(`Shared-runtime bootstrap/rollback must not own product migration grant ${identity}`);
   }
 }
 for (const schema of ['ps01', 'ps01_internal', 'mt01', 'mt01_private', 'wstera_platform_internal', 'auth', 'storage', 'extensions', 'net', 'cron']) {
@@ -111,13 +121,16 @@ for (const schema of ['ps01', 'ps01_internal', 'mt01', 'mt01_private', 'wstera_p
   }
 }
 if (!bootstrap.includes('has_function_privilege(\'bk01_runtime\',p.oid,\'EXECUTE\')')
-    || !bootstrap.includes('effective EXECUTE set differs from the exact approved identities')) {
-  fail('Generated bootstrap is missing the exact effective runtime EXECUTE identity guard.');
+    || !bootstrap.includes('effective EXECUTE set differs from an exact approved migration phase')
+    || !bootstrap.includes('route_function_count NOT IN (0, 5)')
+    || !bootstrap.includes('v_expected_exec_count')) {
+  fail('Generated bootstrap is missing the fail-closed exact pre/post route-migration EXECUTE guard.');
 }
 for (const identity of BK01_RUNTIME_EFFECTIVE_FUNCTIONS) {
   if (!bootstrap.includes(`'${identity}'`)) fail(`Generated effective EXECUTE guard omits ${identity}`);
 }
-if (BK01_PUBLIC_LEGACY_EXECUTE_EXCEPTIONS.length !== 8
+if (BK01_RUNTIME_BOOTSTRAP_FUNCTIONS.length !== 5 || BK01_RUNTIME_ROUTE_FUNCTIONS.length !== 5
+    || BK01_RUNTIME_FUNCTIONS.length !== 10 || BK01_PUBLIC_LEGACY_EXECUTE_EXCEPTIONS.length !== 8
     || BK01_RUNTIME_EFFECTIVE_FUNCTIONS.length !== BK01_RUNTIME_FUNCTIONS.length + 8) {
   fail('Runtime legacy exception set or exact allowlist cardinality changed.');
 }

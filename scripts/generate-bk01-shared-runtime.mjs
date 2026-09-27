@@ -2,7 +2,12 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { BK01_RUNTIME_FUNCTIONS, BK01_RUNTIME_EFFECTIVE_FUNCTIONS } from './lib/bk01-runtime-allowlist.mjs';
+import {
+  BK01_RUNTIME_BOOTSTRAP_FUNCTIONS,
+  BK01_RUNTIME_ROUTE_FUNCTIONS,
+  BK01_PUBLIC_LEGACY_EXECUTE_EXCEPTIONS,
+  BK01_RUNTIME_EFFECTIVE_FUNCTIONS,
+} from './lib/bk01-runtime-allowlist.mjs';
 
 // ---------------------------------------------------------------------------
 // BK01 shared-runtime bootstrap generator.
@@ -299,7 +304,7 @@ ALTER SCHEMA ${INTERNAL_SCHEMA} OWNER TO bk01_migrator;
 REVOKE ALL ON SCHEMA ${INTERNAL_SCHEMA} FROM PUBLIC, anon, authenticated, service_role;
 GRANT USAGE ON SCHEMA local_service TO anon, authenticated, service_role;
 GRANT USAGE ON SCHEMA local_service TO bk01_runtime;
-${BK01_RUNTIME_FUNCTIONS.map((identity) => `GRANT EXECUTE ON FUNCTION ${identity} TO bk01_runtime;`).join('\n')}
+${BK01_RUNTIME_BOOTSTRAP_FUNCTIONS.map((identity) => `GRANT EXECUTE ON FUNCTION ${identity} TO bk01_runtime;`).join('\n')}
 
 -- NO grant is taken on schema auth or schema extensions. bk01_migrator must be able to
 -- prove it cannot resolve auth.*; that proof is in the guard block below.
@@ -573,7 +578,8 @@ $bk01_function_boundary_check$;
 
 const runtimeBoundaryCheckBlock = `
 DO $bk01_runtime_boundary_check$
-DECLARE v_exec_count integer; v_table_write_count integer;
+DECLARE v_exec_count integer; v_route_function_count integer;
+  v_expected_exec_count integer; v_table_write_count integer;
 BEGIN
   IF EXISTS (
     SELECT 1 FROM pg_roles
@@ -615,14 +621,25 @@ BEGIN
   SELECT count(*) INTO v_exec_count
   FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
   WHERE n.nspname='local_service' AND has_function_privilege('bk01_runtime',p.oid,'EXECUTE');
+  SELECT count(*) INTO v_route_function_count
+  FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+  WHERE n.nspname='local_service' AND p.oid::regprocedure::text IN (
+${BK01_RUNTIME_ROUTE_FUNCTIONS.map((identity) => `    '${identity}'`).join(',\n')}
+  );
+  IF v_route_function_count NOT IN (0, ${BK01_RUNTIME_ROUTE_FUNCTIONS.length}) THEN
+    RAISE EXCEPTION 'BK01 route RPC migration is partially present';
+  END IF;
+  v_expected_exec_count := CASE WHEN v_route_function_count=0
+    THEN ${BK01_RUNTIME_BOOTSTRAP_FUNCTIONS.length + BK01_PUBLIC_LEGACY_EXECUTE_EXCEPTIONS.length}
+    ELSE ${BK01_RUNTIME_EFFECTIVE_FUNCTIONS.length} END;
   IF EXISTS (
     SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
     WHERE n.nspname='local_service' AND has_function_privilege('bk01_runtime',p.oid,'EXECUTE')
       AND p.oid::regprocedure::text NOT IN (
 ${BK01_RUNTIME_EFFECTIVE_FUNCTIONS.map((identity) => `        '${identity}'`).join(',\n')}
       )
-  ) OR v_exec_count <> ${BK01_RUNTIME_EFFECTIVE_FUNCTIONS.length} THEN
-    RAISE EXCEPTION 'bk01_runtime effective EXECUTE set differs from the exact approved identities (observed count %)', v_exec_count;
+  ) OR v_exec_count <> v_expected_exec_count THEN
+    RAISE EXCEPTION 'bk01_runtime effective EXECUTE set differs from an exact approved migration phase (observed count %, expected %)', v_exec_count, v_expected_exec_count;
   END IF;
   SELECT count(*) INTO v_table_write_count
   FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
@@ -723,7 +740,7 @@ $bk01_restore_function_owners$;
 
 -- Remove only the runtime boundary grants introduced by this bootstrap. The role
 -- itself is pre-provisioned by House and is intentionally not dropped here.
-REVOKE EXECUTE ON FUNCTION ${BK01_RUNTIME_FUNCTIONS.join(' FROM bk01_runtime;\nREVOKE EXECUTE ON FUNCTION ')} FROM bk01_runtime;
+REVOKE EXECUTE ON FUNCTION ${BK01_RUNTIME_BOOTSTRAP_FUNCTIONS.join(' FROM bk01_runtime;\nREVOKE EXECUTE ON FUNCTION ')} FROM bk01_runtime;
 REVOKE USAGE ON SCHEMA local_service FROM bk01_runtime;
 REVOKE bk01_runtime FROM authenticator;
 
