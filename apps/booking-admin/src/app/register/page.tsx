@@ -3,16 +3,34 @@
 import { useRouter, useSearchParams } from 'next/navigation';
 import React, { useState, useEffect, useRef, useCallback, Suspense } from 'react';
 import Link from 'next/link';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { createClient } from '@/lib/supabase/client';
 import { LanguageToggle } from '@/components/language-toggle';
 import {
   BASIC_PLAN_PRICE_THB,
   evaluatePlanLimit,
 } from '@/lib/commercial-contract';
+import {
+  STARTER_SERVICES_VIEW_QUALIFIED,
+  buildSignupIntent,
+  countStarterServicesForType,
+  loadStarterServices,
+  resolvePlanServicesLimit,
+  starterServicesForType,
+  type StarterServiceListStatus,
+  type StarterServiceRow,
+} from '@/lib/business-type-starter-services';
+import {
+  BUSINESS_TYPE_VIEW_QUALIFIED,
+  businessTypeLabel,
+  findBusinessType,
+  loadBusinessTypes,
+  type BusinessTypeListItem,
+  type BusinessTypeListStatus,
+} from '@/lib/business-type-view';
 import { 
   Store, Mail, Sparkles, ArrowRight, ArrowLeft, QrCode, CreditCard,
-  ShieldCheck, Building, CheckCircle2, Globe
+  ShieldCheck, Building, CheckCircle2, Globe, Scissors
 } from 'lucide-react';
 
 const PENDING_REGISTRATION_KEY = 'local-service.pending-owner-registration';
@@ -28,11 +46,30 @@ interface PendingRegistration {
   promptpayNumber: string;
   promptpayName: string;
   idempotencyKey: string;
+  // WU-A3 + F-13: recorded for later analysis, so the shop's type, the starter services
+  // the database says it will be created with, and the plan are known together. The type
+  // fields are the values `local_service.app_business_types` returned; the starter fields
+  // are the values `local_service.app_business_type_starter_services` returned, capped by
+  // the plan's allowance — the set `provision_owner_shop` creates. Applied client-side
+  // only; the shop's real services are written by `provision_owner_shop`.
+  businessType: string;
+  businessTypeLabel: string;
+  businessTypeEmoji: string;
+  businessTypeDisplayOrder: number;
+  businessTypeSource: string;
+  starterSource: string;
+  starterStatus: 'loaded' | 'empty' | 'unavailable';
+  starterServiceCount: number;
+  starterAvailableServiceCount: number;
+  starterPlanLimit: number;
+  starterTotalDurationMinutes: number;
+  starterServices: { name: string; duration_minutes: number }[];
 }
 
 function RegisterFormContent() {
   const t = useTranslations('auth');
   const tCommon = useTranslations('common');
+  const locale = useLocale();
   const suggestedCategories = t.raw('suggestedCategories') as string[];
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -40,7 +77,27 @@ function RegisterFormContent() {
 
   const [currentStep, setCurrentStep] = useState<number>(1);
 
-  // Step 1: Shop & Owner Info
+  // F-12: the type list is NOT embedded in this page. It is read from the view
+  // `local_service.app_business_types` (see lib/business-type-view.ts), which is granted
+  // to `anon`, so a visitor with no account yet is shown the real list. `loading` and
+  // `unavailable` are kept apart from `empty` so the step can say which happened.
+  const [businessTypes, setBusinessTypes] = useState<readonly BusinessTypeListItem[]>([]);
+  const [businessTypeStatus, setBusinessTypeStatus] =
+    useState<BusinessTypeListStatus | 'loading'>('loading');
+
+  // F-13: the starter-services preview is NOT embedded either. It is read from the view
+  // `local_service.app_business_type_starter_services` — the SAME data
+  // `provision_owner_shop` builds a new shop's services from — which is also granted to
+  // `anon`. BUSINESS_PATTERNS and the app-side catalogue are gone.
+  const [starterServices, setStarterServices] = useState<readonly StarterServiceRow[]>([]);
+  const [starterStatus, setStarterStatus] =
+    useState<StarterServiceListStatus | 'loading'>('loading');
+
+  // Step 1: Business type (WU-A3) — asked before the rest of the flow. The value is
+  // the code the database returned; no code is written into this page.
+  const [businessType, setBusinessType] = useState<string>('');
+
+  // Step 2: Shop & Owner Info
   const [shopName, setShopName] = useState('');
   const [shopSlug, setShopSlug] = useState('');
   const [businessCategory, setBusinessCategory] = useState('');
@@ -49,7 +106,7 @@ function RegisterFormContent() {
   const [ownerEmail, setOwnerEmail] = useState('');
   const [password, setPassword] = useState('');
 
-  // Step 2: Plan Selection
+  // Step 3: Plan Selection
   // Only the Free plan (default) and Basic are selectable. Pro is present in the
   // product but must not be presented as purchasable (Owner decision 2026-09-26,
   // A-2), so a `?plan=pro_990` link can never preselect it.
@@ -59,9 +116,63 @@ function RegisterFormContent() {
       : 'free_trial'
   );
 
-  // Step 3: PromptPay Setup
+  // Step 4: PromptPay Setup
   const [promptpayNumber, setPromptpayNumber] = useState('');
   const [promptpayName, setPromptpayName] = useState('');
+
+  // The row the database returned for the chosen code (null if it is not in the list).
+  const selectedBusinessType = findBusinessType(businessTypes, businessType);
+  const selectedBusinessTypeLabel = selectedBusinessType
+    ? businessTypeLabel(selectedBusinessType, locale)
+    : '';
+
+  // F-13 (preview must match provision): what `provision_owner_shop` would create for the
+  // chosen type on the chosen plan — the projection's rows for the type, in the
+  // projection's own order, cut to the plan's service allowance. A Free signup therefore
+  // previews at most 3 services, not the 5 the deleted app-side table offered. A type the
+  // projection holds no row for previews nothing: there is no fallback set.
+  const preview = starterServicesForType(
+    starterServices,
+    selectedBusinessType?.typeCode ?? '',
+    resolvePlanServicesLimit(selectedPlan),
+    starterStatus === 'loading' ? 'unavailable' : starterStatus,
+  );
+
+  // Reads the type list and the starter-services projection from the database once, on
+  // mount. The client is created here — the same `createClient()` the rest of this page
+  // uses — and passed into the readers, which cannot import it themselves (see
+  // lib/business-type-view.ts). No session is needed or used: both views are granted to
+  // `anon`, so a visitor who has not signed up yet reads the real data. The list is shown
+  // only when the read succeeded; `empty` and `unavailable` render the explanatory states
+  // below instead of a list, and no embedded list is used as a fallback.
+  useEffect(() => {
+    let isCurrent = true;
+
+    const loadTypes = async () => {
+      const supabase = createClient();
+      const [types, starters] = await Promise.all([
+        loadBusinessTypes(supabase),
+        loadStarterServices(supabase),
+      ]);
+      if (!isCurrent) return;
+      setBusinessTypes(types.types);
+      setBusinessTypeStatus(types.status);
+      setStarterServices(starters.services);
+      setStarterStatus(starters.status);
+    };
+
+    void loadTypes();
+
+    return () => {
+      isCurrent = false;
+    };
+  }, []);
+
+  const selectBusinessType = (type: BusinessTypeListItem) => {
+    setBusinessType(type.typeCode);
+    // Prefill the free-text category from the chosen type's database label; still editable.
+    setBusinessCategory(businessTypeLabel(type, locale));
+  };
 
   // UI state
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -157,7 +268,15 @@ function RegisterFormContent() {
 
   const handleNextStep = (e: React.FormEvent) => {
     e.preventDefault();
-    if (currentStep < 3) {
+
+    // The business type is required: the starter pattern cannot be chosen
+    // without it, so the flow does not move past step 1 until it is set.
+    if (currentStep === 1 && !businessType) {
+      setErrorMessage(t('businessTypeRequired'));
+      return;
+    }
+
+    if (currentStep < 4) {
       setCurrentStep(prev => prev + 1);
     } else {
       handleFinalSubmit();
@@ -166,6 +285,26 @@ function RegisterFormContent() {
 
   const handleFinalSubmit = async () => {
     setErrorMessage('');
+
+    // The type row must be one the database view returned. Nothing is submitted for
+    // a code the list did not contain.
+    if (!selectedBusinessType) {
+      setErrorMessage(t('businessTypeRequired'));
+      return;
+    }
+
+    const intent = buildSignupIntent({
+      type: selectedBusinessType,
+      label: selectedBusinessTypeLabel,
+      source: BUSINESS_TYPE_VIEW_QUALIFIED,
+      preview,
+      selectedPlan,
+    });
+    if (!intent) {
+      setErrorMessage(t('businessTypeRequired'));
+      return;
+    }
+
     setIsSubmitting(true);
 
     // Intended-contract check only, NOT enforcement: `evaluatePlanLimit` is a
@@ -190,10 +329,22 @@ function RegisterFormContent() {
       ownerName: ownerName.trim(),
       ownerPhone: ownerPhone.trim(),
       ownerEmail: ownerEmail.trim().toLowerCase(),
-      selectedPlan,
+      selectedPlan: intent.selectedPlan,
       promptpayNumber: promptpayNumber.trim(),
       promptpayName: promptpayName.trim(),
       idempotencyKey: crypto.randomUUID(),
+      businessType: intent.starter.business_type,
+      businessTypeLabel: intent.starter.business_type_label,
+      businessTypeEmoji: intent.starter.business_type_emoji,
+      businessTypeDisplayOrder: intent.starter.business_type_display_order,
+      businessTypeSource: intent.starter.business_type_source,
+      starterSource: intent.starter.starter_source,
+      starterStatus: intent.starter.starter_status,
+      starterServiceCount: intent.starter.starter_service_count,
+      starterAvailableServiceCount: intent.starter.starter_available_service_count,
+      starterPlanLimit: intent.starter.starter_plan_limit,
+      starterTotalDurationMinutes: intent.starter.starter_total_duration_minutes,
+      starterServices: intent.starter.starter_services,
     };
 
     localStorage.setItem(PENDING_REGISTRATION_KEY, JSON.stringify(registration));
@@ -250,17 +401,22 @@ function RegisterFormContent() {
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex items-center justify-between text-xs">
           <div className={`flex items-center gap-2 font-semibold ${currentStep >= 1 ? 'text-emerald-400' : 'text-slate-500'}`}>
             <span className={`w-6 h-6 rounded-full flex items-center justify-center font-mono font-bold text-xs ${currentStep >= 1 ? 'bg-emerald-500 text-slate-950' : 'bg-slate-800 text-slate-400'}`}>1</span>
-            <span className="hidden sm:inline">{t('stepShopShort')}</span>
+            <span className="hidden sm:inline">{t('stepBusinessTypeShort')}</span>
           </div>
           <div className="h-0.5 flex-1 bg-slate-800 mx-3" />
           <div className={`flex items-center gap-2 font-semibold ${currentStep >= 2 ? 'text-emerald-400' : 'text-slate-500'}`}>
             <span className={`w-6 h-6 rounded-full flex items-center justify-center font-mono font-bold text-xs ${currentStep >= 2 ? 'bg-emerald-500 text-slate-950' : 'bg-slate-800 text-slate-400'}`}>2</span>
-            <span className="hidden sm:inline">{t('stepPlanShort')}</span>
+            <span className="hidden sm:inline">{t('stepShopShort')}</span>
           </div>
           <div className="h-0.5 flex-1 bg-slate-800 mx-3" />
           <div className={`flex items-center gap-2 font-semibold ${currentStep >= 3 ? 'text-emerald-400' : 'text-slate-500'}`}>
             <span className={`w-6 h-6 rounded-full flex items-center justify-center font-mono font-bold text-xs ${currentStep >= 3 ? 'bg-emerald-500 text-slate-950' : 'bg-slate-800 text-slate-400'}`}>3</span>
-            <span className="hidden sm:inline">{t('stepPromptpayTitle')}</span>
+            <span className="hidden sm:inline">{t('stepPlanShort')}</span>
+          </div>
+          <div className="h-0.5 flex-1 bg-slate-800 mx-3" />
+          <div className={`flex items-center gap-2 font-semibold ${currentStep >= 4 ? 'text-emerald-400' : 'text-slate-500'}`}>
+            <span className={`w-6 h-6 rounded-full flex items-center justify-center font-mono font-bold text-xs ${currentStep >= 4 ? 'bg-emerald-500 text-slate-950' : 'bg-slate-800 text-slate-400'}`}>4</span>
+            <span className="hidden sm:inline">{t('stepPromptpayShort')}</span>
           </div>
         </div>
 
@@ -293,8 +449,143 @@ function RegisterFormContent() {
             </div>
           ) : (
             <form onSubmit={handleNextStep} className="space-y-6">
-              {/* STEP 1: SHOP & OWNER IDENTITY */}
+              {/* STEP 1: BUSINESS TYPE (WU-A3) */}
               {currentStep === 1 && (
+                <div className="space-y-4 animate-fade-in">
+                  <h2 className="text-base font-bold text-white flex items-center gap-2 border-b border-slate-800 pb-3">
+                    <Scissors className="w-5 h-5 text-emerald-400" />
+                    {t('stepBusinessTypeTitle')}
+                  </h2>
+
+                  <p className="text-[11px] text-slate-400">{t('businessTypeSelectHint')}</p>
+
+                  {/* F-12: the options are the rows the database view returned. Nothing is
+                      rendered from an embedded list. */}
+                  {businessTypes.length > 0 && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {businessTypes.map((type) => {
+                        const isSelected = businessType === type.typeCode;
+                        const starterCount = countStarterServicesForType(starterServices, type.typeCode);
+                        return (
+                          <button
+                            key={type.typeCode}
+                            type="button"
+                            aria-pressed={isSelected}
+                            onClick={() => selectBusinessType(type)}
+                            className={`text-left rounded-2xl p-4 border transition-all space-y-1.5 ${
+                              isSelected
+                                ? 'bg-slate-900 border-2 border-emerald-500 shadow-lg shadow-emerald-950/40'
+                                : 'bg-slate-950 border-slate-800 hover:border-slate-700'
+                            }`}
+                          >
+                            <span className="flex items-center justify-between gap-2">
+                              <span className="font-bold text-sm text-white">
+                                <span aria-hidden="true" className="mr-1.5">{type.emoji}</span>
+                                {businessTypeLabel(type, locale)}
+                              </span>
+                              {isSelected && (
+                                <span className="text-[10px] font-bold text-emerald-400 flex items-center gap-1">
+                                  <CheckCircle2 className="w-3.5 h-3.5" />
+                                  {t('businessTypeSelectedBadge')}
+                                </span>
+                              )}
+                            </span>
+                            {/* F-13: the count is the database's own, from the
+                                starter-services projection; a type with none says so. */}
+                            <span className="block text-[10px] text-slate-500 font-mono">
+                              {starterStatus === 'loaded'
+                                ? (starterCount > 0
+                                  ? `${starterCount} ${t('businessTypeStarterServicesTitle')}`
+                                  : t('businessTypeStarterServicesEmpty'))
+                                : starterStatus === 'empty'
+                                  ? t('businessTypeStarterServicesEmpty')
+                                  : t('businessTypeStarterServicesUnavailable')}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Honest states: the list could not be shown, and no list is invented. */}
+                  {businessTypeStatus === 'loading' && (
+                    <p role="status" className="rounded-xl border border-slate-800 bg-slate-950 p-3 text-xs text-slate-400">
+                      {t('businessTypeLoading')}
+                    </p>
+                  )}
+                  {businessTypeStatus === 'empty' && (
+                    <p role="status" className="rounded-xl border border-slate-800 bg-slate-950 p-3 text-xs text-slate-400">
+                      {t('businessTypeEmpty')}
+                    </p>
+                  )}
+                  {businessTypeStatus === 'unavailable' && (
+                    <p role="status" className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-300">
+                      {t('businessTypeUnavailable')}
+                    </p>
+                  )}
+
+                  {/* Starter-services preview — the SAME data provision_owner_shop builds
+                      the shop's services from, capped by the selected plan's allowance. NO
+                      price and NO deposit amount are shown: those values in the seed are not
+                      an Owner decision yet and the projection does not select them. There is
+                      no opening-hours block and no per-language copy, because the database
+                      holds neither (see businessTypeAbsentFieldsNote). */}
+                  {selectedBusinessType && (
+                    <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-3.5 space-y-3">
+                      <p className="font-bold text-emerald-400 text-xs flex items-center gap-1.5">
+                        <Sparkles className="w-4 h-4 text-emerald-400" />
+                        {t('businessTypeStarterPreviewTitle', {
+                          type: selectedBusinessTypeLabel || selectedBusinessType.typeCode,
+                        })}
+                      </p>
+
+                      {preview.status === 'loaded' && preview.services.length > 0 ? (
+                        <>
+                          <div>
+                            <p className="text-[11px] font-semibold text-slate-300">
+                              {t('businessTypeStarterServicesTitle')}
+                            </p>
+                            <ul className="text-[11px] text-slate-300 space-y-1 pt-1">
+                              {preview.services.map((service) => (
+                                <li
+                                  key={service.serviceOrder}
+                                  className="flex items-center justify-between gap-3"
+                                >
+                                  {/* The stored name, exactly as the database holds it —
+                                      the seed carries no English name to show instead. */}
+                                  <span>{service.serviceName}</span>
+                                  <span className="font-mono text-amber-400">{service.durationMinutes} min</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+
+                          <p className="text-[10px] text-slate-400">
+                            {t('businessTypeStarterPlanCapNote', {
+                              count: preview.services.length,
+                              available: preview.availableCount,
+                            })}
+                          </p>
+
+                          <p className="text-[10px] text-slate-400">{t('businessTypeStarterEditableNote')}</p>
+                        </>
+                      ) : preview.status === 'empty' ? (
+                        <p className="text-[11px] text-slate-400">{t('businessTypeStarterServicesEmpty')}</p>
+                      ) : (
+                        <p className="text-[11px] text-amber-300">{t('businessTypeStarterServicesUnavailable')}</p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Where the list and the starter set come from, stated on the screen. */}
+                  <p className="text-[10px] text-slate-500">{t('businessTypeSourceNote')}</p>
+                  <p className="text-[10px] text-slate-500">{t('businessTypeStarterSourceNote')}</p>
+                  <p className="text-[10px] text-slate-500">{t('businessTypeAbsentFieldsNote')}</p>
+                </div>
+              )}
+
+              {/* STEP 2: SHOP & OWNER IDENTITY */}
+              {currentStep === 2 && (
                 <div className="space-y-4 animate-fade-in">
                   <h2 className="text-base font-bold text-white flex items-center gap-2 border-b border-slate-800 pb-3">
                     <Building className="w-5 h-5 text-emerald-400" />
@@ -350,7 +641,13 @@ function RegisterFormContent() {
                         onChange={(e) => setBusinessCategory(e.target.value)}
                         className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-emerald-500"
                       />
-                      
+
+                      {selectedBusinessType && (
+                        <p className="text-[10px] text-emerald-400/90 font-medium pt-1.5">
+                          {t('businessTypeCategoryPrefillNote')}
+                        </p>
+                      )}
+
                       {/* Suggestion Chips */}
                       <div className="mt-2.5 space-y-1">
                         <span className="text-[10px] text-slate-400 block font-medium">{t('businessCategoryQuickPick')}</span>
@@ -424,8 +721,8 @@ function RegisterFormContent() {
                 </div>
               )}
 
-              {/* STEP 2: SELECT PLAN */}
-              {currentStep === 2 && (
+              {/* STEP 3: SELECT PLAN */}
+              {currentStep === 3 && (
                 <div className="space-y-5 animate-fade-in">
                   <div className="flex justify-between items-center border-b border-slate-800 pb-3">
                     <h2 className="text-base font-bold text-white flex items-center gap-2">
@@ -515,12 +812,12 @@ function RegisterFormContent() {
                 </div>
               )}
 
-              {/* STEP 3: PROMPTPAY SETUP */}
-              {currentStep === 3 && (
+              {/* STEP 4: PROMPTPAY SETUP */}
+              {currentStep === 4 && (
                 <div className="space-y-4 animate-fade-in">
                   <h2 className="text-base font-bold text-white flex items-center gap-2 border-b border-slate-800 pb-3">
                     <QrCode className="w-5 h-5 text-emerald-400" />
-                    {t('stepPromptpayTitle')} (Step 3/3)
+                    {t('stepPromptpayTitle')} (Step 4/4)
                   </h2>
 
                   <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-3.5 text-xs text-slate-300 space-y-1">
@@ -582,7 +879,7 @@ function RegisterFormContent() {
                 >
                   {isSubmitting ? (
                     tCommon('saving')
-                  ) : currentStep === 3 ? (
+                  ) : currentStep === 4 ? (
                     <>
                       ยืนยันสร้างร้านค้า & เข้าสู่แดชบอร์ด
                       <Sparkles className="w-4 h-4" />
