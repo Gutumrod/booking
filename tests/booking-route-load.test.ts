@@ -11,6 +11,15 @@ type Backend = Record<string, {
   shop: QueryResult<Row>;
   services?: QueryResult<Row[]>;
   staff?: QueryResult<Row[]>;
+  /**
+   * F-14: whether the shop has a row of each kind at all, as the entitlement
+   * view reports it. The two choice lists are now entitlement-filtered, so an
+   * empty list alone cannot tell "the shop added nothing" from "the shop has
+   * rows and can offer none of them"; this fact is what the page now needs, and
+   * it is the fact the loader must pass through. Defaults to true (the
+   * conservative reading) for every slug whose lists are non-empty.
+   */
+  kinds?: { service: boolean; staff: boolean };
   schedulesError?: boolean;
 }>;
 const fail = { data: null, error: { message: 'network down' } };
@@ -22,6 +31,7 @@ function api(backend: Backend) {
     getShopBySlug: async (slug: string) => rowOrNull(backend[slug]?.shop ?? ok(null), 'shop') as never,
     getShopServices: async (id: string) => rowsOrThrow(byId(id).services ?? ok([{ id: 'sv' }]), 'services') as never,
     getShopStaff: async (id: string) => rowsOrThrow(byId(id).staff ?? ok([{ id: 'st' }]), 'staff') as never,
+    getShopEntitlementKinds: async (id: string) => byId(id).kinds ?? { service: true, staff: true },
     getShopAvailability: async (id: string) => {
       if (byId(id).schedulesError) throw new Error('availability down');
       return { schedules: [{ staff_id: 'st' }], holidays: [] } as never;
@@ -37,12 +47,14 @@ const stateOf = (d: Awaited<ReturnType<typeof loadBookingRoute>>) => resolveBook
   staffCount: d.staff.length,
   scheduleCount: d.schedules.length,
   everyServicePaymentBlocked: false,
+  serviceKindPresent: d.serviceKindPresent,
+  staffKindPresent: d.staffKindPresent,
 });
 
 const backend: Backend = {
   a: { shop: ok({ id: 'A', is_accepting_online_bookings: true }) },
-  empty: { shop: ok({ id: 'E', is_accepting_online_bookings: true }), services: ok([]) },
-  nostaff: { shop: ok({ id: 'N', is_accepting_online_bookings: true }), staff: ok([]) },
+  empty: { shop: ok({ id: 'E', is_accepting_online_bookings: true }), services: ok([]), kinds: { service: false, staff: true } },
+  nostaff: { shop: ok({ id: 'N', is_accepting_online_bookings: true }), staff: ok([]), kinds: { service: true, staff: false } },
   svcfail: { shop: ok({ id: 'F', is_accepting_online_bookings: true }), services: fail },
   stafffail: { shop: ok({ id: 'G', is_accepting_online_bookings: true }), staff: fail },
   availfail: { shop: ok({ id: 'H', is_accepting_online_bookings: true }), schedulesError: true },

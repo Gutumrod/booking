@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { rowOrNull, rowsOrThrow } from './load-result';
+import { rowOrNull, rowsOrThrow, type QueryLike } from './load-result';
 import {
   ENTITLEMENT_VIEW,
   ENTITLEMENT_VIEW_COLUMNS,
@@ -147,7 +147,7 @@ export async function getShopEntitlementKinds(shopId: string): Promise<Entitleme
     .from(ENTITLEMENT_VIEW)
     .select(ENTITLEMENT_VIEW_COLUMNS)
     .eq('shop_id', shopId);
-  const rows = rowsOrThrow(result, 'shop entitlement status') as unknown as EntitlementRow[];
+  const rows = rowsOrThrow<EntitlementRow>(result, 'shop entitlement status');
   return resolveEntitlementPresence(rows, shopId, 'shop entitlement status');
 }
 
@@ -167,7 +167,7 @@ async function readShopEntitlement(
     .select(ENTITLEMENT_VIEW_COLUMNS)
     .eq('shop_id', shopId)
     .eq('item_kind', itemKind);
-  const rows = rowsOrThrow(result, `${what} entitlement`) as unknown as EntitlementRow[];
+  const rows = rowsOrThrow<EntitlementRow>(result, `${what} entitlement`);
   return selectEntitlement(rows, shopId, itemKind, what);
 }
 
@@ -179,11 +179,14 @@ async function readShopEntitlement(
  * fail-closed rule rowsOrThrow applies to an unreadable query).
  */
 async function hydrateBookableRows<T>(
-  query: PromiseLike<{ data: unknown; error: { message?: string } | null }>,
+  query: PromiseLike<QueryLike<T[]>>,
   what: string,
 ): Promise<T[]> {
-  const rows = rowsOrThrow(await query, what) as (T & { id?: string })[];
-  return rows as T[];
+  // rowsOrThrow is generic in the row type, so the caller gets T[] without a
+  // cast: a bookable id the table cannot supply is an error, never a silently
+  // shorter list (the same fail-closed rule rowsOrThrow applies to a query that
+  // reports an error).
+  return rowsOrThrow<T>(await query, what);
 }
 
 export async function getShopAvailability(shopId: string): Promise<ShopAvailability> {

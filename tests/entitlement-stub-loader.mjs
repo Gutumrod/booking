@@ -1,4 +1,4 @@
-// Module-resolution hook for tests/entitlement-consumer-admin.test.ts.
+// Module-resolution hook for tests/f14-entitlement-visibility.test.ts.
 //
 // apps/booking-consumer/src/lib/booking-service.ts imports its Supabase client
 // and its result adapters with extensionless relative specifiers (`./supabase`,

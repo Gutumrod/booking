@@ -21,12 +21,16 @@ test('rowsOrThrow: empty is [], error throws (never collapsed to [])', () => {
 
 // Mirrors the booking page's loadData(): accessors through the adapters, any
 // throw -> loadError. Proves each failure reaches LOAD_ERROR and each genuine
-// empty result keeps its own state.
+// empty result keeps its own state. F-14: the page also carries the view's
+// answer for "does this shop have a row of this kind at all", because the
+// choice lists are entitlement-filtered; absent is the conservative `true`.
 type Shop = { id: string; is_accepting_online_bookings?: boolean };
 function loadState(q: {
   shop: QueryResult<Shop>;
   services?: QueryResult<unknown[]>;
   staff?: QueryResult<unknown[]>;
+  serviceKindPresent?: boolean;
+  staffKindPresent?: boolean;
 }) {
   let shop: Shop | null = null;
   let services: unknown[] = [];
@@ -49,6 +53,8 @@ function loadState(q: {
     staffCount: staff.length,
     scheduleCount: 1,
     everyServicePaymentBlocked: false,
+    serviceKindPresent: q.serviceKindPresent ?? true,
+    staffKindPresent: q.staffKindPresent ?? true,
   });
 }
 
@@ -61,12 +67,16 @@ test('shop query error is LOAD_ERROR, genuine missing shop is SHOP_NOT_FOUND', (
 
 test('service query error is LOAD_ERROR, genuine empty services is NO_SERVICES', () => {
   assert.equal(loadState({ shop: okShop, services: queryError }), 'LOAD_ERROR');
-  assert.equal(loadState({ shop: okShop, services: { data: [], error: null } }), 'NO_SERVICES');
+  // The shop has no service row at all: the "never added" state stays honest.
+  assert.equal(loadState({ shop: okShop, services: { data: [], error: null }, serviceKindPresent: false }), 'NO_SERVICES');
+  // The shop has service rows and none of them is bookable right now.
+  assert.equal(loadState({ shop: okShop, services: { data: [], error: null }, serviceKindPresent: true }), 'BOOKING_DISABLED');
 });
 
 test('staff query error is LOAD_ERROR, genuine empty staff is NO_STAFF', () => {
   assert.equal(loadState({ shop: okShop, staff: queryError }), 'LOAD_ERROR');
-  assert.equal(loadState({ shop: okShop, staff: { data: [], error: null } }), 'NO_STAFF');
+  assert.equal(loadState({ shop: okShop, staff: { data: [], error: null }, staffKindPresent: false }), 'NO_STAFF');
+  assert.equal(loadState({ shop: okShop, staff: { data: [], error: null }, staffKindPresent: true }), 'BOOKING_DISABLED');
 });
 
 test('healthy load is OK', () => {

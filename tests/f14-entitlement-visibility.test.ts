@@ -123,7 +123,12 @@ function makeFetch(seed: Seed, calls: string[], profiles: Array<Record<string, s
     if (url.includes(VIEW)) {
       const answer = typeof seed.view === 'function' ? seed.view(url) : seed.view;
       if (!Array.isArray(answer)) return jsonResponse(answer.body, answer.status);
-      // Answer like PostgREST: the row filters the URL carries are applied.
+      // A plain array fixture answers like PostgREST: the row filters the URL
+      // carries are applied. A function answer is used verbatim (see ViewAnswer)
+      // so a test can make the server answer with rows the request never asked
+      // for -- filtering it here would silently repair the very response the
+      // fail-closed cases exist to reject.
+      if (typeof seed.view === 'function') return jsonResponse(answer, 200);
       const requestedKind = /item_kind=eq\.([a-z]+)/.exec(decodeURIComponent(url))?.[1];
       const requestedShop = /shop_id=eq\.([^&]+)/.exec(decodeURIComponent(url))?.[1];
       const rows = answer.filter(
@@ -403,7 +408,10 @@ test('an unknown item kind, a missing item id and a non-boolean flag all throw',
   ];
 
   for (const { row, expected } of cases) {
-    const seed: Seed = { view: [row] };
+    // Answered verbatim: a row PostgREST would never return for this request is
+    // exactly the malformed answer these cases exist to reject, so the fixture
+    // must not be passed through the harness's own row filtering.
+    const seed: Seed = { view: () => [row] };
     const { calls } = await withStubbedFetch(seed, async () => {
       await assert.rejects(() => getShopServices(SHOP), expected);
       return 'rejected';
@@ -614,7 +622,14 @@ test('the admin service reads the view for the selected shop and surfaces a stat
     assert.ok(body.length > 0, `${iface} must still exist`);
     assert.match(body, /entitlementStatus: EntitlementStatusRow \| null;/, `${iface} must carry its entitlement status`);
   }
-  assert.match(source, /entitlementStatus: (\w+) \?\? null/);
+  assert.match(source, /entitlementStatusFor\(/);
+  // Each rendered row resolves its own status from the indexed view rows and
+  // falls back to null -- there is no other source for the field.
+  assert.equal(
+    (source.match(/entitlementStatus: entitlementStatusFor\([^)]*\) \?\? null,/g) ?? []).length,
+    2,
+    'both row shapes take their status from the indexed view read, defaulting to null',
+  );
 });
 
 test('the dashboard tabs render a chip for both kinds and keep the existing controls', () => {
@@ -787,9 +802,67 @@ test('the hold RPC refusals the client can still meet are named by the migration
   assert.match(migration, /MESSAGE = 'SERVICE_OUTSIDE_PLAN'/);
   assert.match(migration, /MESSAGE = 'STAFF_OUTSIDE_PLAN'/);
 
+  const entitlement = read('apps/booking-consumer/src/lib/booking-entitlement.ts');
   const service = read('apps/booking-consumer/src/lib/booking-service.ts');
-  // The client does not re-derive the plan: it reads the view and lets the RPC
-  // remain the enforcement point.
-  assert.match(service, /bk01_shop_entitlement_status/);
+  // The client does not re-derive the plan: the read-only view is named exactly
+  // once (booking-entitlement.ts) and every consumer read in booking-service.ts
+  // goes through that constant, so the RPC remains the enforcement point. The
+  // name is asserted where it is defined rather than as a literal repeated in
+  // the service file.
+  assert.match(entitlement, /export const ENTITLEMENT_VIEW = 'bk01_shop_entitlement_status';/);
+  assert.equal(
+    (service.match(/from\(ENTITLEMENT_VIEW\)/g) ?? []).length,
+    2,
+    'both entitlement reads (kind presence and the bookable selection) go through the constant',
+  );
   assert.doesNotMatch(service, /SERVICE_OUTSIDE_PLAN|STAFF_OUTSIDE_PLAN/);
+});
+
+// ---------------------------------------------------------------------------
+// 9. A refusal while booking is shown, and the stale choice list is re-read
+// ---------------------------------------------------------------------------
+
+test('a hold refused for entitlement is named in the customer language and re-reads the choices', () => {
+  // The database guard is the only authority (section 8); this is the other half
+  // of that contract: when it refuses, the customer must not be left with a
+  // silent failure and a choice the database no longer offers.
+  const page = read('apps/booking-consumer/src/app/book/[slug]/page.tsx');
+
+  // Both refusal codes the migration defines are recognised...
+  assert.match(page, /refusal\.includes\('SERVICE_OUTSIDE_PLAN'\)/);
+  assert.match(page, /refusal\.includes\('STAFF_OUTSIDE_PLAN'\)/);
+  // ...each with its own customer message, from the catalogue...
+  assert.match(page, /t\('errors\.serviceOutsidePlan'\)/);
+  assert.match(page, /t\('errors\.staffOutsidePlan'\)/);
+  // ...and each re-reads the choice list rather than keeping the stale option.
+  assert.equal(
+    (page.match(/await reloadChoices\(\);/g) ?? []).length,
+    2,
+    'both refusal branches refresh the choices',
+  );
+  // The refresh goes through the same route loader (which reads the view); the
+  // page itself derives no entitlement rule of its own.
+  assert.match(page, /const data = await loadBookingRoute\(slug, \{/);
+  assert.match(page, /getShopEntitlementKinds/);
+  // A refusal never passes silently: the branch that recognises neither code
+  // still surfaces the error the database returned.
+  assert.match(page, /\} else \{\s*\n\s*setErrorMessage\(getErrorMessage\(err, t\('errors\.createHoldFailed'\)\)\);/);
+
+  // Both messages exist in both languages, are non-empty, carry no number, and
+  // are not the same sentence for two different refusals.
+  for (const locale of ['th', 'en']) {
+    const errors = (json(`apps/booking-consumer/messages/${locale}.json`).booking as Dict).errors as Dict;
+    for (const key of ['serviceOutsidePlan', 'staffOutsidePlan']) {
+      const value = errors[key];
+      assert.equal(typeof value, 'string', `${locale} booking.errors.${key} must exist`);
+      assert.ok((value as string).trim().length > 0, `${locale} booking.errors.${key} must not be empty`);
+      assert.doesNotMatch(value as string, /\d/, `${locale} booking.errors.${key} must not embed a number`);
+      assert.doesNotMatch(value as string, /฿|\$/);
+    }
+    assert.notEqual(
+      errors.serviceOutsidePlan,
+      errors.staffOutsidePlan,
+      `${locale}: a service refusal and a staff refusal are different facts and must read differently`,
+    );
+  }
 });

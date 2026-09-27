@@ -1,5 +1,5 @@
 // Test double for apps/booking-consumer/src/lib/supabase.ts, used only by
-// tests/entitlement-consumer-admin.test.ts (see entitlement-stub-loader.mjs).
+// tests/f14-entitlement-visibility.test.ts (see entitlement-stub-loader.mjs).
 //
 // It is a real @supabase/supabase-js client pointed at an unreachable host with
 // the same `db: { schema: 'local_service' }` setting the app uses, so the

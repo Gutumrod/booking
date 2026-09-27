@@ -35,13 +35,22 @@ test('disabled shop', () => {
 });
 
 test('partial configuration is reported in precedence order', () => {
-  assert.equal(resolveBookingPageState({ ...base, serviceCount: 0 }), 'NO_SERVICES');
-  assert.equal(resolveBookingPageState({ ...base, staffCount: 0 }), 'NO_STAFF');
+  // F-14: the choice lists are entitlement-filtered, so NO_SERVICES / NO_STAFF
+  // ("this shop hasn't added any yet") are only reachable when the shop has no
+  // row of that kind at all -- the kind flags carry that fact. The assertions
+  // below are the same ones as before; each now states the fact it depends on.
+  assert.equal(resolveBookingPageState({ ...base, serviceCount: 0, serviceKindPresent: false }), 'NO_SERVICES');
+  assert.equal(resolveBookingPageState({ ...base, staffCount: 0, staffKindPresent: false }), 'NO_STAFF');
   assert.equal(resolveBookingPageState({ ...base, scheduleCount: 0 }), 'NO_SCHEDULE');
   assert.equal(
-    resolveBookingPageState({ ...base, serviceCount: 0, staffCount: 0 }),
+    resolveBookingPageState({ ...base, serviceCount: 0, serviceKindPresent: false, staffCount: 0, staffKindPresent: false }),
     'NO_SERVICES',
+    'services still win the precedence order',
   );
+  // A shop that HAS rows of a kind and can offer none of them is the existing
+  // booking-disabled state, not the "never added" copy.
+  assert.equal(resolveBookingPageState({ ...base, serviceCount: 0, serviceKindPresent: true }), 'BOOKING_DISABLED');
+  assert.equal(resolveBookingPageState({ ...base, staffCount: 0, staffKindPresent: true }), 'BOOKING_DISABLED');
 });
 
 // --- F6 / R2-4: selected-service-aware payment gate ---
@@ -135,6 +144,9 @@ test('load / not-found / disabled / empty-config still win over payment state', 
     resolveBookingPageState({ ...blocked, shop: { is_accepting_online_bookings: false } }),
     'BOOKING_DISABLED',
   );
-  assert.equal(resolveBookingPageState({ ...blocked, staffCount: 0 }), 'NO_STAFF');
+  // F-14: an empty choice list is only NO_STAFF when the shop has no staff row
+  // at all (the staff query still succeeded); a payment-blocked page keeps its
+  // precedence over the list states.
+  assert.equal(resolveBookingPageState({ ...blocked, staffCount: 0, staffKindPresent: false }), 'NO_STAFF');
   assert.equal(resolveBookingPageState(blocked), 'PAYMENT_NOT_CONFIGURED');
 });
