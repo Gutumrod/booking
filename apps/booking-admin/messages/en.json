@@ -59,19 +59,22 @@
     "passwordPlaceholder": "At least 8 characters",
     "stepBusinessTypeTitle": "What kind of business is your shop? (Step 1/4)",
     "stepBusinessTypeShort": "Business type",
-    "businessTypeSelectHint": "Choose one type. We will prefill example services with durations, and opening hours, that you can edit.",
+    "businessTypeSelectHint": "Choose one type. We will show the starter services and durations your shop will be created with, read from the database (editable).",
     "businessTypeRequired": "Please choose your business type to continue.",
     "businessTypeSelectedBadge": "Selected",
-    "businessTypePatternPreviewTitle": "What the {type} starter pattern gives you",
-    "businessTypePatternServicesTitle": "Example services & durations (editable)",
-    "businessTypePatternHoursTitle": "Example opening hours (editable)",
-    "businessTypePatternEditableNote": "Every service and every opening hour can be edited or deleted after your shop is created.",
+    "businessTypeStarterPreviewTitle": "The {type} starter services your shop will get, from the database",
+    "businessTypeStarterServicesTitle": "Services your shop will be created with & durations (editable)",
+    "businessTypeStarterEditableNote": "Every service can be edited or deleted after your shop is created.",
+    "businessTypeStarterPlanCapNote": "Showing {count} of {available} services in the database — exactly what will be created for your shop on the plan you selected.",
     "businessTypeCategoryPrefillNote": "Pre-filled from your business type. You can edit or extend it freely.",
     "businessTypeLoading": "Reading the business types from the database...",
     "businessTypeEmpty": "The database has no active business type (is_active) yet, so none can be chosen — the app does not invent its own type codes.",
-    "businessTypeUnavailable": "The business type list could not be read from the database (local_service.app_business_types), so no list is shown; the app will not guess one. Please sign in and try again, or contact your administrator.",
-    "businessTypePatternUnavailable": "This business type has no bundled starter pattern yet — you can still choose it, and no example services or opening hours will be pre-filled (the pre-filled values are editable placeholders).",
-    "businessTypeSourceNote": "* The list, labels, emoji and order of the business types are read from the database (local_service.app_business_types), not embedded in the app. The starter patterns and any price shown are reference placeholders, not Owner-confirmed values.",
+    "businessTypeUnavailable": "The business type list could not be read from the database (local_service.app_business_types), so no list is shown; the app will not guess one. Please try again, or contact your administrator.",
+    "businessTypeStarterServicesEmpty": "This business type has no starter service in the database yet — you can still choose it, and no starter services will be created; the signup does not invent any.",
+    "businessTypeStarterServicesUnavailable": "The starter services could not be read from the database (local_service.app_business_type_starter_services), so no preview is shown; the app will not guess them. Please try again, or contact your administrator.",
+    "businessTypeSourceNote": "* The list, labels, emoji and order of the business types are read from the database (local_service.app_business_types), not embedded in the app.",
+    "businessTypeStarterSourceNote": "* The starter services and their durations are read from the database (local_service.app_business_type_starter_services) — the same set used to create your shop's services, not embedded in the app. No price and no deposit amount are shown, because the Owner has not confirmed those values.",
+    "businessTypeAbsentFieldsNote": "* There is no English service name and no opening-hours data in the database today (the business_types seed holds only the Thai service name and a duration, and provision_owner_shop creates no opening hours at all) — those two fields are therefore a database/Owner decision, not something this signup may invent.",
     "stepShopTitle": "Shop & owner account details (Step 2/4)",
     "stepShopShort": "Shop details",
     "stepPlanTitle": "Choose your booking system plan (Step 3/4)",
@@ -482,51 +485,4 @@
     "priorityLow": "Low",
     "priorityMedium": "Medium",
     "priorityHigh": "High"
-  },
-  "businessType": {
-    "hairBarber": {
-      "label": "Hair & barber shop",
-      "description": "Cuts, beard trims and wash-and-set, with a Monday rest day.",
-      "services": {
-        "haircut": "Men's haircut",
-        "haircutWash": "Haircut + shampoo & set",
-        "beardTrim": "Beard trim / shave",
-        "washSet": "Wash & set",
-        "colorShort": "Short-hair colour"
-      }
-    },
-    "beautySalon": {
-      "label": "Beauty salon",
-      "description": "Facials, brows, lashes and event makeup.",
-      "services": {
-        "facialBasic": "Basic facial",
-        "facialPremium": "Premium facial",
-        "browShape": "Eyebrow shaping",
-        "lashExtension": "Lash extensions",
-        "makeupEvent": "Event makeup"
-      }
-    },
-    "nailSalon": {
-      "label": "Nail salon",
-      "description": "Manicure, pedicure, gel polish and nail art, open every day.",
-      "services": {
-        "manicure": "Manicure",
-        "pedicure": "Pedicure",
-        "gelPolish": "Gel polish",
-        "nailArt": "Nail art",
-        "extensionSet": "Full extension set"
-      }
-    },
-    "other": {
-      "label": "Other business",
-      "description": "A neutral starter set for any other appointment business.",
-      "services": {
-        "consultation": "Consultation",
-        "standardService": "Standard service",
-        "servicePackage": "Service package",
-        "followUp": "Follow-up visit"
-      }
-    },
-    "closedDay": "Closed"
-  }
-}
+  }}

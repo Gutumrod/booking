@@ -395,3 +395,198 @@ Pre-existing, NOT written by this work unit but present in the same uncommitted 
   and by the suites passing. It is **not** proven against a live database in this work
   unit — no SQL was executed here, and the boundary tests remain static/pure unit tests,
   as review finding N-4's context already records.
+
+---
+
+## 9. R5 close-out: two anon DB projections, the deleted app-side starter table, and the two fields the database does not hold
+
+Work unit: H1-R5-UI-NOTE (this record covers the R5 close-out, correlation id
+`house-swarm-1-r5-ui-note-20260926`)
+Role class: implementation
+Worktree: `D:/AI-Workspace/runtime/worktrees/house-swarm-1-wua3`
+Branch: `feature/house-swarm-1-wua3-signup`
+Revision at the start of this run: `0646a7a4537ed7799ade211ba304c3ffabe96729`
+
+**THIS SECTION IS APPENDED, NOT WRITTEN OVER.** When this work unit opened, the file was
+21656 bytes, sha256
+`4f1eae0a95eed94920bd25e4e15b754f46e9bc57af7f50ab0fd3115dca1d5913`. Every byte above
+this heading is held unchanged; nothing above was edited, reordered or rewritten, and this
+work unit touched no other file. The append-only rule is followed here because in R4 a
+different lane overwrote a note of this kind and destroyed earlier content.
+
+### 9.1 What the signup reads now: TWO database projections, both as `anon`
+
+The signup reads **two** projections, both as an anonymous visitor, **before any account
+exists** (F-12). Both are granted `SELECT` to `anon` by the migration lane:
+
+1. `local_service.app_business_types` — the type list. Columns:
+   `type_code`, `emoji`, `label_th`, `label_en`, `display_order`.
+2. `local_service.app_business_type_starter_services` — the starter set. Columns:
+   `type_code`, `service_order`, `service_name`, `duration_minutes`; one row per starter
+   service, ordered `display_order`, then `type_code`, then the service ordinality, and
+   **no rows for an inactive type**.
+
+Both are projections, and the underlying source table stays closed to client roles:
+`local_service.business_types` remains **revoked from client roles**. An anonymous signup
+therefore never reaches the table, the raw JSON column or any column outside the two
+column lists above: it reads the two projections and nothing else. This is what
+`apps/booking-admin/src/lib/business-type-starter-services.ts` selects
+(`STARTER_SERVICES_VIEW`, `STARTER_SERVICES_COLUMNS`) and what
+`apps/booking-admin/src/lib/business-type-view.ts` selects for the type list.
+
+### 9.2 The app-side starter table is DELETED, and it was deleted rather than corrected
+
+`BUSINESS_PATTERNS` in `apps/booking-admin/src/lib/business-type-catalogue.ts` has been
+**DELETED**, together with the code that existed only to serve it. The file no longer
+exists on disk (confirmed: a read of that path raises `ENOENT`), and **nothing imports
+it** — a worktree-wide scan for `business-type-catalogue` and `BUSINESS_PATTERNS` outside
+`node_modules` returns no import, only prose that records the removal
+(`apps/booking-admin/src/app/register/page.tsx`, the module header of
+`business-type-starter-services.ts`, and the test file that pins the removal).
+
+Consequence, and this is the whole point of the deletion: **the app can no longer disagree
+with what `provision_owner_shop` creates.** Before F-13 the preview came from the app's own
+hardcoded table while the real services were built from `business_types.starter_pattern` in
+the database, so the barber pattern offered five services while the Free plan allows three
+— five shown, three given. With one source of truth (the projection) that class of
+mismatch cannot recur by construction, because there is no second copy left to drift.
+
+### 9.3 Exactly what the preview renders
+
+The preview renders, per starter service, exactly two fields:
+
+- the **stored service name** (`STARTER_SERVICES_VIEW.service_name`, shown exactly as
+  stored — Thai today), and
+- its **duration** (`duration_minutes`).
+
+It renders **at most the selected plan's `services_limit` rows**, taken in **the
+projection's own order** (`service_order`, the JSON array position the provisioning loop
+walks). That is the **same set `provision_owner_shop` creates** for the new shop on that
+plan: the projection's rows for the chosen type, capped at the plan's allowance. Nothing
+is added, nothing is reordered, and a type the projection holds no row for yields no
+service at all.
+
+### 9.4 The preview renders NO price and NO deposit amount
+
+The seed does carry a price and a deposit amount per starter service, and the preview
+renders **neither**. That is deliberate and it is stated here rather than papered over:
+**those seeded money values are not an Owner decision yet and remain adjustable.** Showing
+them at signup would present a provisional number as a settled price. The projection does
+not expose them, the module does not select them, and the page does not render them — so
+the signup cannot state a price or a deposit the Owner has not decided. Making them
+visible is a database/Owner decision, not something the app may take on its own.
+
+### 9.5 The two fields the UI would like and the database does NOT hold
+
+Two fields a fuller preview would want **do not exist anywhere in the database**. They are
+recorded here as a **database/Owner decision** and are **never invented** by the app:
+
+1. **There is NO English service name per starter service.** The seed's
+   `starter_pattern` stores a **single Thai service name** per service. There is no
+   `name_en`, so there is no honest English per-service line to render, and the app
+   carries none.
+2. **There is NO opening-hours data at all.** No weekday, no open time, no close time is
+   in the seed, anywhere in the type data or in the starter set, and
+   **`provision_owner_shop` creates no opening hours.** So no signup preview may draw an
+   opening-hours line: there is no stored value behind one.
+
+Both absences are reported to the visitor in the signup copy
+(`auth.businessTypeAbsentFieldsNote`, which names `provision_owner_shop`) rather than
+filled in with plausible-looking text. Adding either field to the preview requires a
+database change and an Owner decision; it is not an app-side gap to close with invented
+data.
+
+### 9.6 Honest degradation is kept, and there is no fallback set by construction
+
+Both states survive in the module and in the page copy:
+
+- **`unavailable`** — a **genuine read failure**: a client error, a rejected read, a
+  non-array response, or any malformed row. The whole list is `unavailable` with zero
+  rows (all-or-nothing: a half-parsed list would be a broken list).
+- **`empty`** — a **well-formed response with no row** for the selected type: `empty`
+  with zero rows. A type with no starter service is still selectable and still records
+  honestly.
+
+Because the app-side table is deleted, **there is no embedded starter set to fall back to
+by construction** — the `unavailable`/`empty` states are the only alternatives to a real
+projection row.
+
+### 9.7 The source-scanning assertions are proven non-vacuous (real negative run)
+
+The assertions in `tests/signup-business-type.test.ts` that scan the module and the page
+for a reintroduced embedded starter table (`BUSINESS_PATTERNS`,
+`business-type-catalogue`) and for a raw JSON column selection
+(`starter_pattern`) were repaired in this cycle because they previously matched
+explanatory **COMMENTS** rather than code; the scans now run over comment-stripped source.
+A repaired scan must be shown to still catch a real reintroduction, so it was probed — real
+commands, real observed output, no assertion modified or removed:
+
+1. The module was **copied** (never edited) and the copy mutated by adding
+   `const BUSINESS_PATTERNS = { barber: [...] };`
+2. The **test file itself** was copied and only its two module-path references
+   (`import ... from '<real module path>'` and `const STARTER_MODULE = '<real module path>'`)
+   were pointed at the mutated copy; the copy was written outside the repository, in
+   `%LOCALAPPDATA%\Temp`, and the test file's other path constants were left alone so the
+   probe still read the real page and messages.
+3. Command run from the worktree root:
+
+        node --no-warnings --test --experimental-test-isolation=none \
+          "$LOCALAPPDATA/Temp/h1-r5-ui-note-probe/probe.test.ts"
+
+Observed with the embedded-table mutant — **raw exit 1**, `tests 25`, `pass 24`,
+`fail 1`:
+
+    ✖ the app-side starter-pattern table and the code that served it are gone (3.0987ms)
+      AssertionError [ERR_ASSERTION]: The input was expected to not match the regular
+      expression /BUSINESS_PATTERNS/. Input: "... const BUSINESS_PATTERNS = { barber:
+      ['ตัดผมชาย', 'โกนหนวด'] }; ..."
+      test at ...\probe.test.ts:700:1
+
+4. The first mutant was discarded and the copy mutated a second way, by selecting the raw
+   JSONB column instead of the projection's four:
+   `'type_code,service_order,service_name,duration_minutes,starter_pattern'`. Observed —
+   **raw exit 1**, `tests 25`, `pass 22`, `fail 3`, the three read-surface tests failing,
+   e.g.
+
+    ✖ the app reads exactly the starter-services projection the migration lane named
+      AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+      + 'type_code,service_order,service_name,duration_minutes,starter_pattern'
+      - 'type_code,service_order,service_name,duration_minutes'
+      at ...\probe.test.ts:195:10
+
+5. Both mutants were discarded and the **pristine** module copy (same sha256 as the real
+   module, `63fcc044a9049a98ea04b5547e1c10e7eaf432da136362963a4e1393e8530da9`) was run
+   through the identical harness. Observed — **raw exit 0**, `tests 25`, `pass 25`,
+   `fail 0`: the suite passes again once the reintroduction is gone.
+
+The probe copy, the probe test and its raw output files were then deleted, and the probe
+directory itself removed; a follow-up scan of the worktree for any `mutant*`, `probe*`,
+`run[0-9]*.raw` or `tmp-*` path returns nothing. The real module, the real test file, the
+page and the message files were never edited by the probe: the module and the test file
+hash to their pre-probe values (`63fcc044…` and `5ad7bbe9…`), and `git status` after the
+probe is identical to `git status` before it. **No assertion was weakened or deleted.**
+
+### 9.8 Honesty statement for H1-R5-UI-NOTE
+
+- **Append only.** The note grew; no existing byte was changed. The section you are
+  reading was added at the end.
+- **One file modified.** The only file this work unit modified is this note. The migrated
+  module, the page, the two message catalogues and the test file are byte-identical to how
+  this work unit found them.
+- **No database connection, no CLI, no deploy.** No Postgres or Supabase connection was
+  opened, no migration was run, the Supabase CLI was not invoked, no deploy or dry-run
+  deploy was run, and nothing was touched in production. Every database fact above is
+  reported from the contracts already implemented by the migration lane, not read from a
+  live database in this run.
+- **`supabase/` was untouched**, and the deleted app-side table `BUSINESS_PATTERNS` was
+  **not restored**.
+- **No `.env` file was read, created or edited** — not `.env`, `.env.local` or
+  `.env.staging.local`. No secret was read or printed.
+- **No commit and no push occurred.** `HEAD` is still
+  `0646a7a4537ed7799ade211ba304c3ffabe96729`.
+- **No probe or temporary file remains** in the worktree or in the probe directory.
+- **The English service name and the opening hours are absent from the database** and are
+  recorded above as a **database/Owner decision**. They are not invented anywhere in the
+  app, and this note states their absence rather than filling it.
+- This record states only results observed in this run. No claim of "100%", "perfect", or
+  any benchmark speed is made.

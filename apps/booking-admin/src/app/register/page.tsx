@@ -7,10 +7,15 @@ import { useLocale, useTranslations } from 'next-intl';
 import { createClient } from '@/lib/supabase/client';
 import { LanguageToggle } from '@/components/language-toggle';
 import {
-  summarizeOpeningHours,
+  STARTER_SERVICES_VIEW_QUALIFIED,
   buildSignupIntent,
-  findBusinessPattern,
-} from '@/lib/business-type-catalogue';
+  countStarterServicesForType,
+  loadStarterServices,
+  resolvePlanServicesLimit,
+  starterServicesForType,
+  type StarterServiceListStatus,
+  type StarterServiceRow,
+} from '@/lib/business-type-starter-services';
 import {
   BUSINESS_TYPE_VIEW_QUALIFIED,
   businessTypeLabel,
@@ -37,46 +42,52 @@ interface PendingRegistration {
   promptpayNumber: string;
   promptpayName: string;
   idempotencyKey: string;
-  // WU-A3 + WUD-UI-TYPES: recorded for later analysis, so the shop's type, starter
-  // pattern and plan are known together. The type fields are the values the database
-  // view returned for the chosen code, together with the surface they came from.
-  // Applied client-side only; persisting the pattern in the database is server/SQL
-  // work that is NOT APPLIED.
+  // WU-A3 + F-13: recorded for later analysis, so the shop's type, the starter services
+  // the database says it will be created with, and the plan are known together. The type
+  // fields are the values `local_service.app_business_types` returned; the starter fields
+  // are the values `local_service.app_business_type_starter_services` returned, capped by
+  // the plan's allowance — the set `provision_owner_shop` creates. Applied client-side
+  // only; the shop's real services are written by `provision_owner_shop`.
   businessType: string;
   businessTypeLabel: string;
   businessTypeEmoji: string;
   businessTypeDisplayOrder: number;
   businessTypeSource: string;
-  patternMessageKey: string | null;
-  patternSource: 'bundled-starter-pattern' | 'none';
-  patternId: string | null;
-  patternVersion: number;
-  patternServiceCount: number;
-  patternTotalDurationMinutes: number;
-  patternServiceKeys: string[];
-  patternWorkingDays: number[];
+  starterSource: string;
+  starterStatus: 'loaded' | 'empty' | 'unavailable';
+  starterServiceCount: number;
+  starterAvailableServiceCount: number;
+  starterPlanLimit: number;
+  starterTotalDurationMinutes: number;
+  starterServices: { name: string; duration_minutes: number }[];
 }
 
 function RegisterFormContent() {
   const t = useTranslations('auth');
   const tCommon = useTranslations('common');
-  const tBusinessType = useTranslations('businessType');
   const locale = useLocale();
   const suggestedCategories = t.raw('suggestedCategories') as string[];
-  const dayNames = tCommon.raw('dayNames') as string[];
   const router = useRouter();
   const searchParams = useSearchParams();
   const planParam = searchParams.get('plan');
 
   const [currentStep, setCurrentStep] = useState<number>(1);
 
-  // WUD-UI-TYPES: the type list is NOT embedded in this page. It is read from the
-  // view `local_service.app_business_types` (see lib/business-type-view.ts), so the
-  // database owns the codes and the signup cannot drift from them. `loading` and
+  // F-12: the type list is NOT embedded in this page. It is read from the view
+  // `local_service.app_business_types` (see lib/business-type-view.ts), which is granted
+  // to `anon`, so a visitor with no account yet is shown the real list. `loading` and
   // `unavailable` are kept apart from `empty` so the step can say which happened.
   const [businessTypes, setBusinessTypes] = useState<readonly BusinessTypeListItem[]>([]);
   const [businessTypeStatus, setBusinessTypeStatus] =
     useState<BusinessTypeListStatus | 'loading'>('loading');
+
+  // F-13: the starter-services preview is NOT embedded either. It is read from the view
+  // `local_service.app_business_type_starter_services` — the SAME data
+  // `provision_owner_shop` builds a new shop's services from — which is also granted to
+  // `anon`. BUSINESS_PATTERNS and the app-side catalogue are gone.
+  const [starterServices, setStarterServices] = useState<readonly StarterServiceRow[]>([]);
+  const [starterStatus, setStarterStatus] =
+    useState<StarterServiceListStatus | 'loading'>('loading');
 
   // Step 1: Business type (WU-A3) — asked before the rest of the flow. The value is
   // the code the database returned; no code is written into this page.
@@ -104,34 +115,43 @@ function RegisterFormContent() {
 
   // The row the database returned for the chosen code (null if it is not in the list).
   const selectedBusinessType = findBusinessType(businessTypes, businessType);
-  // The starter pattern is the app's bundled mapping for that code. A database code
-  // with no bundled pattern yields null, and the step says so instead of inventing one.
-  const selectedPattern = selectedBusinessType
-    ? findBusinessPattern(selectedBusinessType.typeCode)
-    : null;
   const selectedBusinessTypeLabel = selectedBusinessType
     ? businessTypeLabel(selectedBusinessType, locale)
     : '';
-  const patternHoursLines = selectedPattern
-    ? summarizeOpeningHours(selectedPattern.pattern, {
-      dayNames,
-      closedLabel: tBusinessType('closedDay'),
-    })
-    : [];
 
-  // Reads the type list from the database view once, on mount. The client is created
-  // here — the same `createClient()` the rest of this page uses — and passed into the
-  // reader, which cannot import it itself (see lib/business-type-view.ts). The list is
-  // shown only when the read succeeded; `empty` and `unavailable` render the explanatory
-  // state below instead of a list, and no embedded list is used as a fallback.
+  // F-13 (preview must match provision): what `provision_owner_shop` would create for the
+  // chosen type on the chosen plan — the projection's rows for the type, in the
+  // projection's own order, cut to the plan's service allowance. A Free signup therefore
+  // previews at most 3 services, not the 5 the deleted app-side table offered. A type the
+  // projection holds no row for previews nothing: there is no fallback set.
+  const preview = starterServicesForType(
+    starterServices,
+    selectedBusinessType?.typeCode ?? '',
+    resolvePlanServicesLimit(selectedPlan),
+    starterStatus === 'loading' ? 'unavailable' : starterStatus,
+  );
+
+  // Reads the type list and the starter-services projection from the database once, on
+  // mount. The client is created here — the same `createClient()` the rest of this page
+  // uses — and passed into the readers, which cannot import it themselves (see
+  // lib/business-type-view.ts). No session is needed or used: both views are granted to
+  // `anon`, so a visitor who has not signed up yet reads the real data. The list is shown
+  // only when the read succeeded; `empty` and `unavailable` render the explanatory states
+  // below instead of a list, and no embedded list is used as a fallback.
   useEffect(() => {
     let isCurrent = true;
 
     const loadTypes = async () => {
-      const result = await loadBusinessTypes(createClient());
+      const supabase = createClient();
+      const [types, starters] = await Promise.all([
+        loadBusinessTypes(supabase),
+        loadStarterServices(supabase),
+      ]);
       if (!isCurrent) return;
-      setBusinessTypes(result.types);
-      setBusinessTypeStatus(result.status);
+      setBusinessTypes(types.types);
+      setBusinessTypeStatus(types.status);
+      setStarterServices(starters.services);
+      setStarterStatus(starters.status);
     };
 
     void loadTypes();
@@ -270,6 +290,7 @@ function RegisterFormContent() {
       type: selectedBusinessType,
       label: selectedBusinessTypeLabel,
       source: BUSINESS_TYPE_VIEW_QUALIFIED,
+      preview,
       selectedPlan,
     });
     if (!intent) {
@@ -290,19 +311,18 @@ function RegisterFormContent() {
       promptpayNumber: promptpayNumber.trim(),
       promptpayName: promptpayName.trim(),
       idempotencyKey: crypto.randomUUID(),
-      businessType: intent.pattern.business_type,
-      businessTypeLabel: intent.pattern.business_type_label,
-      businessTypeEmoji: intent.pattern.business_type_emoji,
-      businessTypeDisplayOrder: intent.pattern.business_type_display_order,
-      businessTypeSource: intent.pattern.business_type_source,
-      patternMessageKey: selectedPattern?.messageKey ?? null,
-      patternSource: intent.pattern.pattern_source,
-      patternId: intent.pattern.pattern_id,
-      patternVersion: intent.pattern.pattern_version,
-      patternServiceCount: intent.pattern.pattern_service_count,
-      patternTotalDurationMinutes: intent.pattern.pattern_total_duration_minutes,
-      patternServiceKeys: intent.pattern.pattern_service_keys,
-      patternWorkingDays: intent.pattern.pattern_working_days,
+      businessType: intent.starter.business_type,
+      businessTypeLabel: intent.starter.business_type_label,
+      businessTypeEmoji: intent.starter.business_type_emoji,
+      businessTypeDisplayOrder: intent.starter.business_type_display_order,
+      businessTypeSource: intent.starter.business_type_source,
+      starterSource: intent.starter.starter_source,
+      starterStatus: intent.starter.starter_status,
+      starterServiceCount: intent.starter.starter_service_count,
+      starterAvailableServiceCount: intent.starter.starter_available_service_count,
+      starterPlanLimit: intent.starter.starter_plan_limit,
+      starterTotalDurationMinutes: intent.starter.starter_total_duration_minutes,
+      starterServices: intent.starter.starter_services,
     };
 
     localStorage.setItem(PENDING_REGISTRATION_KEY, JSON.stringify(registration));
@@ -417,13 +437,13 @@ function RegisterFormContent() {
 
                   <p className="text-[11px] text-slate-400">{t('businessTypeSelectHint')}</p>
 
-                  {/* WUD-UI-TYPES: the options are the rows the database view returned.
-                      Nothing is rendered from an embedded list. */}
+                  {/* F-12: the options are the rows the database view returned. Nothing is
+                      rendered from an embedded list. */}
                   {businessTypes.length > 0 && (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       {businessTypes.map((type) => {
                         const isSelected = businessType === type.typeCode;
-                        const pattern = findBusinessPattern(type.typeCode);
+                        const starterCount = countStarterServicesForType(starterServices, type.typeCode);
                         return (
                           <button
                             key={type.typeCode}
@@ -448,17 +468,16 @@ function RegisterFormContent() {
                                 </span>
                               )}
                             </span>
-                            {/* Pattern preview copy exists only for codes the app
-                                bundles a pattern for; a code without one says so. */}
-                            <span className="block text-[11px] text-slate-400">
-                              {pattern
-                                ? tBusinessType(`${pattern.messageKey}.description`)
-                                : t('businessTypePatternUnavailable')}
-                            </span>
+                            {/* F-13: the count is the database's own, from the
+                                starter-services projection; a type with none says so. */}
                             <span className="block text-[10px] text-slate-500 font-mono">
-                              {pattern
-                                ? `${pattern.pattern.services.length} ${t('businessTypePatternServicesTitle')}`
-                                : type.typeCode}
+                              {starterStatus === 'loaded'
+                                ? (starterCount > 0
+                                  ? `${starterCount} ${t('businessTypeStarterServicesTitle')}`
+                                  : t('businessTypeStarterServicesEmpty'))
+                                : starterStatus === 'empty'
+                                  ? t('businessTypeStarterServicesEmpty')
+                                  : t('businessTypeStarterServicesUnavailable')}
                             </span>
                           </button>
                         );
@@ -483,53 +502,63 @@ function RegisterFormContent() {
                     </p>
                   )}
 
-                  {/* Pattern preview: exactly what signup will prefill, still editable */}
+                  {/* Starter-services preview — the SAME data provision_owner_shop builds
+                      the shop's services from, capped by the selected plan's allowance. NO
+                      price and NO deposit amount are shown: those values in the seed are not
+                      an Owner decision yet and the projection does not select them. There is
+                      no opening-hours block and no per-language copy, because the database
+                      holds neither (see businessTypeAbsentFieldsNote). */}
                   {selectedBusinessType && (
                     <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-3.5 space-y-3">
                       <p className="font-bold text-emerald-400 text-xs flex items-center gap-1.5">
                         <Sparkles className="w-4 h-4 text-emerald-400" />
-                        {t('businessTypePatternPreviewTitle', {
+                        {t('businessTypeStarterPreviewTitle', {
                           type: selectedBusinessTypeLabel || selectedBusinessType.typeCode,
                         })}
                       </p>
 
-                      {selectedPattern ? (
+                      {preview.status === 'loaded' && preview.services.length > 0 ? (
                         <>
                           <div>
                             <p className="text-[11px] font-semibold text-slate-300">
-                              {t('businessTypePatternServicesTitle')}
+                              {t('businessTypeStarterServicesTitle')}
                             </p>
                             <ul className="text-[11px] text-slate-300 space-y-1 pt-1">
-                              {selectedPattern.pattern.services.map((service) => (
-                                <li key={service.key} className="flex items-center justify-between gap-3">
-                                  <span>{tBusinessType(`${selectedPattern.messageKey}.services.${service.key}`)}</span>
+                              {preview.services.map((service) => (
+                                <li
+                                  key={service.serviceOrder}
+                                  className="flex items-center justify-between gap-3"
+                                >
+                                  {/* The stored name, exactly as the database holds it —
+                                      the seed carries no English name to show instead. */}
+                                  <span>{service.serviceName}</span>
                                   <span className="font-mono text-amber-400">{service.durationMinutes} min</span>
                                 </li>
                               ))}
                             </ul>
                           </div>
 
-                          <div>
-                            <p className="text-[11px] font-semibold text-slate-300">
-                              {t('businessTypePatternHoursTitle')}
-                            </p>
-                            <ul className="text-[11px] text-slate-400 pt-1 space-y-0.5 font-mono">
-                              {patternHoursLines.map((line) => (
-                                <li key={line}>{line}</li>
-                              ))}
-                            </ul>
-                          </div>
+                          <p className="text-[10px] text-slate-400">
+                            {t('businessTypeStarterPlanCapNote', {
+                              count: preview.services.length,
+                              available: preview.availableCount,
+                            })}
+                          </p>
 
-                          <p className="text-[10px] text-slate-400">{t('businessTypePatternEditableNote')}</p>
+                          <p className="text-[10px] text-slate-400">{t('businessTypeStarterEditableNote')}</p>
                         </>
+                      ) : preview.status === 'empty' ? (
+                        <p className="text-[11px] text-slate-400">{t('businessTypeStarterServicesEmpty')}</p>
                       ) : (
-                        <p className="text-[11px] text-slate-400">{t('businessTypePatternUnavailable')}</p>
+                        <p className="text-[11px] text-amber-300">{t('businessTypeStarterServicesUnavailable')}</p>
                       )}
                     </div>
                   )}
 
-                  {/* Where the list comes from, stated on the screen. */}
+                  {/* Where the list and the starter set come from, stated on the screen. */}
                   <p className="text-[10px] text-slate-500">{t('businessTypeSourceNote')}</p>
+                  <p className="text-[10px] text-slate-500">{t('businessTypeStarterSourceNote')}</p>
+                  <p className="text-[10px] text-slate-500">{t('businessTypeAbsentFieldsNote')}</p>
                 </div>
               )}
 

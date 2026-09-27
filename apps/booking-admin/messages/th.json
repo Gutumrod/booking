@@ -59,19 +59,22 @@
     "passwordPlaceholder": "อย่างน้อย 8 ตัวอักษร",
     "stepBusinessTypeTitle": "ร้านของคุณเป็นธุรกิจประเภทไหน? (Step 1/4)",
     "stepBusinessTypeShort": "ประเภทธุรกิจ",
-    "businessTypeSelectHint": "เลือกหนึ่งประเภท ระบบจะเตรียมตัวอย่างบริการพร้อมระยะเวลา และช่วงเวลาทำการให้ ร้านแก้ไขได้",
+    "businessTypeSelectHint": "เลือกหนึ่งประเภท ระบบจะแสดงบริการตั้งต้นพร้อมระยะเวลาที่จะสร้างให้ร้าน อ่านจากฐานข้อมูล (แก้ไขได้)",
     "businessTypeRequired": "กรุณาเลือกประเภทธุรกิจก่อนไปขั้นตอนต่อไป",
     "businessTypeSelectedBadge": "เลือกแล้ว",
-    "businessTypePatternPreviewTitle": "แพทเทิร์นตั้งต้นของ {type} ที่ร้านจะได้",
-    "businessTypePatternServicesTitle": "ตัวอย่างบริการ & ระยะเวลา (แก้ไขได้)",
-    "businessTypePatternHoursTitle": "ตัวอย่างช่วงเวลาทำการ (แก้ไขได้)",
-    "businessTypePatternEditableNote": "บริการทุกตัวและช่วงเวลาทำการทุกวัน แก้ไขหรือลบได้หลังสร้างร้านเสร็จ",
+    "businessTypeStarterPreviewTitle": "บริการตั้งต้นของ {type} ที่ร้านจะได้จากฐานข้อมูล",
+    "businessTypeStarterServicesTitle": "บริการที่จะสร้างให้ร้าน & ระยะเวลา (แก้ไขได้)",
+    "businessTypeStarterEditableNote": "บริการทุกตัวแก้ไขหรือลบได้หลังสร้างร้านเสร็จ",
+    "businessTypeStarterPlanCapNote": "แสดง {count} จาก {available} บริการในฐานข้อมูล — ตรงกับที่จะสร้างให้ร้านตามแพ็กเกจที่เลือก",
     "businessTypeCategoryPrefillNote": "เติมจากประเภทธุรกิจที่เลือกไว้ ยังแก้ไขหรือเพิ่มรายละเอียดได้อิสระ",
     "businessTypeLoading": "กำลังอ่านรายการประเภทธุรกิจจากฐานข้อมูล...",
     "businessTypeEmpty": "ฐานข้อมูลยังไม่มีประเภทธุรกิจที่เปิดใช้งาน (is_active) จึงยังเลือกไม่ได้ — ยังไม่มีการสร้างรหัสประเภทธุรกิจขึ้นเองในแอป",
-    "businessTypeUnavailable": "อ่านรายการประเภทธุรกิจจากฐานข้อมูลไม่ได้ (local_service.app_business_types) — ยังแสดงรายการไม่ได้ และระบบจะไม่เดารายการขึ้นมาเอง กรุณาล็อกอินและลองใหม่ หรือแจ้งผู้ดูแลระบบ",
-    "businessTypePatternUnavailable": "ประเภทธุรกิจนี้ยังไม่มีแพทเทิร์นตั้งต้นในแอป — เลือกได้ แต่จะยังไม่มีการเติมบริการ/เวลาทำการตัวอย่าง (ค่าที่จะเติมเป็นค่าชั่วคราวที่แก้ได้)",
-    "businessTypeSourceNote": "* รายการ ชื่อ รูป และลำดับของประเภทธุรกิจอ่านจากฐานข้อมูล (local_service.app_business_types) ไม่ได้ฝังไว้ในแอป · แพทเทิร์นตั้งต้นและราคาที่แสดงเป็นค่าอ้างอิงชั่วคราว ยังไม่ใช่ค่าที่ Owner ยืนยัน",
+    "businessTypeUnavailable": "อ่านรายการประเภทธุรกิจจากฐานข้อมูลไม่ได้ (local_service.app_business_types) — ยังแสดงรายการไม่ได้ และระบบจะไม่เดารายการขึ้นมาเอง กรุณาลองใหม่ หรือแจ้งผู้ดูแลระบบ",
+    "businessTypeStarterServicesEmpty": "ประเภทธุรกิจนี้ยังไม่มีบริการตั้งต้นในฐานข้อมูล — เลือกได้ แต่ระบบจะไม่สร้างบริการตั้งต้นให้ และหน้าสมัครจะไม่แต่งบริการขึ้นมาเอง",
+    "businessTypeStarterServicesUnavailable": "อ่านบริการตั้งต้นจากฐานข้อมูลไม่ได้ (local_service.app_business_type_starter_services) — ยังแสดงตัวอย่างไม่ได้ และระบบจะไม่เดาบริการขึ้นมาเอง กรุณาลองใหม่ หรือแจ้งผู้ดูแลระบบ",
+    "businessTypeSourceNote": "* รายการ ชื่อ รูป และลำดับของประเภทธุรกิจอ่านจากฐานข้อมูล (local_service.app_business_types) ไม่ได้ฝังไว้ในแอป",
+    "businessTypeStarterSourceNote": "* บริการตั้งต้นและระยะเวลาอ่านจากฐานข้อมูล (local_service.app_business_type_starter_services) ซึ่งเป็นชุดเดียวกับที่ระบบใช้สร้างบริการให้ร้านจริง ไม่ได้ฝังไว้ในแอป · ไม่แสดงราคาและเงินมัดจำ เพราะยังไม่ใช่ค่าที่ Owner ยืนยัน",
+    "businessTypeAbsentFieldsNote": "* ชื่อบริการภาษาอังกฤษ และช่วงเวลาทำการ ยังไม่มีในฐานข้อมูลวันนี้ (seed ของ business_types เก็บเฉพาะชื่อบริการไทยกับระยะเวลา และ provision_owner_shop ไม่ได้สร้างเวลาทำการเลย) — สองฟิลด์นี้จึงเป็นการตัดสินใจของฐานข้อมูล/Owner ไม่ใช่สิ่งที่หน้าสมัครนี้จะสร้างขึ้นเอง",
     "stepShopTitle": "ข้อมูลร้านค้าและบัญชีเจ้าของร้าน (Step 2/4)",
     "stepShopShort": "ข้อมูลร้านค้า",
     "stepPlanTitle": "เลือกแพ็กเกจระบบรับจองคิว (Step 3/4)",
@@ -482,51 +485,4 @@
     "priorityLow": "Low (ต่ำ)",
     "priorityMedium": "Medium (ปานกลาง)",
     "priorityHigh": "High (สูง / เร่งด่วน)"
-  },
-  "businessType": {
-    "hairBarber": {
-      "label": "ร้านทำผม / บาร์เบอร์",
-      "description": "ตัดผม โกนหนวด แต่งทรง พร้อมสระ-เซ็ต โดยหยุดวันจันทร์",
-      "services": {
-        "haircut": "ตัดผมชาย",
-        "haircutWash": "ตัดผมพร้อมสระ-เซ็ต",
-        "beardTrim": "โกนหนวด / แต่งเคราตามทรง",
-        "washSet": "สระผม-เซ็ตทรง",
-        "colorShort": "ทำสีผมสั้น"
-      }
-    },
-    "beautySalon": {
-      "label": "ร้านเสริมสวย",
-      "description": "ทำหน้า ออกแบบคิ้ว ต่อขนตา และแต่งหน้าโอกาสพิเศษ",
-      "services": {
-        "facialBasic": "ทำความสะอาดผิวหน้าขั้นพื้นฐาน",
-        "facialPremium": "ทรีตเมนต์ผิวหน้าพรีเมียม",
-        "browShape": "ออกแบบและจัดทรงคิ้ว",
-        "lashExtension": "ต่อขนตา",
-        "makeupEvent": "แต่งหน้าโอกาสพิเศษ"
-      }
-    },
-    "nailSalon": {
-      "label": "ร้านทำเล็บ",
-      "description": "ทำเล็บมือ เล็บเท้า ทาเจล และเพนต์เล็บ เปิดทุกวัน",
-      "services": {
-        "manicure": "ทำเล็บมือ",
-        "pedicure": "ทำเล็บเท้า",
-        "gelPolish": "ทาเจลเล็บ",
-        "nailArt": "เพนต์ลวดลายเล็บ",
-        "extensionSet": "ต่อเล็บเต็มชุด"
-      }
-    },
-    "other": {
-      "label": "ธุรกิจอื่นๆ",
-      "description": "ชุดตั้งต้นกลางๆ สำหรับธุรกิจรับนัดหมายประเภทอื่น",
-      "services": {
-        "consultation": "ปรึกษาก่อนให้บริการ",
-        "standardService": "บริการมาตรฐาน",
-        "servicePackage": "แพ็กเกจบริการ",
-        "followUp": "นัดติดตามผล"
-      }
-    },
-    "closedDay": "หยุด"
-  }
-}
+  }}
