@@ -47,4 +47,4 @@ Codex verification in this checkpoint:
 
 - Local `main` is ahead of `origin/main`; the Phase A commits were not pushed during this checkpoint.
 - Reapplying the Phase A migration manually drops and rebuilds the GiST exclusion constraint and can take an `ACCESS EXCLUSIVE` table lock. Treat it as a one-time ordered migration.
-- Phase B has not started. It requires the server-only `SUPABASE_SERVICE_ROLE_KEY` integration for the LINE webhook.
+- At this report's date Phase B had not started. The 2026-09-27 BK01 WU-C work supersedes this checkpoint and uses the House runtime JWT adapter for server routes.

@@ -113,7 +113,7 @@ D:\AI-Workspace\projects\local-service-booking-saas
 
 Phase A-D เสร็จแล้ว, Phase E แตกเป็น checkpoint ย่อย (E1, E2, E3.1-E3.3, E4) ตาม [`docs/technical/BRIEF_PHASE2_HARDENING_A_TO_E.md`](docs/technical/BRIEF_PHASE2_HARDENING_A_TO_E.md) — **ห้ามข้ามลำดับ** แต่ละ checkpoint ต้อง verify ผ่าน REST API จริง (+ browser สำหรับ UI) ก่อนเริ่ม checkpoint ถัดไป:
 
-- ✅ **Phase B:** แก้ LINE webhook ให้ใช้ `SUPABASE_SERVICE_ROLE_KEY` ผ่าน server-only admin client — commit `370473f`
+- ⚠️ **Phase B:** implementation เดิมถูก WU-C แทนด้วย House runtime JWT และ RPC allowlist; LINE trial ยัง fail closed จนกว่าจะมี follow-up RPC ที่รองรับ trusted shop scope.
 - ✅ **Phase C:** แก้ frontend no-deposit flow + fail-closed staff schedule — commit `c8a00e3`
 - ✅ **Phase D:** เอกสารขั้นตอน manual "Exposed schemas" กันเจอ `406 PGRST106` ซ้ำตอน deploy ใหม่
 - ✅ **Phase E1:** Owner auth (Supabase Auth email/password + atomic shop provisioning RPC) — commit `a42ec09`

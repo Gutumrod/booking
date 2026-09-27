@@ -1,42 +1,43 @@
-import { NextRequest, NextResponse } from 'next/server';
-
-import { buildDepositSlipObjectPath } from '@/lib/deposit-slip-contract';
-import { getSupabaseAdmin } from '@/lib/supabase-admin';
 
 const ALLOWED_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
+type RuntimeClient = Awaited<ReturnType<typeof import('../../../../lib/bk01-runtime').getBk01RuntimeClient>>;
+type RuntimeProvider = () => Promise<RuntimeClient>;
+const defaultRuntimeProvider: RuntimeProvider = async () => (await import('../../../../lib/bk01-runtime')).getBk01RuntimeClient();
 
-export async function POST(req: NextRequest) {
+export async function handleUploadIntent(req: Request, runtimeProvider: RuntimeProvider = defaultRuntimeProvider) {
   const body = await req.json().catch(() => null) as {
-    bookingId?: string;
-    recoveryToken?: string;
-    contentType?: string;
-    size?: number;
+    bookingId?: string; recoveryToken?: string; contentType?: string; size?: number;
   } | null;
   if (!body?.bookingId || !body.recoveryToken || !body.contentType || !ALLOWED_TYPES.has(body.contentType)
-      || !Number.isFinite(body.size) || Number(body.size) <= 0 || Number(body.size) > 5 * 1024 * 1024) {
-    return NextResponse.json({ error: 'Invalid upload request' }, { status: 400 });
+      || !Number.isInteger(body.size) || Number(body.size) <= 0 || Number(body.size) > 5 * 1024 * 1024) {
+    return Response.json({ error: 'Invalid upload request' }, { status: 400 });
   }
 
-  const admin = getSupabaseAdmin();
-  const { data: recoveryAuthorized, error: recoveryError } = await admin.rpc('authorize_booking_recovery_attempt', {
-    p_booking_id: body.bookingId,
-    p_recovery_token: body.recoveryToken,
-  });
-  if (recoveryError || recoveryAuthorized !== true) {
-    return NextResponse.json({ error: 'Invalid or expired booking capability' }, { status: 403 });
-  }
-  const { data: booking } = await admin.from('bookings')
-    .select('id,status,deposit_status,expires_at')
-    .eq('id', body.bookingId).maybeSingle();
-  const now = Date.now();
-  const authorized = booking
-    && booking.status === 'hold'
-    && ['awaiting', 'rejected'].includes(booking.deposit_status)
-    && new Date(booking.expires_at).getTime() > now;
-  if (!authorized) return NextResponse.json({ error: 'Invalid or expired booking capability' }, { status: 403 });
+  try {
+    const runtime = await runtimeProvider();
+    const { data: grants, error: grantError } = await runtime.rpc('authorize_deposit_slip_upload', {
+      p_booking_id: body.bookingId,
+      p_recovery_token: body.recoveryToken,
+      p_content_type: body.contentType,
+      p_size_bytes: body.size,
+    });
+    const grant = Array.isArray(grants) ? grants[0] : grants;
+    if (grantError || !grant?.object_path) {
+      return Response.json({ error: 'Invalid or expired booking capability' }, { status: 403 });
+    }
 
-  const objectPath = buildDepositSlipObjectPath(body.bookingId, body.contentType);
-  const { data, error } = await admin.storage.from('deposit-slips').createSignedUploadUrl(objectPath);
-  if (error || !data?.token) return NextResponse.json({ error: 'Could not authorize upload' }, { status: 500 });
-  return NextResponse.json({ objectPath, token: data.token });
+    const { data, error } = await runtime.storage.from('deposit-slips').createSignedUploadUrl(grant.object_path);
+    if (error || !data?.token) {
+      // TODO(HOUSE-STORAGE-UPLOAD-GRANT): route through the separately reviewed
+      // House Storage artifact if bk01_runtime cannot create a scoped upload URL.
+      return Response.json({ error: 'Storage upload authorization is unavailable', code: 'STORAGE_GRANT_UNAVAILABLE' }, { status: 503 });
+    }
+    return Response.json({ objectPath: grant.object_path, token: data.token });
+  } catch {
+    return Response.json({ error: 'Runtime upload authorization is unavailable' }, { status: 503 });
+  }
+}
+
+export async function POST(req: Request) {
+  return handleUploadIntent(req);
 }

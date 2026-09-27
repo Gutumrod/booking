@@ -1,11 +1,12 @@
-import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
-import { getSupabaseAdmin } from '@/lib/supabase-admin';
 
 // --- Configuration -----------------------------------------------------------
 
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY ?? '';
 const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET ?? '';
+type RuntimeClient = Awaited<ReturnType<typeof import('../../../../lib/bk01-runtime').getBk01RuntimeClient>>;
+type RuntimeProvider = () => Promise<RuntimeClient>;
+const defaultRuntimeProvider: RuntimeProvider = async () => (await import('../../../../lib/bk01-runtime')).getBk01RuntimeClient();
 
 function getStripeClient(): Stripe {
   if (!STRIPE_SECRET_KEY) {
@@ -141,8 +142,9 @@ async function isDuplicateEvent(
   eventId: string,
   eventType: string,
   eventCreated: number,
+  runtimeProvider: RuntimeProvider,
 ): Promise<boolean> {
-  const supabaseAdmin = getSupabaseAdmin();
+  const supabaseAdmin = await runtimeProvider();
 
   const { data, error } = await supabaseAdmin.rpc('claim_stripe_webhook_event', {
     p_id: eventId,
@@ -151,10 +153,9 @@ async function isDuplicateEvent(
   });
 
   if (error) {
-    console.error('stripe_webhook_events insert failed', {
+    console.error('Stripe event journal RPC failed', {
       eventId,
       eventType,
-      error: error.message,
       code: error.code,
     });
     throw new Error(`Stripe event journal failed: ${error.message}`);
@@ -177,8 +178,8 @@ interface SyncStateParams {
   cancelAtPeriodEnd: boolean | null;
 }
 
-async function syncSubscriptionState(params: SyncStateParams): Promise<{ applied: boolean }> {
-  const supabaseAdmin = getSupabaseAdmin();
+async function syncSubscriptionState(params: SyncStateParams, runtimeProvider: RuntimeProvider): Promise<{ applied: boolean }> {
+  const supabaseAdmin = await runtimeProvider();
 
   const rpcArgs: Record<string, unknown> = {
     p_event_type: params.eventType,
@@ -205,13 +206,17 @@ async function syncSubscriptionState(params: SyncStateParams): Promise<{ applied
 
 // --- Main webhook handler ----------------------------------------------------
 
-export async function POST(req: NextRequest) {
+export async function handleStripeWebhook(
+  req: Request,
+  runtimeProvider: RuntimeProvider = defaultRuntimeProvider,
+  stripeClientFactory: () => Stripe = getStripeClient,
+) {
   // 1. Read the raw body BEFORE any JSON parsing (needed for signature verify).
   const rawBody = await req.text();
   const signatureHeader = req.headers.get('stripe-signature');
 
   if (!signatureHeader) {
-    return NextResponse.json(
+    return Response.json(
       { error: 'Missing stripe-signature header' },
       { status: 400 },
     );
@@ -221,7 +226,7 @@ export async function POST(req: NextRequest) {
   //    without touching the database.
   if (!STRIPE_WEBHOOK_SECRET) {
     console.error('STRIPE_WEBHOOK_SECRET is not configured');
-    return NextResponse.json(
+    return Response.json(
       { error: 'Webhook secret not configured' },
       { status: 500 },
     );
@@ -229,12 +234,10 @@ export async function POST(req: NextRequest) {
 
   let stripeClient: Stripe;
   try {
-    stripeClient = getStripeClient();
-  } catch (err) {
-    console.error('Stripe client init failed', {
-      error: err instanceof Error ? err.message : String(err),
-    });
-    return NextResponse.json(
+    stripeClient = stripeClientFactory();
+  } catch {
+    console.error('Stripe client initialization failed');
+    return Response.json(
       { error: 'Stripe client not configured' },
       { status: 500 },
     );
@@ -249,7 +252,7 @@ export async function POST(req: NextRequest) {
     );
   } catch {
     // Signature verification failure — return 400, do NOT touch the DB.
-    return NextResponse.json(
+    return Response.json(
       { error: 'Invalid Stripe signature' },
       { status: 400 },
     );
@@ -258,17 +261,17 @@ export async function POST(req: NextRequest) {
   // 3. Idempotency guard: insert into stripe_webhook_events. If the event.id
   //    already exists (duplicate), return 200 immediately.
   try {
-    const duplicate = await isDuplicateEvent(event.id, event.type, event.created);
+    const duplicate = await isDuplicateEvent(event.id, event.type, event.created, runtimeProvider);
     if (duplicate) {
-      return NextResponse.json({ received: true, duplicate: true });
+      return Response.json({ received: true, duplicate: true });
     }
-  } catch (err) {
+  } catch {
     console.error('Idempotency guard failed', {
       eventId: event.id,
       eventType: event.type,
-      error: err instanceof Error ? err.message : String(err),
+      code: 'IDEMPOTENCY_GUARD_FAILED',
     });
-    return NextResponse.json({ error: 'idempotency_guard_failed' }, { status: 500 });
+    return Response.json({ error: 'idempotency_guard_failed' }, { status: 500 });
   }
 
   // 4. Dispatch to the appropriate event handler. Each handler calls the
@@ -294,10 +297,9 @@ export async function POST(req: NextRequest) {
             if (!payload.plan) {
               payload.plan = mapPriceIdToPlan(sub.items.data[0]?.price?.id);
             }
-          } catch (err) {
+          } catch {
             console.error('Failed to retrieve subscription after checkout', {
               subscriptionId: payload.stripeSubscriptionId,
-              error: err instanceof Error ? err.message : String(err),
             });
           }
         }
@@ -312,7 +314,7 @@ export async function POST(req: NextRequest) {
           status: payload.status,
           currentPeriodEnd: payload.currentPeriodEnd,
           cancelAtPeriodEnd: payload.cancelAtPeriodEnd,
-        });
+        }, runtimeProvider);
         break;
       }
 
@@ -331,7 +333,7 @@ export async function POST(req: NextRequest) {
           status: payload.status,
           currentPeriodEnd: payload.currentPeriodEnd,
           cancelAtPeriodEnd: payload.cancelAtPeriodEnd,
-        });
+        }, runtimeProvider);
         break;
       }
 
@@ -349,7 +351,7 @@ export async function POST(req: NextRequest) {
           status: 'canceled',
           currentPeriodEnd: null,
           cancelAtPeriodEnd: false,
-        });
+        }, runtimeProvider);
         break;
       }
 
@@ -375,7 +377,7 @@ export async function POST(req: NextRequest) {
           status: currentSub?.status ?? 'active',
           currentPeriodEnd,
           cancelAtPeriodEnd: null,
-        });
+        }, runtimeProvider);
         break;
       }
 
@@ -396,7 +398,7 @@ export async function POST(req: NextRequest) {
           status: currentSub?.status ?? 'past_due',
           currentPeriodEnd: currentSub ? getSubscriptionPeriodEnd(currentSub) : null,
           cancelAtPeriodEnd: currentSub ? isCancelScheduled(currentSub) : null,
-        });
+        }, runtimeProvider);
         break;
       }
 
@@ -404,25 +406,41 @@ export async function POST(req: NextRequest) {
         // Event type we don't handle — ack it so Stripe doesn't retry.
         break;
     }
-  } catch (err) {
+  } catch {
     console.error('Stripe webhook event processing failed', {
       eventId: event.id,
       eventType: event.type,
-      error: err instanceof Error ? err.message : String(err),
-      stack: err instanceof Error ? err.stack : undefined,
+      code: 'EVENT_PROCESSING_FAILED',
     });
-    const admin = getSupabaseAdmin();
-    const { error: releaseError } = await admin.from('stripe_webhook_events')
-      .update({ processing_status: 'failed', last_error: err instanceof Error ? err.message.slice(0, 500) : 'processing failed' })
-      .eq('id', event.id).eq('processing_status', 'processing');
-    if (releaseError) console.error('Failed to mark Stripe event retryable', { eventId: event.id, error: releaseError.message });
-    return NextResponse.json({ error: 'internal_processing_error' }, { status: 500 });
+    try {
+      const runtime = await runtimeProvider();
+      const { data: released, error: releaseError } = await runtime.rpc('finish_stripe_webhook_event', {
+        p_id: event.id,
+        p_status: 'failed',
+        p_error: 'Stripe webhook processing failed',
+      });
+      if (releaseError || released !== true) console.error('Failed to mark Stripe event retryable', { eventId: event.id });
+    } catch {
+      console.error('Stripe event retry state could not be persisted', { eventId: event.id });
+    }
+    return Response.json({ error: 'internal_processing_error' }, { status: 500 });
   }
 
-  const { error: completionError } = await getSupabaseAdmin().from('stripe_webhook_events')
-    .update({ processing_status: 'processed', processed_at: new Date().toISOString(), last_error: null })
-    .eq('id', event.id).eq('processing_status', 'processing');
-  if (completionError) return NextResponse.json({ error: 'event_completion_failed' }, { status: 500 });
+  try {
+    const runtime = await runtimeProvider();
+    const { data: completed, error: completionError } = await runtime.rpc('finish_stripe_webhook_event', {
+      p_id: event.id,
+      p_status: 'processed',
+      p_error: null,
+    });
+    if (completionError || completed !== true) return Response.json({ error: 'event_completion_failed' }, { status: 500 });
+  } catch {
+    return Response.json({ error: 'event_completion_failed' }, { status: 500 });
+  }
 
-  return NextResponse.json({ received: true });
+  return Response.json({ received: true });
+}
+
+export async function POST(req: Request) {
+  return handleStripeWebhook(req);
 }

@@ -12,7 +12,7 @@
 | :--- | :--- |
 | `supabase/migrations/20260810000000_phase_e4_3_stripe_webhook_events.sql` | Idempotency log table `local_service.stripe_webhook_events` per design doc §4.3.1. |
 | `supabase/migrations/20260810000100_phase_e4_4_sync_subscription_state_rpc.sql` | SECURITY DEFINER RPC function `sync_subscription_state` for atomic subscription + shop status writes. |
-| `apps/booking-admin/src/lib/supabase-admin.ts` | Server-only Supabase admin client (service_role), mirroring the booking-consumer pattern from Phase B. |
+| `apps/booking-admin/src/lib/bk01-runtime.ts` | Current server-only House runtime JWT adapter; it supersedes the historical privileged-client implementation. |
 | `apps/booking-admin/src/app/api/webhooks/stripe/route.ts` | Next.js App Router POST handler — Stripe webhook endpoint. |
 | `docs/technical/QWEN_E4_3_E4_4_HANDOFF.md` | This file. |
 

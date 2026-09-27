@@ -30,7 +30,7 @@ Also done: `stripe` SDK added to `booking-admin` (commit `72ea9af`), plus `scrip
 
 **DoD:**
 - [ ] Two live test-mode Prices exist in Stripe, IDs recorded in `.env.local`.
-- [ ] `STRIPE_SECRET_KEY` present in `.env.local`, confirmed never referenced under `apps/*/src/app/**/page.tsx` (server-only, same rule as `SUPABASE_SERVICE_ROLE_KEY` in Phase B).
+- [ ] `STRIPE_SECRET_KEY` present in the runtime environment, confirmed never referenced under `apps/*/src/app/**/page.tsx`.
 
 ---
 
@@ -38,7 +38,7 @@ Also done: `stripe` SDK added to `booking-admin` (commit `72ea9af`), plus `scrip
 
 **Tasks:**
 1. Apply the `local_service.stripe_webhook_events` table exactly as specced in `STRIPE_SUBSCRIPTION_STATE_MACHINE.md` §4.3.1 (id = Stripe event id PK, type, created_at, processed_at).
-2. No grants to `anon`/`authenticated` — `service_role` only (webhook handler runs server-side with service_role, same pattern as the LINE webhook's admin client from Phase B).
+2. No grants to `anon`/`authenticated`; server-side webhook access uses the current narrow runtime RPC contract.
 
 **DoD:**
 - [ ] Migration file under `supabase/migrations/`, applied live, confirmed via `pg_tables`/REST that `anon` gets 401 on any access.
@@ -56,7 +56,7 @@ Also done: `stripe` SDK added to `booking-admin` (commit `72ea9af`), plus `scrip
 3. Idempotency guard first: `INSERT INTO stripe_webhook_events (id, type, created_at) ... ON CONFLICT (id) DO NOTHING RETURNING id`. No row → return 200 `{duplicate:true}` immediately.
 4. Out-of-order guard: skip DB state update if `event.created` < `subscriptions.updated_at` for the target row (design doc §4.3.2 step 4).
 5. Implement the 5 handlers per `STRIPE_SUBSCRIPTION_STATE_MACHINE.md` §2.2 exactly (`checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.paid`, `invoice.payment_failed`) — each a single transaction that writes `subscriptions` AND syncs `shops.subscription_status` per the mapping matrix (§3.3/§3.4), not two separate writes that can drift.
-6. Use the `booking-admin` server-only Supabase admin client (service_role) — create one if it doesn't already exist, following the exact pattern of `apps/booking-consumer/src/lib/supabase-admin.ts` from Phase B (never imported client-side).
+6. Use the server-only House runtime JWT adapter and approved RPCs. Historical privileged-client instructions are superseded by the 2026-09-27 WU-C brief.
 
 **DoD (verified with `stripe trigger` / Stripe CLI against the running dev server, not just reading code):**
 - [ ] Unsigned/tampered request body → 400, no DB write.

@@ -25,20 +25,11 @@ Source: consolidated from Claude's own review + Codex's two independent audit ro
 
 ---
 
-## Phase B — LINE webhook: switch to service_role (real fix, not a workaround)
+## Phase B — LINE webhook: historical instructions superseded
 
-**Why second:** the webhook is currently non-functional in production (RLS silently blocks its reads/writes while it reports fake success) — but it depends on Phase A's tightened grants being in place first so we don't widen the attack surface while fixing this.
+**2026-09-27 update:** Do not restore a privileged client or credential in BK01. The current implementation uses the House-issued short-lived `bk01_runtime` JWT and narrow RPC allowlist. Trial LINE binding remains blocked until a follow-up RPC accepts booking code without a trusted shop UUID; merchant routes use the frozen WU-B RPC. Follow the current WU-C brief and report as authority.
 
-**Tasks:**
-1. Need `SUPABASE_SERVICE_ROLE_KEY` — **this must come from the project owner** (Claude has no MCP tool that exposes the service_role key; it's not something to fetch or guess).
-2. Add a second Supabase client in `apps/booking-consumer/src/lib/` (e.g. `supabase-admin.ts`) constructed with the service_role key, used **only** server-side in `apps/booking-consumer/src/app/api/line/webhook/route.ts` (never imported into any client component). This is safe specifically because the webhook already verifies the LINE HMAC signature before touching the DB — it's a genuinely trusted server context, unlike a browser client.
-3. Update the webhook route to use this admin client for the SELECT on `bookings`, the `line_users` upsert, the `customers` UPDATE, and the notification log INSERT.
-4. Fix the route's error handling — currently it returns `{success:true}` even when a mutation fails silently; check and surface real errors (still return 200 to LINE per their webhook contract, but log failures properly instead of pretending success).
-
-**DoD:**
-- [ ] `SUPABASE_SERVICE_ROLE_KEY` present in `.env.local` (both apps, matching existing hardlink setup) — confirm the key is never referenced anywhere under `apps/*/src/app/**/page.tsx`, only inside the webhook route / a dedicated server-only lib file.
-- [ ] Simulate a real LINE webhook POST (signed with the real channel secret) against the running dev server for a booking in `hold`/`pending_review` state; confirm `line_users` row is created, `customers.line_user_id` is set, and a Flex message reply attempt fires (can mock the outbound `fetch` to LINE's API if no real LINE account is being tested against).
-- [ ] Route no longer reports `success:true` when an underlying Supabase call actually failed.
+The original Phase B task list and gates have been retired. Do not execute or hand off those instructions.
 
 ---
 

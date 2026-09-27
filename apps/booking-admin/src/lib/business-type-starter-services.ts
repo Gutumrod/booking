@@ -123,9 +123,9 @@ export const SIGNUP_PLAN_DB_CODE: Readonly<Record<SignupPlanId, string>> = {
  * as seeded by the migration lane — `free` 3, `basic_490` 50, `pro_990` 100 (Pro is not
  * sold; its 100 is the unapproved C2 proposal marked *). The mirror exists only because
  * the signup reads the preview as `anon` and the database exposes NO anon-readable
- * plan-limit surface: `entitlement_plans` is `service_role` only, `get_tier_limits` is
+ * plan-limit surface: `entitlement_plans` is restricted to the privileged database role, `get_tier_limits` is
  * `authenticated` only and does not return `services_limit`, and `bk01_shop_limits` is
- * a per-shop `service_role` function. An anon-readable plan-cap surface is a
+ * a per-shop privileged database function. An anon-readable plan-cap surface is a
  * database/Owner decision; until it exists, a change to `services_limit` must be
  * mirrored here, and that coupling is recorded in
  * `docs/house-swarm-1/WUD-UI-TYPES.md`.
