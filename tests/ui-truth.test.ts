@@ -125,7 +125,7 @@ test('the admin catalogue still carries the locked commercial facts unchanged', 
   const en = JSON.parse(read('apps/booking-admin/messages/en.json'));
   for (const messages of [th, en]) {
     const planCopy = JSON.stringify({ auth: messages.auth, dashboard: messages.dashboard });
-    assert.match(planCopy, /390/);
+    assert.match(JSON.stringify(messages.auth), messages === th ? /฿390/ : /\$11/);
     assert.match(planCopy, /50/);
     // No invented numbers: the retired walls and the unanswered Pro price stay out.
     assert.doesNotMatch(planCopy, /490|990|฿790|\$23|100 bookings|500 bookings|100 คิว|500 คิว/);

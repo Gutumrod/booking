@@ -8,7 +8,8 @@
     "cancel": "Cancel",
     "saving": "Saving...",
     "saved": "Saved!",
-    "signOut": "Sign out"
+    "signOut": "Sign out",
+    "shopAccessCheckFailed": "Could not verify shop access"
   },
   "landing": {
     "badge": "Store Owner Admin Portal",
@@ -89,7 +90,7 @@
     "planFreeQ3": "✓ 3 services (intended · DB does not enforce it — migration pending)",
     "planFreeExcluded": "Once enforcement is live, going above these terms will require upgrading to Basic to keep taking bookings (nothing enforces them today)",
     "planBasicTitle": "⚡ Basic",
-    "planBasicPrice": "฿390",
+    "planBasicPrice": "$11",
     "planBasicDesc": "The only paid plan on sale today (no 50-bookings/month cap is intended — but the DB still applies its legacy booking ceiling until the pending migration)",
     "planBasicQ1": "✓ Intended to have no 50-bookings/month Free cap (fair use) · DB does not enforce this yet",
     "planBasicQ2": "✓ Up to 5 staff members* (awaiting Owner confirmation · DB does not enforce it)",
@@ -115,7 +116,14 @@
     "backToLogin": "Back to login",
     "backHome": "Back to home",
     "localServiceBadge": "Local Service Booking SaaS",
-    "stepPromptpayShort": "PromptPay"
+    "stepPromptpayShort": "PromptPay",
+    "promptpayExplanation": "We use this PromptPay number to create a dynamic QR code for customers to pay a deposit directly to your account.",
+    "promptpayNumberLabel": "Shop PromptPay number *",
+    "promptpayNumberPlaceholder": "e.g. 080-074-2005 or 13-digit juristic ID",
+    "promptpayNameLabel": "Deposit recipient account name *",
+    "promptpayNamePlaceholder": "e.g. Somchai Jaidee",
+    "registerSubmit": "Create shop & open dashboard",
+    "next": "Next"
   },
   "dashboard": {
     "shopNameDashboard": "{shopName} Dashboard",
@@ -363,7 +371,8 @@
     "durationServerLimit": "Saved durations must currently be a multiple of 15 minutes. Free-minute durations are a pending backend change (R7); the value was not saved.",
     "numericFieldInvalid": "Please enter valid numbers for duration, price and deposit",
     "depositMustBeSet": "Enter the deposit amount for this service (use 0 for no deposit). A blank deposit cannot be saved yet.",
-    "depositNotSet": "not set"
+    "depositNotSet": "not set",
+    "perMonth": "/month"
   },
   "tickets": {
     "backToDashboard": "Back to main dashboard",
@@ -503,5 +512,50 @@
     "priorityLow": "Low",
     "priorityMedium": "Medium",
     "priorityHigh": "High"
+  },
+  "platformAdmin": {
+    "title": "Platform administration",
+    "subtitle": "Manage shops, service access, trials and plans",
+    "switchDashboard": "Open shop dashboard",
+    "mrr": "Monthly recurring revenue (MRR)",
+    "mrrNote": "Active and past-due shops only",
+    "activeShops": "Active shops",
+    "trialing": "On trial",
+    "suspended": "Suspended",
+    "shopCount": "shops",
+    "allShops": "All shops in the system",
+    "actionsHelp": "Enable or suspend service, extend trials and change shop plans",
+    "activeTab": "Active ({count})",
+    "suspendedTab": "Suspended ({count})",
+    "allTab": "All ({count})",
+    "search": "Search shop / owner / slug...",
+    "shopOwner": "Shop / owner",
+    "plan": "Plan",
+    "subscriptionStatus": "Subscription status",
+    "periodEnd": "Access end / renewal",
+    "shopStatus": "Shop status",
+    "management": "Management",
+    "loading": "Loading...",
+    "empty": "No shops match the selected filters",
+    "viewBooking": "View booking page",
+    "bookingTitle": "View the customer-facing booking page",
+    "ownerUnknown": "Owner not specified",
+    "planUpdated": "Shop plan updated",
+    "proNotForSale": "Pro (not on sale)",
+    "cancelAtPeriodEnd": "(cancels at period end)",
+    "enable": "Enable service",
+    "suspend": "Suspend service",
+    "extendTrialSuccess": "Trial extended by 14 days",
+    "extendTrial": "+14 days trial",
+    "reactivate": "Reactivate service",
+    "suspendedShopSuccess": "Service suspended for {shop}",
+    "reactivatedShopSuccess": "Service reactivated for {shop}",
+    "noData": "No data",
+    "loadFailed": "Failed to load shops",
+    "actionFailed": "Action failed",
+    "subscriptionMissing": "Unknown",
+    "basicPrice": "$11",
+    "perMonth": "/month",
+    "adminCheckFailed": "Could not verify platform admin access"
   }
 }

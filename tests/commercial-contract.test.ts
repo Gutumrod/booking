@@ -210,8 +210,9 @@ test('no admin code or catalogue still shows the retired 490/990 plan prices', (
 test('the admin catalogue states the approved ฿390 and the Free limits', () => {
   for (const path of ['apps/booking-admin/messages/th.json', 'apps/booking-admin/messages/en.json']) {
     const messages = JSON.parse(read(path));
-    assert.match(JSON.stringify(messages.dashboard), /390/);
-    assert.match(JSON.stringify(messages.auth), /390/);
+    const isThai = path.endsWith('/th.json');
+    assert.match(JSON.stringify(messages.dashboard), isThai ? /390/ : /\$11/);
+    assert.match(JSON.stringify(messages.auth), isThai ? /390/ : /\$11/);
     for (const section of ['auth', 'dashboard'] as const) {
       assert.match(JSON.stringify(messages[section]), /50/, `${path}.${section} must state the 50 limit`);
     }

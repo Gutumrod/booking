@@ -8,7 +8,8 @@
     "cancel": "ยกเลิก",
     "saving": "กำลังบันทึก...",
     "saved": "บันทึกเรียบร้อย!",
-    "signOut": "ออกจากระบบ"
+    "signOut": "ออกจากระบบ",
+    "shopAccessCheckFailed": "ตรวจสอบสิทธิ์ร้านค้าไม่สำเร็จ"
   },
   "landing": {
     "badge": "Store Owner Admin Portal",
@@ -115,7 +116,14 @@
     "backToLogin": "กลับสู่หน้าเข้าสู่ระบบ",
     "backHome": "ย้อนกลับหน้าแรก",
     "localServiceBadge": "Local Service Booking SaaS",
-    "stepPromptpayShort": "ตั้งค่า PromptPay"
+    "stepPromptpayShort": "ตั้งค่า PromptPay",
+    "promptpayExplanation": "ระบบจะใช้เลขพร้อมเพย์นี้สร้าง Dynamic QR Code ให้ลูกค้าชำระเงินมัดจำเข้าบัญชีร้านโดยตรง",
+    "promptpayNumberLabel": "เลขพร้อมเพย์ร้านค้า *",
+    "promptpayNumberPlaceholder": "เช่น 080-074-2005 หรือเลขนิติบุคคล 13 หลัก",
+    "promptpayNameLabel": "ชื่อบัญชีรับโอนเงินมัดจำ *",
+    "promptpayNamePlaceholder": "เช่น สมชาย ใจดี",
+    "registerSubmit": "ยืนยันสร้างร้านค้าและเข้าสู่แดชบอร์ด",
+    "next": "ถัดไป"
   },
   "dashboard": {
     "shopNameDashboard": "{shopName} Dashboard",
@@ -363,7 +371,8 @@
     "durationServerLimit": "ตอนนี้ระบบยังบันทึกระยะเวลาได้เฉพาะจำนวนเท่าของ 15 นาที การรองรับค่าอิสระเป็นการแก้ฝั่ง backend ที่รอ (R7) — ค่านี้ยังไม่ถูกบันทึก",
     "numericFieldInvalid": "กรุณากรอกตัวเลขให้ถูกต้องในช่องระยะเวลา ราคา และมัดจำ",
     "depositMustBeSet": "กรุณากรอกยอดมัดจำของบริการนี้ (ใส่ 0 หากไม่เก็บมัดจำ) — ตอนนี้ยังบันทึกช่องมัดจำว่างไม่ได้",
-    "depositNotSet": "ยังไม่ตั้งค่า"
+    "depositNotSet": "ยังไม่ตั้งค่า",
+    "perMonth": "/เดือน"
   },
   "tickets": {
     "backToDashboard": "กลับหน้าแดชบอร์ดหลัก",
@@ -503,5 +512,50 @@
     "priorityLow": "Low (ต่ำ)",
     "priorityMedium": "Medium (ปานกลาง)",
     "priorityHigh": "High (สูง / เร่งด่วน)"
+  },
+  "platformAdmin": {
+    "title": "จัดการแพลตฟอร์ม",
+    "subtitle": "จัดการร้านค้า การเปิดใช้บริการ ช่วงทดลอง และแพ็กเกจ",
+    "switchDashboard": "สลับไปหน้า Dashboard ร้านค้า",
+    "mrr": "รายได้ประจำเดือน (MRR)",
+    "mrrNote": "จากร้านที่ active/past_due เท่านั้น",
+    "activeShops": "ร้านค้าเปิดใช้งาน",
+    "trialing": "กำลังทดลองใช้ (Trial)",
+    "suspended": "ระงับบริการอยู่",
+    "shopCount": "ร้าน",
+    "allShops": "รายชื่อร้านค้าในระบบทั้งหมด",
+    "actionsHelp": "เปิด/ปิดบริการ ขยายเวลา trial และปรับแพ็กเกจร้านค้า",
+    "activeTab": "เปิดใช้งาน ({count})",
+    "suspendedTab": "ระงับบริการ ({count})",
+    "allTab": "ทั้งหมด ({count})",
+    "search": "ค้นหานามร้าน / เจ้าของ / slug...",
+    "shopOwner": "ร้านค้า / เจ้าของร้าน",
+    "plan": "แพ็กเกจ",
+    "subscriptionStatus": "สถานะ Subscription",
+    "periodEnd": "สิทธิ์สิ้นสุด/ตัดรอบ",
+    "shopStatus": "สถานะร้าน",
+    "management": "การจัดการ",
+    "loading": "กำลังโหลด...",
+    "empty": "ไม่พบข้อมูลร้านค้าตามเงื่อนไขที่เลือก",
+    "viewBooking": "ดูหน้าจอง",
+    "bookingTitle": "ดูหน้าจองที่ลูกค้าเห็นจริง",
+    "ownerUnknown": "ไม่ระบุชื่อเจ้าของ",
+    "planUpdated": "ปรับแพ็กเกจร้านค้าเรียบร้อยแล้ว",
+    "proNotForSale": "Pro (ยังไม่เปิดขาย)",
+    "cancelAtPeriodEnd": "(ยกเลิกปลายรอบ)",
+    "enable": "เปิดใช้งาน",
+    "suspend": "ระงับบริการ",
+    "extendTrialSuccess": "ขยายเวลา trial +14 วัน เรียบร้อยแล้ว",
+    "extendTrial": "+14 วัน Trial",
+    "reactivate": "เปิดคืนบริการ",
+    "suspendedShopSuccess": "ระงับบริการร้าน {shop} เรียบร้อยแล้ว",
+    "reactivatedShopSuccess": "เปิดคืนบริการร้าน {shop} เรียบร้อยแล้ว",
+    "noData": "ไม่มีข้อมูล",
+    "loadFailed": "โหลดรายชื่อร้านค้าไม่สำเร็จ",
+    "actionFailed": "ทำรายการไม่สำเร็จ",
+    "subscriptionMissing": "ไม่มีข้อมูล",
+    "basicPrice": "฿390",
+    "perMonth": "/เดือน",
+    "adminCheckFailed": "ตรวจสอบสิทธิ์ platform admin ไม่สำเร็จ"
   }
 }

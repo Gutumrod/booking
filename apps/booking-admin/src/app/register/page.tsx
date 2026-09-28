@@ -825,17 +825,17 @@ function RegisterFormContent() {
                       <ShieldCheck className="w-4 h-4 text-emerald-400" /> {t('depositFlowTitle')}
                     </p>
                     <p className="text-[11px] text-slate-400">
-                      ระบบจะนำเลขพร้อมเพย์นี้ไปสร้างเป็น Dynamic QR Code ให้ลูกค้าสแกนโอนเงินมัดจำ เงินเข้าบัญชีท่านทันทีโดยไม่ผ่านตัวกลาง
+                      {t('promptpayExplanation')}
                     </p>
                   </div>
 
                   <div className="space-y-4 pt-1">
                     <div>
-                      <label className="text-xs font-semibold text-slate-300 block mb-1">เลขพร้อมเพย์ร้านค้า (PromptPay Number) *</label>
+                      <label className="text-xs font-semibold text-slate-300 block mb-1">{t('promptpayNumberLabel')}</label>
                       <input
                         required
                         type="text"
-                        placeholder="เช่น 080-074-2005 หรือ เลขนิติบุคคล 13 หลัก"
+                        placeholder={t('promptpayNumberPlaceholder')}
                         value={promptpayNumber}
                         onChange={(e) => setPromptpayNumber(e.target.value)}
                         className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-emerald-400 font-mono font-bold focus:outline-none focus:border-emerald-500"
@@ -843,11 +843,11 @@ function RegisterFormContent() {
                     </div>
 
                     <div>
-                      <label className="text-xs font-semibold text-slate-300 block mb-1">ชื่อบัญชีรับโอนเงินมัดจำ *</label>
+                      <label className="text-xs font-semibold text-slate-300 block mb-1">{t('promptpayNameLabel')}</label>
                       <input
                         required
                         type="text"
-                        placeholder="เช่น คุณสมชาย ใจดี (PromptPay Direct)"
+                        placeholder={t('promptpayNamePlaceholder')}
                         value={promptpayName}
                         onChange={(e) => setPromptpayName(e.target.value)}
                         className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-emerald-500"
@@ -881,12 +881,12 @@ function RegisterFormContent() {
                     tCommon('saving')
                   ) : currentStep === 4 ? (
                     <>
-                      ยืนยันสร้างร้านค้า & เข้าสู่แดชบอร์ด
+                      {t('registerSubmit')}
                       <Sparkles className="w-4 h-4" />
                     </>
                   ) : (
                     <>
-                      ถัดไป
+                      {t('next')}
                       <ArrowRight className="w-4 h-4" />
                     </>
                   )}

@@ -1940,7 +1940,7 @@ export default function AdminDashboard() {
                   </div>
 
                   <div className="text-3xl font-extrabold text-white font-mono">
-                    ฿{BASIC_PLAN_PRICE_THB} <span className="text-xs font-normal text-slate-400">{locale === 'th' ? '/เดือน' : '/month'}</span>
+                    {locale === 'th' ? `฿${BASIC_PLAN_PRICE_THB}` : '$11'} <span className="text-xs font-normal text-slate-400">{t('perMonth')}</span>
                   </div>
 
                   <p className="border-t border-slate-800 pt-4 text-xs leading-relaxed text-slate-400">

@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useCallback, useEffect, useState } from 'react';
+import { useLocale, useTranslations } from 'next-intl';
+import { BASIC_PLAN_PRICE_THB, BASIC_PLAN_PRICE_USD } from '@/lib/commercial-contract';
 import Link from 'next/link';
 import {
   Store, Users, DollarSign, CheckCircle2, XCircle, Search,
@@ -14,7 +16,6 @@ import {
   type PlatformAdminShop,
   type PlatformSubscriptionPlan,
 } from '@/lib/platform-admin-service';
-import { BASIC_PLAN_PRICE_THB } from '@/lib/commercial-contract';
 
 const BOOKING_SITE_URL = (process.env.NEXT_PUBLIC_BOOKING_SITE_URL || 'http://localhost:3000').replace(/\/$/, '');
 
@@ -36,15 +37,7 @@ const BOOKING_SITE_URL = (process.env.NEXT_PUBLIC_BOOKING_SITE_URL || 'http://lo
  * OWNER-LOCK-BK01-PACKS-2026-09-26.md and was NOT answered (A1/A2/A3/A4/A5, B1,
  * B3–B5, C1–C4 and D1–D3 are all still open; only B2 is answered).
  */
-function planLabel(plan: string | null) {
-  switch (plan) {
-    case 'pro_990': return '🚀 Pro (ยังไม่เปิดขาย)';
-    case 'basic_490': return `⚡ Basic (฿${BASIC_PLAN_PRICE_THB}/ด.)`;
-    default: return '🎁 Free';
-  }
-}
-
-function subscriptionStatusLabel(status: string | null) {
+function subscriptionStatusLabel(status: string | null, t: ReturnType<typeof useTranslations<'platformAdmin'>>) {
   switch (status) {
     case 'active': return { text: 'Active', cls: 'text-emerald-400' };
     case 'trialing': return { text: 'Trialing', cls: 'text-amber-400' };
@@ -53,18 +46,20 @@ function subscriptionStatusLabel(status: string | null) {
     case 'unpaid': return { text: 'Unpaid', cls: 'text-rose-400' };
     case 'incomplete':
     case 'incomplete_expired': return { text: 'Incomplete', cls: 'text-rose-400' };
-    default: return { text: 'ไม่มีข้อมูล', cls: 'text-slate-500' };
+    default: return { text: t('noData'), cls: 'text-slate-500' };
   }
 }
 
-function formatDate(value: string | null) {
+function formatDate(value: string | null, locale: string) {
   if (!value) return '—';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '—';
-  return new Intl.DateTimeFormat('th-TH', { timeZone: 'Asia/Bangkok', dateStyle: 'medium' }).format(date);
+  return new Intl.DateTimeFormat(locale === 'th' ? 'th-TH' : 'en-US', { timeZone: 'Asia/Bangkok', dateStyle: 'medium' }).format(date);
 }
 
 export default function PlatformSuperAdminPage() {
+  const locale = useLocale();
+  const t = useTranslations('platformAdmin');
   const [shops, setShops] = useState<PlatformAdminShop[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -80,11 +75,11 @@ export default function PlatformSuperAdminPage() {
       const data = await fetchPlatformAdminShops();
       setShops(data);
     } catch (error) {
-      setLoadError(error instanceof Error ? error.message : 'โหลดรายชื่อร้านค้าไม่สำเร็จ');
+      setLoadError(error instanceof Error ? error.message : t('loadFailed'));
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     // Initial synchronization with the remote platform shop list.
@@ -104,7 +99,7 @@ export default function PlatformSuperAdminPage() {
   // price, so an active Pro shop contributes 0 rather than the retired ฿990.
   const mrr = shops
     .filter((s) => s.subscriptionStatus === 'active' || s.subscriptionStatus === 'past_due')
-    .reduce((sum, s) => sum + (s.subscriptionPlan === 'basic_490' ? BASIC_PLAN_PRICE_THB : 0), 0);
+    .reduce((sum, s) => sum + (s.subscriptionPlan === 'basic_490' ? (locale === 'th' ? BASIC_PLAN_PRICE_THB : BASIC_PLAN_PRICE_USD) : 0), 0);
 
   const filteredShops = shops.filter((s) => {
     const q = searchQuery.toLowerCase();
@@ -126,7 +121,7 @@ export default function PlatformSuperAdminPage() {
       await loadShops();
       triggerNotice(successMsg);
     } catch (error) {
-      triggerNotice(`❌ ${error instanceof Error ? error.message : 'ทำรายการไม่สำเร็จ'}`);
+      triggerNotice(`❌ ${error instanceof Error ? error.message : t('actionFailed')}`);
     } finally {
       setPendingShopId(null);
     }
@@ -141,8 +136,8 @@ export default function PlatformSuperAdminPage() {
               👑
             </div>
             <div>
-              <h1 className="font-bold text-base text-white">Platform Admin</h1>
-              <p className="text-[11px] text-slate-400">บริหารร้านค้าทั้งหมดในระบบ • เปิด/ปิดบริการ • ปรับแพ็กเกจ/trial</p>
+              <h1 className="font-bold text-base text-white">{t('title')}</h1>
+              <p className="text-[11px] text-slate-400">{t('subtitle')}</p>
             </div>
           </div>
 
@@ -157,7 +152,7 @@ export default function PlatformSuperAdminPage() {
               className="bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs px-3 py-2 rounded-xl font-medium border border-slate-700 transition-all flex items-center gap-1.5"
             >
               <Store className="w-4 h-4 text-emerald-400" />
-              สลับไปหน้า Dashboard ร้านค้า
+              {t('switchDashboard')}
             </Link>
           </div>
         </div>
@@ -173,35 +168,35 @@ export default function PlatformSuperAdminPage() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="bg-slate-900 border border-emerald-500/40 rounded-2xl p-5 shadow-lg shadow-emerald-950/20">
             <div className="flex items-center justify-between text-emerald-400 mb-2">
-              <span className="text-xs font-bold uppercase tracking-wider">รายได้ประจำเดือน (MRR)</span>
+              <span className="text-xs font-bold uppercase tracking-wider">{t('mrr')}</span>
               <DollarSign className="w-5 h-5 text-emerald-400" />
             </div>
-            <p className="text-3xl font-extrabold text-white font-mono">฿{mrr.toLocaleString()}.00</p>
-            <p className="text-[11px] text-emerald-400 mt-1">จากร้านที่ active/past_due เท่านั้น</p>
+            <p className="text-3xl font-extrabold text-white font-mono">{new Intl.NumberFormat(locale === 'th' ? 'th-TH' : 'en-US', { style: 'currency', currency: locale === 'th' ? 'THB' : 'USD' }).format(mrr)}</p>
+            <p className="text-[11px] text-emerald-400 mt-1">{t('mrrNote')}</p>
           </div>
 
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg">
             <div className="flex items-center justify-between text-slate-400 mb-2">
-              <span className="text-xs font-bold uppercase tracking-wider">ร้านค้าเปิดใช้งาน</span>
+              <span className="text-xs font-bold uppercase tracking-wider">{t('activeShops')}</span>
               <Store className="w-5 h-5 text-purple-400" />
             </div>
-            <p className="text-3xl font-extrabold text-white font-mono">{activeShopsCount} <span className="text-xs font-normal text-slate-400">/ {shops.length} ร้าน</span></p>
+            <p className="text-3xl font-extrabold text-white font-mono">{activeShopsCount} <span className="text-xs font-normal text-slate-400">/ {shops.length} {t('shopCount')}</span></p>
           </div>
 
           <div className="bg-slate-900 border border-amber-500/40 rounded-2xl p-5 shadow-lg">
             <div className="flex items-center justify-between text-amber-400 mb-2">
-              <span className="text-xs font-bold uppercase tracking-wider">กำลังทดลองใช้ (Trial)</span>
+              <span className="text-xs font-bold uppercase tracking-wider">{t('trialing')}</span>
               <Clock className="w-5 h-5 text-amber-400" />
             </div>
-            <p className="text-3xl font-extrabold text-white font-mono">{trialingCount} <span className="text-xs font-normal text-slate-400">ร้าน</span></p>
+            <p className="text-3xl font-extrabold text-white font-mono">{trialingCount} <span className="text-xs font-normal text-slate-400">{t('shopCount')}</span></p>
           </div>
 
           <div className="bg-slate-900 border border-rose-500/30 rounded-2xl p-5 shadow-lg">
             <div className="flex items-center justify-between text-rose-400 mb-2">
-              <span className="text-xs font-bold uppercase tracking-wider">ระงับบริการอยู่</span>
+              <span className="text-xs font-bold uppercase tracking-wider">{t('suspended')}</span>
               <XCircle className="w-5 h-5 text-rose-400" />
             </div>
-            <p className="text-3xl font-extrabold text-white font-mono">{suspendedShopsCount} <span className="text-xs font-normal text-slate-400">ร้าน</span></p>
+            <p className="text-3xl font-extrabold text-white font-mono">{suspendedShopsCount} <span className="text-xs font-normal text-slate-400">{t('shopCount')}</span></p>
           </div>
         </div>
 
@@ -210,9 +205,9 @@ export default function PlatformSuperAdminPage() {
             <div>
               <h2 className="text-lg font-bold text-white flex items-center gap-2">
                 <Users className="w-5 h-5 text-purple-400" />
-                รายชื่อร้านค้าในระบบทั้งหมด
+                {t('allShops')}
               </h2>
-              <p className="text-xs text-slate-400">เปิด/ปิดบริการ ขยายเวลา trial และปรับแพ็กเกจร้านค้า</p>
+              <p className="text-xs text-slate-400">{t('actionsHelp')}</p>
             </div>
 
             <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs">
@@ -220,19 +215,19 @@ export default function PlatformSuperAdminPage() {
                 onClick={() => setStatusTab('active')}
                 className={`px-3 py-1.5 rounded-lg font-medium transition-all ${statusTab === 'active' ? 'bg-emerald-500 text-slate-950 font-bold' : 'text-slate-400 hover:text-white'}`}
               >
-                เปิดใช้งาน ({activeShopsCount})
+                {t('activeTab', { count: activeShopsCount })}
               </button>
               <button
                 onClick={() => setStatusTab('suspended')}
                 className={`px-3 py-1.5 rounded-lg font-medium transition-all ${statusTab === 'suspended' ? 'bg-rose-500/20 text-rose-300 font-bold border border-rose-500/40' : 'text-slate-400 hover:text-white'}`}
               >
-                ระงับบริการ ({suspendedShopsCount})
+                {t('suspendedTab', { count: suspendedShopsCount })}
               </button>
               <button
                 onClick={() => setStatusTab('all')}
                 className={`px-3 py-1.5 rounded-lg font-medium transition-all ${statusTab === 'all' ? 'bg-slate-800 text-white font-bold' : 'text-slate-400 hover:text-white'}`}
               >
-                ทั้งหมด ({shops.length})
+                {t('allTab', { count: shops.length })}
               </button>
             </div>
           </div>
@@ -241,7 +236,7 @@ export default function PlatformSuperAdminPage() {
             <Search className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" />
             <input
               type="text"
-              placeholder="ค้นหานามร้าน / เจ้าของ / slug..."
+              placeholder={t('search')}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-3 py-1.5 text-xs text-white focus:outline-none focus:border-purple-500 w-full"
@@ -252,22 +247,22 @@ export default function PlatformSuperAdminPage() {
             <table className="w-full text-left text-xs border-collapse">
               <thead>
                 <tr className="border-b border-slate-800 text-slate-400 uppercase text-[10px] tracking-wider">
-                  <th className="py-3 px-4 whitespace-nowrap">ร้านค้า / เจ้าของร้าน</th>
-                  <th className="py-3 px-4 whitespace-nowrap">แพ็กเกจ</th>
-                  <th className="py-3 px-4 whitespace-nowrap">สถานะ Subscription</th>
-                  <th className="py-3 px-4 whitespace-nowrap">สิทธิ์สิ้นสุด/ตัดรอบ</th>
-                  <th className="py-3 px-4 whitespace-nowrap">สถานะร้าน</th>
-                  <th className="py-3 px-4 whitespace-nowrap text-right">การจัดการ</th>
+                  <th className="py-3 px-4 whitespace-nowrap">{t('shopOwner')}</th>
+                  <th className="py-3 px-4 whitespace-nowrap">{t('plan')}</th>
+                  <th className="py-3 px-4 whitespace-nowrap">{t('subscriptionStatus')}</th>
+                  <th className="py-3 px-4 whitespace-nowrap">{t('periodEnd')}</th>
+                  <th className="py-3 px-4 whitespace-nowrap">{t('shopStatus')}</th>
+                  <th className="py-3 px-4 whitespace-nowrap text-right">{t('management')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60">
                 {isLoading ? (
-                  <tr><td colSpan={6} className="py-8 text-center text-slate-500 text-xs">กำลังโหลด...</td></tr>
+                  <tr><td colSpan={6} className="py-8 text-center text-slate-500 text-xs">{t('loading')}</td></tr>
                 ) : filteredShops.length === 0 ? (
-                  <tr><td colSpan={6} className="py-8 text-center text-slate-500 text-xs">ไม่พบข้อมูลร้านค้าตามเงื่อนไขที่เลือก</td></tr>
+                  <tr><td colSpan={6} className="py-8 text-center text-slate-500 text-xs">{t('empty')}</td></tr>
                 ) : (
                   filteredShops.map((shop) => {
-                    const statusInfo = subscriptionStatusLabel(shop.subscriptionStatus);
+                    const statusInfo = subscriptionStatusLabel(shop.subscriptionStatus, t);
                     const isBusy = pendingShopId === shop.shopId;
                     return (
                       <tr key={shop.shopId} className="hover:bg-slate-800/40 transition-all">
@@ -280,13 +275,13 @@ export default function PlatformSuperAdminPage() {
                               target="_blank"
                               rel="noreferrer"
                               className="text-[10px] text-purple-400 hover:underline flex items-center gap-0.5"
-                              title="ดูหน้าจองที่ลูกค้าเห็นจริง"
+                              title={t('bookingTitle')}
                             >
-                              <ExternalLink className="w-3 h-3" /> ดูหน้าจอง
+                              <ExternalLink className="w-3 h-3" /> {t('viewBooking')}
                             </a>
                           </div>
                           <p className="text-[10px] text-slate-400">
-                            {shop.ownerName || 'ไม่ระบุชื่อเจ้าของ'}
+                            {shop.ownerName || t('ownerUnknown')}
                             {shop.phone && (
                               <> · <a href={`tel:${shop.phone}`} className="text-amber-300 underline">{shop.phone}</a></>
                             )}
@@ -301,7 +296,7 @@ export default function PlatformSuperAdminPage() {
                               runAction(
                                 shop.shopId,
                                 () => updateShopPlan(shop.shopId, e.target.value as PlatformSubscriptionPlan),
-                                'ปรับแพ็กเกจร้านค้าเรียบร้อยแล้ว'
+                                t('planUpdated')
                               )
                             }
                             className="bg-slate-950 border border-purple-500/40 text-purple-300 px-2.5 py-1 rounded-lg text-[10px] font-bold focus:outline-none cursor-pointer disabled:opacity-50"
@@ -317,28 +312,28 @@ export default function PlatformSuperAdminPage() {
                                 DB enforcement of the approved limits is PENDING
                                 — migration written, NOT applied. */}
                             <option value="free_trial">🎁 Free</option>
-                            <option value="basic_490">⚡ Basic ฿{BASIC_PLAN_PRICE_THB}</option>
-                            <option value="pro_990" disabled>🚀 Pro (ยังไม่เปิดขาย)</option>
+                            <option value="basic_490">⚡ Basic {t('basicPrice')}</option>
+                            <option value="pro_990" disabled>🚀 {t('proNotForSale')}</option>
                           </select>
                         </td>
 
                         <td className={`py-3.5 px-4 whitespace-nowrap font-semibold ${statusInfo.cls}`}>
                           {statusInfo.text}
-                          {shop.cancelAtPeriodEnd && <span className="ml-1 text-[10px] text-slate-400">(ยกเลิกปลายรอบ)</span>}
+                          {shop.cancelAtPeriodEnd && <span className="ml-1 text-[10px] text-slate-400">{t('cancelAtPeriodEnd')}</span>}
                         </td>
 
                         <td className="py-3.5 px-4 whitespace-nowrap font-mono text-slate-300">
-                          {formatDate(shop.currentPeriodEnd)}
+                          {formatDate(shop.currentPeriodEnd, locale)}
                         </td>
 
                         <td className="py-3.5 px-4 whitespace-nowrap">
                           {shop.isActive ? (
                             <span className="text-emerald-400 font-semibold flex items-center gap-1 text-[11px]">
-                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> เปิดใช้งาน
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> {t('enable')}
                             </span>
                           ) : (
                             <span className="text-rose-400 font-semibold flex items-center gap-1 text-[11px]">
-                              <XCircle className="w-3.5 h-3.5 text-rose-500" /> ระงับบริการ
+                              <XCircle className="w-3.5 h-3.5 text-rose-500" /> {t('suspend')}
                             </span>
                           )}
                         </td>
@@ -349,11 +344,11 @@ export default function PlatformSuperAdminPage() {
                               <button
                                 disabled={isBusy}
                                 onClick={() =>
-                                  runAction(shop.shopId, () => extendShopTrial(shop.shopId, 14), 'ขยายเวลา trial +14 วัน เรียบร้อยแล้ว')
+                                  runAction(shop.shopId, () => extendShopTrial(shop.shopId, 14), t('extendTrialSuccess'))
                                 }
                                 className="bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 px-2.5 py-1 rounded-lg text-[10px] font-bold shadow-sm disabled:opacity-50"
                               >
-                                +14 วัน Trial
+                                {t('extendTrial')}
                               </button>
                             )}
                             <button
@@ -362,7 +357,7 @@ export default function PlatformSuperAdminPage() {
                                 runAction(
                                   shop.shopId,
                                   () => setShopActive(shop.shopId, !shop.isActive),
-                                  shop.isActive ? `ระงับบริการร้าน ${shop.name} เรียบร้อยแล้ว` : `เปิดคืนบริการร้าน ${shop.name} เรียบร้อยแล้ว`
+                                  shop.isActive ? t('suspendedShopSuccess', { shop: shop.name }) : t('reactivatedShopSuccess', { shop: shop.name })
                                 )
                               }
                               className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-all shadow-sm disabled:opacity-50 ${
@@ -371,7 +366,7 @@ export default function PlatformSuperAdminPage() {
                                   : 'bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border-emerald-500/40'
                               }`}
                             >
-                              {shop.isActive ? 'ระงับบริการ' : 'เปิดคืนบริการ'}
+                              {shop.isActive ? t('suspend') : t('reactivate')}
                             </button>
                           </div>
                         </td>

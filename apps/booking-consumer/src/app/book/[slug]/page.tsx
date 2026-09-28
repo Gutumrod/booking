@@ -3,7 +3,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { 
   Calendar, Clock, User, CheckCircle2, QrCode, Upload, ShieldCheck, 
   ChevronRight, Sparkles, MessageCircle, AlertTriangle, Coffee, CalendarOff,
@@ -103,6 +103,7 @@ export default function BookingPage() {
 function BookingRoute({ slug }: { slug: string }) {
   const t = useTranslations('booking');
   const tc = useTranslations('common');
+  const locale = useLocale();
 
   const [shop, setShop] = useState<Shop | null>(null);
   const [services, setServices] = useState<Service[]>([]);
@@ -617,7 +618,7 @@ function BookingRoute({ slug }: { slug: string }) {
                       <div className="flex justify-between items-start mb-1.5">
                         <h3 className="font-semibold text-sm text-white">{sv.name}</h3>
                         <span className="text-xs font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
-                          ฿{sv.price}
+                          {new Intl.NumberFormat(locale === 'th' ? 'th-TH' : 'en-US', { style: 'currency', currency: 'THB' }).format(sv.price)}
                         </span>
                       </div>
                       <p className="text-xs text-slate-400 mb-3 leading-relaxed">{sv.description}</p>
