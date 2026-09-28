@@ -342,6 +342,125 @@ record('platform bootstrap reapplies cleanly after its rollback', rebootstrapErr
   && JSON.stringify(rebootstrapSet.slice().sort()) === JSON.stringify(preRouteExpected),
   rebootstrapError ?? `runtime EXECUTE identities=${rebootstrapSet.length}`);
 
+// Optional offline source snapshot for the BK01 compensating rollback chain.
+// This records database definitions and grants immediately before the product
+// migrations; it never contains row data or credentials.
+if (process.env.BK01_BASELINE_CATALOG_OUTPUT) {
+  const [functions, views, policies, triggers, relations, columns, grants, constraints, indexes] = await Promise.all([
+    q(`select p.oid::regprocedure::text as identity, pg_get_functiondef(p.oid) as definition,
+      case when p.proacl is null then 'PUBLIC:EXECUTE:false' else coalesce((select string_agg(coalesce(grantee.rolname,'PUBLIC') || ':' || acl.privilege_type || ':' || acl.is_grantable::text, ',' order by 1)
+        from aclexplode(p.proacl) acl
+        left join pg_roles grantee on grantee.oid=acl.grantee),'') end as acl
+      from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+      where n.nspname in ('local_service','local_service_internal') order by 1`),
+    q(`select schemaname, viewname, definition from pg_views
+      where schemaname in ('local_service','local_service_internal') order by 1,2`),
+    q(`select schemaname, tablename, policyname, permissive, roles, cmd, qual, with_check
+      from pg_policies where schemaname in ('local_service','local_service_internal') order by 1,2,3`),
+    q(`select n.nspname as schema, c.relname as table, t.tgname as name, pg_get_triggerdef(t.oid) as definition
+      from pg_trigger t join pg_class c on c.oid=t.tgrelid join pg_namespace n on n.oid=c.relnamespace
+      where not t.tgisinternal and n.nspname in ('local_service','local_service_internal') order by 1,2,3`),
+    q(`select n.nspname as schema, c.relname as name, pg_get_userbyid(c.relowner) as owner, c.relkind, c.relrowsecurity, c.relforcerowsecurity
+      from pg_class c join pg_namespace n on n.oid=c.relnamespace
+      where n.nspname in ('local_service','local_service_internal') and c.relkind in ('r','v','m','S','f') order by 1,2`),
+    q(`select table_schema, table_name, column_name, ordinal_position, column_default, is_nullable, data_type,
+      udt_name, character_maximum_length from information_schema.columns
+      where table_schema in ('local_service','local_service_internal') order by 1,2,4`),
+    q(`select n.nspname as schema, c.relname as object, coalesce(grantee.rolname,'PUBLIC') as grantee,
+      acl.privilege_type, acl.is_grantable from pg_class c join pg_namespace n on n.oid=c.relnamespace
+      cross join lateral aclexplode(c.relacl) acl
+      left join pg_roles grantee on grantee.oid=acl.grantee
+      where n.nspname in ('local_service','local_service_internal') order by 1,2,3,4`),
+    q(`select n.nspname as schema, c.relname as table, con.conname as name, con.contype,
+      pg_get_constraintdef(con.oid) as definition from pg_constraint con
+      join pg_class c on c.oid=con.conrelid join pg_namespace n on n.oid=c.relnamespace
+      where n.nspname in ('local_service','local_service_internal') order by 1,2,3`),
+    q(`select schemaname, tablename, indexname, indexdef from pg_indexes
+      where schemaname in ('local_service','local_service_internal') order by 1,2,3`),
+  ]);
+  fs.writeFileSync(process.env.BK01_BASELINE_CATALOG_OUTPUT,
+    JSON.stringify({ functions, views, policies, triggers, relations, columns, grants, constraints, indexes }, null, 2) + '\n');
+  if (process.env.BK01_GENERATE_FIRST_ROLLBACK === '1') {
+    const createdFunctions = [
+      'local_service.apply_trial_promotion()',
+      'local_service.bk01_apply_plan_change(uuid)',
+      'local_service.bk01_bookings_used_in_month(uuid,date)',
+      'local_service.bk01_effective_plan(text,text)',
+      'local_service.bk01_entitled_service_ids(uuid)',
+      'local_service.bk01_entitled_staff_ids(uuid)',
+      'local_service.bk01_free_bookings_ceiling()',
+      'local_service.bk01_month_key(timestamp with time zone)',
+      'local_service.bk01_reapply_shop_entitlements(uuid)',
+      'local_service.bk01_restore_services_within_limit(uuid)',
+      'local_service.bk01_shop_effective_plan(uuid)',
+      'local_service.bk01_shop_limits(uuid)',
+    ];
+    const restoredFunctions = functions.map(({ identity, definition, acl }) => {
+      const grantLines = [];
+      for (const entry of (acl || '').split(',').filter(Boolean)) {
+        const [granteeValue, privilege, grantable] = entry.split(':');
+        if (privilege !== 'EXECUTE') continue;
+        const grantee = granteeValue || 'PUBLIC';
+        const grantOption = grantable === 'true' ? ' WITH GRANT OPTION' : '';
+        grantLines.push(`GRANT EXECUTE ON FUNCTION ${identity} TO ${grantee}${grantOption};`);
+      }
+      return `REVOKE ALL ON FUNCTION ${identity} FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;\n${definition.trimEnd()};\n${grantLines.join('\n')}`;
+    });
+    const statements = [
+      '-- Compensating rollback for 20260926120000_bk01_entitlement_packs.sql.',
+      '-- Run only after rolling back 20260927130000 and 20260927120000. One transaction.',
+      'BEGIN;',
+      `DO $rollback_guard$ BEGIN
+        IF to_regclass('local_service.entitlement_plans') IS NULL
+           OR to_regclass('local_service.business_types') IS NULL
+           OR to_regclass('local_service.service_entitlement_periods') IS NULL THEN
+          RAISE EXCEPTION 'BK01 entitlement migration is not present';
+        END IF;
+        IF md5(coalesce((SELECT string_agg((to_jsonb(t)-'updated_at')::text, E'\n' ORDER BY plan_code)
+                           FROM local_service.entitlement_plans t),'')) <> '6a74424756820d4d3ce8b1a2a44f18d2'
+           OR md5(coalesce((SELECT string_agg((to_jsonb(t)-'updated_at')::text, E'\n' ORDER BY promotion_code)
+                              FROM local_service.trial_promotions t),'')) <> 'bac65c32328d84eba438755e6f7bc878'
+           OR md5(coalesce((SELECT string_agg((to_jsonb(t)-'created_at'-'updated_at')::text, E'\n' ORDER BY type_code)
+                              FROM local_service.business_types t),'')) <> 'c82116836d690b53991a8b5ad46d2de1' THEN
+          RAISE EXCEPTION 'Rollback refused: BK01 migration seed data changed';
+        END IF;
+        IF EXISTS (SELECT 1 FROM local_service.service_entitlement_periods)
+           OR EXISTS (SELECT 1 FROM local_service.services WHERE entitlement_disabled IS DISTINCT FROM false)
+           OR EXISTS (SELECT 1 FROM local_service.shops WHERE starter_set_applied IS DISTINCT FROM false
+             OR business_type_code IS DISTINCT FROM CASE
+               WHEN EXISTS (SELECT 1 FROM local_service.business_types bt WHERE bt.type_code = btrim(lower(regexp_replace(
+                 coalesce(local_service.shops.business_category, ''), '[^a-zA-Z0-9]+', '_', 'g'))))
+                 THEN btrim(lower(regexp_replace(coalesce(local_service.shops.business_category, ''), '[^a-zA-Z0-9]+', '_', 'g')))
+               ELSE 'other' END) THEN
+          RAISE EXCEPTION 'Rollback refused: entitlement rows or migration-added columns contain product data';
+        END IF;
+      END; $rollback_guard$;`,
+      'DROP TRIGGER IF EXISTS trg_apply_trial_promotion ON local_service.subscriptions;',
+      'DROP TRIGGER IF EXISTS trg_enforce_booking_quota ON local_service.bookings;',
+      'DROP TRIGGER IF EXISTS trg_enforce_shop_booking_acceptance ON local_service.bookings;',
+      'DROP VIEW local_service.app_business_type_starter_services;',
+      'DROP VIEW local_service.app_business_types;',
+      'DROP VIEW local_service.bk01_shop_entitlement_status;',
+      'DROP VIEW local_service.shop_public_profile;',
+      'ALTER TABLE local_service.services DROP CONSTRAINT services_not_active_and_entitlement_disabled;',
+      ...restoredFunctions,
+      ...createdFunctions.map((identity) => `DROP FUNCTION ${identity};`),
+      'ALTER TABLE local_service.services DROP COLUMN entitlement_disabled;',
+      'ALTER TABLE local_service.shops DROP COLUMN starter_set_applied, DROP COLUMN business_type_code;',
+      'DROP TABLE local_service.service_entitlement_periods;',
+      'DROP TABLE local_service.business_types;',
+      'DROP TABLE local_service.trial_promotions;',
+      'DROP TABLE local_service.entitlement_plans;',
+      ...triggers.map(({ schema, table, name, definition }) =>
+        `DROP TRIGGER IF EXISTS ${name} ON ${schema}.${table};\n${definition};`),
+      `SET ROLE ${relations.find((relation) => relation.name === 'shop_public_profile').owner};\nCREATE OR REPLACE VIEW local_service.shop_public_profile AS\n${views.find((view) => view.viewname === 'shop_public_profile').definition};\nGRANT ALL ON TABLE local_service.shop_public_profile TO ${relations.find((relation) => relation.name === 'shop_public_profile').owner};\nGRANT SELECT ON TABLE local_service.shop_public_profile TO anon, authenticated;\nRESET ROLE;`,
+      'COMMIT;',
+    ];
+    fs.writeFileSync(path.join(REPO, 'supabase/rollback/20260926120000_bk01_entitlement_packs.rollback.sql'),
+      statements.join('\n\n') + '\n');
+  }
+}
+
 // Apply the active product stream through the bootstrapped migrator identity, in
 // timestamp order. The runtime boundary becomes exact 11+8 only after this commit.
 const productErrors = [];
@@ -374,6 +493,140 @@ record('Swarm-1 and WU-B product migrations apply after frozen chain and bootstr
 if (productErrors.length) {
   await db.close();
   process.exit(1);
+}
+if (process.env.BK01_SEED_HASHES_OUTPUT) {
+  const seedHashes = {
+    entitlement_plans: (await q(`select md5(coalesce(string_agg((to_jsonb(t)-'updated_at')::text, E'\n' order by plan_code),'')) as hash
+      from local_service.entitlement_plans t`))[0].hash,
+    trial_promotions: (await q(`select md5(coalesce(string_agg((to_jsonb(t)-'updated_at')::text, E'\n' order by promotion_code),'')) as hash
+      from local_service.trial_promotions t`))[0].hash,
+    business_types: (await q(`select md5(coalesce(string_agg((to_jsonb(t)-'created_at'-'updated_at')::text, E'\n' order by type_code),'')) as hash
+      from local_service.business_types t`))[0].hash,
+  };
+  fs.writeFileSync(process.env.BK01_SEED_HASHES_OUTPUT, JSON.stringify(seedHashes, null, 2) + '\n');
+}
+
+// Rollback proofs use the same embedded database and the exact frozen source
+// chain. The pre-chain snapshot is captured after the House platform bootstrap.
+const rollbackSnapshot = async () => ({
+  functions: await q(`select p.oid::regprocedure::text as identity, pg_get_functiondef(p.oid) as definition,
+    case when p.proacl is null then 'PUBLIC:EXECUTE:false' else coalesce((select string_agg(coalesce(grantee.rolname,'PUBLIC') || ':' || acl.privilege_type || ':' || acl.is_grantable::text, ',' order by 1)
+      from aclexplode(p.proacl) acl
+      left join pg_roles grantee on grantee.oid=acl.grantee),'') end as acl
+    from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+    where n.nspname in ('local_service','local_service_internal') order by 1`),
+  views: await q(`select schemaname, viewname, definition from pg_views
+    where schemaname in ('local_service','local_service_internal') order by 1,2`),
+  policies: await q(`select schemaname, tablename, policyname, permissive, roles, cmd, qual, with_check
+    from pg_policies where schemaname in ('local_service','local_service_internal') order by 1,2,3`),
+  triggers: await q(`select n.nspname as schema, c.relname as table, t.tgname as name, pg_get_triggerdef(t.oid) as definition
+    from pg_trigger t join pg_class c on c.oid=t.tgrelid join pg_namespace n on n.oid=c.relnamespace
+    where not t.tgisinternal and n.nspname in ('local_service','local_service_internal') order by 1,2,3`),
+  relations: await q(`select n.nspname as schema, c.relname as name, pg_get_userbyid(c.relowner) as owner, c.relkind, c.relrowsecurity, c.relforcerowsecurity
+    from pg_class c join pg_namespace n on n.oid=c.relnamespace
+    where n.nspname in ('local_service','local_service_internal') and c.relkind in ('r','v','m','S','f') order by 1,2`),
+  columns: await q(`select table_schema, table_name, column_name, ordinal_position, column_default, is_nullable, data_type,
+    udt_name, character_maximum_length from information_schema.columns
+    where table_schema in ('local_service','local_service_internal') order by 1,2,4`),
+  grants: await q(`select n.nspname as schema, c.relname as object, coalesce(grantee.rolname,'PUBLIC') as grantee,
+    acl.privilege_type, acl.is_grantable from pg_class c join pg_namespace n on n.oid=c.relnamespace
+    cross join lateral aclexplode(c.relacl) acl
+    left join pg_roles grantee on grantee.oid=acl.grantee
+    where n.nspname in ('local_service','local_service_internal') order by 1,2,3,4`),
+  constraints: await q(`select n.nspname as schema, c.relname as table, con.conname as name, con.contype,
+    pg_get_constraintdef(con.oid) as definition from pg_constraint con
+    join pg_class c on c.oid=con.conrelid join pg_namespace n on n.oid=c.relnamespace
+    where n.nspname in ('local_service','local_service_internal') order by 1,2,3`),
+  indexes: await q(`select schemaname, tablename, indexname, indexdef from pg_indexes
+    where schemaname in ('local_service','local_service_internal') order by 1,2,3`),
+});
+if (process.env.BK01_BASELINE_CATALOG_OUTPUT) {
+  const partialRollback = read('supabase/rollback/20260927130000_bk01_trial_line_bind.rollback.sql');
+  let partialError = null;
+  try { await exec(`reset role;\n${partialRollback}`); } catch (e) { partialError = String(e.message).split('\n')[0]; }
+  const partialState = (await q(`select to_regprocedure('local_service.bk01_line_bind_booking_trial(text,text,text,text)') is null as function_removed,
+    not exists(select 1 from information_schema.columns where table_schema='local_service' and table_name='bookings'
+      and column_name in ('line_binding_token_used_at','line_binding_webhook_event_id')) as columns_removed`))[0];
+  record('rollback of latest BK01 migration works independently (partial rollback)',
+    partialError === null && partialState.function_removed && partialState.columns_removed,
+    partialError ?? JSON.stringify(partialState));
+  await exec(`set role bk01_migrator;\n${read(productMigrations[2])}\nreset role;`);
+
+  await exec(`insert into local_service.line_webhook_events(webhook_event_id,processing_status,processing_started_at)
+    values ('rollback-negative-fixture','processing',now())`);
+  let populatedRejected = false;
+  try { await exec(`reset role;\n${read('supabase/rollback/20260927120000_bk01_runtime_route_rpcs.rollback.sql')}`); }
+  catch { populatedRejected = true; await exec('rollback;'); }
+  const populatedPreserved = (await q(`select count(*)::int as n from local_service.line_webhook_events
+    where webhook_event_id='rollback-negative-fixture'`))[0].n === 1;
+  record('rollback refuses populated migration table without deleting its row', populatedRejected && populatedPreserved,
+    `rejected=${populatedRejected}; row-preserved=${populatedPreserved}`);
+  await exec(`delete from local_service.line_webhook_events where webhook_event_id='rollback-negative-fixture'`);
+
+  let fullRollbackError = null;
+  try {
+    for (const file of [
+      'supabase/rollback/20260927130000_bk01_trial_line_bind.rollback.sql',
+      'supabase/rollback/20260927120000_bk01_runtime_route_rpcs.rollback.sql',
+      'supabase/rollback/20260926120000_bk01_entitlement_packs.rollback.sql',
+    ]) await exec(`reset role;\n${read(file)}`);
+  } catch (e) {
+    fullRollbackError = `${String(e.message).split('\n')[0]}${e.detail ? `; ${e.detail}` : ''}`;
+    await exec('rollback;');
+    const ownerState = (await q(`select current_user, pg_get_userbyid(c.relowner) as owner
+      from pg_class c where c.oid='local_service.shop_public_profile'::regclass`))[0];
+    fullRollbackError += `; current=${ownerState.current_user}; view-owner=${ownerState.owner}`;
+  }
+  const expectedBaseline = JSON.parse(fs.readFileSync(process.env.BK01_BASELINE_CATALOG_OUTPUT, 'utf8'));
+  const actualBaseline = await rollbackSnapshot();
+  if (process.env.BK01_ROLLBACK_CATALOG_OUTPUT) {
+    fs.writeFileSync(process.env.BK01_ROLLBACK_CATALOG_OUTPUT, JSON.stringify(actualBaseline, null, 2) + '\n');
+  }
+  // pg_get_viewdef is a deparser, not a stable source serializer: a CREATE VIEW
+  // round-trip changes redundant cast/parenthesis formatting. Compare view
+  // identity here; the view owner, ACL and full column signature are compared
+  // in relations/grants/columns above.
+  const comparableExpected = { ...expectedBaseline,
+    views: expectedBaseline.views.map(({ schemaname, viewname }) => ({ schemaname, viewname })) };
+  const comparableActual = { ...actualBaseline,
+    views: actualBaseline.views.map(({ schemaname, viewname }) => ({ schemaname, viewname })) };
+  const snapshotEqual = JSON.stringify(comparableActual) === JSON.stringify(comparableExpected);
+  record('all three compensating rollbacks restore schema, grants, functions, policies and triggers exactly',
+    fullRollbackError === null && snapshotEqual,
+    fullRollbackError ?? `snapshot-equal=${snapshotEqual}; baseline-objects=${expectedBaseline.relations.length}`);
+  const restoreFiles = fullRollbackError === null ? productMigrations : productMigrations.slice(1);
+  await exec(`set role bk01_migrator;\n${restoreFiles.map(read).join('\n')}\nreset role;`);
+}
+
+if (process.env.BK01_POSTCHAIN_CATALOG_OUTPUT) {
+  const catalog = {
+    functions: await q(`select p.oid::regprocedure::text as identity, pg_get_functiondef(p.oid) as definition,
+      coalesce(p.proacl::text,'') as acl from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+      where n.nspname in ('local_service','local_service_internal') order by 1`),
+    views: await q(`select schemaname, viewname, definition from pg_views
+      where schemaname in ('local_service','local_service_internal') order by 1,2`),
+    policies: await q(`select schemaname, tablename, policyname, permissive, roles, cmd, qual, with_check
+      from pg_policies where schemaname in ('local_service','local_service_internal') order by 1,2,3`),
+    triggers: await q(`select n.nspname as schema, c.relname as table, t.tgname as name, pg_get_triggerdef(t.oid) as definition
+      from pg_trigger t join pg_class c on c.oid=t.tgrelid join pg_namespace n on n.oid=c.relnamespace
+      where not t.tgisinternal and n.nspname in ('local_service','local_service_internal') order by 1,2,3`),
+    relations: await q(`select n.nspname as schema, c.relname as name, c.relkind, c.relrowsecurity, c.relforcerowsecurity,
+      pg_get_userbyid(c.relowner) as owner from pg_class c join pg_namespace n on n.oid=c.relnamespace
+      where n.nspname in ('local_service','local_service_internal') and c.relkind in ('r','v','m','S','f') order by 1,2`),
+    columns: await q(`select table_schema, table_name, column_name, ordinal_position, column_default, is_nullable, data_type,
+      udt_name, character_maximum_length from information_schema.columns
+      where table_schema in ('local_service','local_service_internal') order by 1,2,4`),
+    grants: await q(`select n.nspname as schema, c.relname as object, coalesce(c.relacl::text,'') as acl
+      from pg_class c join pg_namespace n on n.oid=c.relnamespace
+      where n.nspname in ('local_service','local_service_internal') order by 1,2`),
+    constraints: await q(`select n.nspname as schema, c.relname as table, con.conname as name, con.contype,
+      pg_get_constraintdef(con.oid) as definition from pg_constraint con
+      join pg_class c on c.oid=con.conrelid join pg_namespace n on n.oid=c.relnamespace
+      where n.nspname in ('local_service','local_service_internal') order by 1,2,3`),
+    indexes: await q(`select schemaname, tablename, indexname, indexdef from pg_indexes
+      where schemaname in ('local_service','local_service_internal') order by 1,2,3`),
+  };
+  fs.writeFileSync(process.env.BK01_POSTCHAIN_CATALOG_OUTPUT, JSON.stringify(catalog, null, 2) + '\n');
 }
 
 const actualRuntimeSet = await effectiveRuntimeSet();
