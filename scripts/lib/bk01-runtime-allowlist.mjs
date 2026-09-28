@@ -16,6 +16,7 @@ export const BK01_RUNTIME_ROUTE_FUNCTIONS = Object.freeze([
   'local_service.authorize_deposit_slip_upload(uuid,text,text,bigint)',
   'local_service.bk01_finish_line_webhook_delivery(text,uuid,text,text)',
   'local_service.bk01_line_bind_booking(text,text,text,uuid,text)',
+  'local_service.bk01_line_bind_booking_trial(text,text,text,text)',
   'local_service.finish_stripe_webhook_event(text,text,text)',
   'local_service.get_line_notification_delivery_context(uuid,integer)',
 ]);
@@ -26,7 +27,7 @@ export const BK01_RUNTIME_FUNCTIONS = Object.freeze([
 ].sort());
 
 // Fixed legacy exception set accepted by the WSTERA House caretaker on 2026-09-27
-// (Lane B WU-2 round 2). Keep separate from the ten explicit runtime RPC grants.
+// (Lane B WU-2 round 2). Keep separate from the eleven explicit runtime RPC grants.
 export const BK01_PUBLIC_LEGACY_EXECUTE_EXCEPTIONS = Object.freeze([
   'local_service.audit_platform_admin_update()',
   'local_service.enforce_booking_status_transition()',

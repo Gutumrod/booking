@@ -105,9 +105,12 @@ for (const identity of BK01_RUNTIME_BOOTSTRAP_FUNCTIONS) {
     fail(`Runtime grant missing matching rollback revoke: ${identity}`);
   }
 }
-const routeMigration = read('supabase/bk01-migrations/20260927120000_bk01_runtime_route_rpcs.sql');
+const routeMigrations = [
+  read('supabase/bk01-migrations/20260927120000_bk01_runtime_route_rpcs.sql'),
+  read('supabase/bk01-migrations/20260927130000_bk01_trial_line_bind.sql'),
+].join('\n');
 for (const identity of BK01_RUNTIME_ROUTE_FUNCTIONS) {
-  if (!routeMigration.includes(`GRANT EXECUTE ON FUNCTION ${identity} TO bk01_runtime;`)) {
+  if (!routeMigrations.includes(`GRANT EXECUTE ON FUNCTION ${identity} TO bk01_runtime;`)) {
     fail(`Route migration grant missing from exact runtime allowlist: ${identity}`);
   }
   if (bootstrap.includes(`GRANT EXECUTE ON FUNCTION ${identity} TO bk01_runtime;`)
@@ -122,15 +125,16 @@ for (const schema of ['ps01', 'ps01_internal', 'mt01', 'mt01_private', 'wstera_p
 }
 if (!bootstrap.includes('has_function_privilege(\'bk01_runtime\',p.oid,\'EXECUTE\')')
     || !bootstrap.includes('effective EXECUTE set differs from an exact approved migration phase')
-    || !bootstrap.includes('route_function_count NOT IN (0, 5)')
+    || !bootstrap.includes('route_function_count NOT IN (0, 5, 6)')
+    || !bootstrap.includes("v_route_function_count = 5 AND to_regprocedure('local_service.bk01_line_bind_booking_trial(text,text,text,text)') IS NOT NULL")
     || !bootstrap.includes('v_expected_exec_count')) {
   fail('Generated bootstrap is missing the fail-closed exact pre/post route-migration EXECUTE guard.');
 }
 for (const identity of BK01_RUNTIME_EFFECTIVE_FUNCTIONS) {
   if (!bootstrap.includes(`'${identity}'`)) fail(`Generated effective EXECUTE guard omits ${identity}`);
 }
-if (BK01_RUNTIME_BOOTSTRAP_FUNCTIONS.length !== 5 || BK01_RUNTIME_ROUTE_FUNCTIONS.length !== 5
-    || BK01_RUNTIME_FUNCTIONS.length !== 10 || BK01_PUBLIC_LEGACY_EXECUTE_EXCEPTIONS.length !== 8
+if (BK01_RUNTIME_BOOTSTRAP_FUNCTIONS.length !== 5 || BK01_RUNTIME_ROUTE_FUNCTIONS.length !== 6
+    || BK01_RUNTIME_FUNCTIONS.length !== 11 || BK01_PUBLIC_LEGACY_EXECUTE_EXCEPTIONS.length !== 8
     || BK01_RUNTIME_EFFECTIVE_FUNCTIONS.length !== BK01_RUNTIME_FUNCTIONS.length + 8) {
   fail('Runtime legacy exception set or exact allowlist cardinality changed.');
 }

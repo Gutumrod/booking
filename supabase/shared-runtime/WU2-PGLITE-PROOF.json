@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-27T13:30:55.255Z",
+  "generated_at": "2026-09-28T02:46:47.918Z",
   "engine": "pglite (embedded postgres)",
   "subject": "supabase/shared-runtime/bk01-platform-bootstrap.sql",
   "frozen_chain_files": 30,
@@ -19,7 +19,7 @@
     {
       "name": "generated bootstrap applies cleanly to a real Postgres with the real chain",
       "ok": true,
-      "detail": "50060 bytes applied"
+      "detail": "50364 bytes applied"
     },
     {
       "name": "bootstrap accepts only the exact pre-route migration phase (5+8)",
@@ -37,19 +37,24 @@
       "detail": "runtime EXECUTE identities=13"
     },
     {
-      "name": "Swarm-1 and WU-B product migrations apply after frozen chain and bootstrap",
-      "ok": true,
-      "detail": "supabase/bk01-migrations/20260926120000_bk01_entitlement_packs.sql → supabase/bk01-migrations/20260927120000_bk01_runtime_route_rpcs.sql"
-    },
-    {
-      "name": "post-migration bk01_runtime EXECUTE identities equal exact 10+8 allowlist",
+      "name": "bootstrap accepts the exact WU-B-only migration phase (10+8)",
       "ok": true,
       "detail": "expected=18; observed=18"
     },
     {
-      "name": "anon and authenticated cannot EXECUTE any of the five new route RPCs",
+      "name": "Swarm-1 and WU-B product migrations apply after frozen chain and bootstrap",
       "ok": true,
-      "detail": "checked=5; anon=0; authenticated=0"
+      "detail": "supabase/bk01-migrations/20260926120000_bk01_entitlement_packs.sql → supabase/bk01-migrations/20260927120000_bk01_runtime_route_rpcs.sql → supabase/bk01-migrations/20260927130000_bk01_trial_line_bind.sql"
+    },
+    {
+      "name": "post-migration bk01_runtime EXECUTE identities equal exact 11+8 allowlist",
+      "ok": true,
+      "detail": "expected=19; observed=19"
+    },
+    {
+      "name": "anon and authenticated cannot EXECUTE any of the six route RPCs",
+      "ok": true,
+      "detail": "checked=6; anon=0; authenticated=0; service_role=0; runtime=6"
     },
     {
       "name": "non-vacuity rejects a 9th PUBLIC-executable function",
@@ -57,7 +62,7 @@
       "detail": "temporary local_service.wu2_extra_probe() PUBLIC grant was detected then removed"
     },
     {
-      "name": "non-vacuity rejects an 11th explicit bk01_runtime RPC grant",
+      "name": "non-vacuity rejects a 12th explicit bk01_runtime RPC grant",
       "ok": true,
       "detail": "temporary direct grant was detected then revoked"
     },
@@ -112,9 +117,9 @@
       "detail": "current_user=bk01_runtime; rolcanlogin=false; direct credential handshake is not available in PGlite"
     },
     {
-      "name": "bk01_runtime can EXECUTE each of its ten allowlisted RPCs",
+      "name": "bk01_runtime can EXECUTE each of its eleven allowlisted RPCs",
       "ok": true,
-      "detail": "local_service.authorize_booking_recovery_attempt: callable | local_service.claim_due_line_notifications: callable | local_service.claim_stripe_webhook_event: callable | local_service.complete_line_notification: callable | local_service.sync_subscription_state_bk_a: callable | local_service.authorize_deposit_slip_upload: callable | local_service.bk01_finish_line_webhook_delivery: callable | local_service.bk01_line_bind_booking: callable | local_service.finish_stripe_webhook_event: callable | local_service.get_line_notification_delivery_context: callable"
+      "detail": "local_service.authorize_booking_recovery_attempt: callable | local_service.claim_due_line_notifications: callable | local_service.claim_stripe_webhook_event: callable | local_service.complete_line_notification: callable | local_service.sync_subscription_state_bk_a: callable | local_service.authorize_deposit_slip_upload: callable | local_service.bk01_finish_line_webhook_delivery: callable | local_service.bk01_line_bind_booking: callable | local_service.bk01_line_bind_booking_trial: callable | local_service.finish_stripe_webhook_event: callable | local_service.get_line_notification_delivery_context: callable"
     },
     {
       "name": "LINE webhookEventId binds once, replay is suppressed, malformed LINE identity fails, lease cannot finish twice",
@@ -122,14 +127,19 @@
       "detail": "first=true; firstError=null; replay=false; badIdentity=true; finish=true; finishReplay=false; event={\"processing_status\":\"processed\",\"last_error\":null,\"booking_id\":\"00000000-0000-0000-0000-000000000004\",\"shop_id\":\"00000000-0000-0000-0000-000000000001\",\"lease_token\":null}"
     },
     {
+      "name": "trial binding requires matching token and central OA, consumes once, dedupes event IDs, and permits same-event delivery retry",
+      "ok": true,
+      "detail": "badToken=false; merchantShop=false; badLineId=true; expiredToken=false; expiredHold=false; first=true; replay=false; failedFinish=true; retry=true; processedFinish=true; secondEvent=false; persisted={\"token_used\":true,\"line_binding_webhook_event_id\":\"trial-line-event\",\"line_user_id\":\"Ubbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"line_oa_id\":null}"
+    },
+    {
       "name": "notification context returns only the matching pending attempt",
       "ok": true,
-      "detail": "attempt=2; matching=1; stale=0"
+      "detail": "attempt=1; matching=1; stale=0"
     },
     {
       "name": "upload RPC derives exact booking path and records MIME/size/token hash/TTL; invalid type and size fail",
       "ok": true,
-      "detail": "issued=true; stored={\"object_path\":\"00000000-0000-0000-0000-000000000004/9b9df8ed-1431-4b70-98ef-77e630f1e8a9.png\",\"content_type\":\"image/png\",\"size_bytes\":1024,\"expires_at\":\"2026-09-27T13:35:55.240Z\",\"token_hash_shape\":true}; path=00000000-0000-0000-0000-000000000004/9b9df8ed-1431-4b70-98ef-77e630f1e8a9.png; pathMatch=true; expiryValid=true; badMime=true; badSize=true; wrongState=true; DB-only proof does not test Storage consume/replay"
+      "detail": "issued=true; stored={\"object_path\":\"00000000-0000-0000-0000-000000000004/50c83376-36f8-4c92-891f-f8f271c510fc.png\",\"content_type\":\"image/png\",\"size_bytes\":1024,\"expires_at\":\"2026-09-28T02:51:47.902Z\",\"token_hash_shape\":true}; path=00000000-0000-0000-0000-000000000004/50c83376-36f8-4c92-891f-f8f271c510fc.png; pathMatch=true; expiryValid=true; badMime=true; badSize=true; wrongState=true; DB-only proof does not test Storage consume/replay"
     },
     {
       "name": "same Stripe event applied twice preserves identical subscription business state",
@@ -356,6 +366,11 @@
       "name": "local_service.bk01_line_bind_booking",
       "ok": true,
       "error": "Invalid LINE booking binding input"
+    },
+    {
+      "name": "local_service.bk01_line_bind_booking_trial",
+      "ok": true,
+      "error": "Invalid LINE trial booking binding input"
     },
     {
       "name": "local_service.finish_stripe_webhook_event",

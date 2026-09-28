@@ -197,6 +197,7 @@ if (chainErrors.length) {
 const productMigrations = [
   'supabase/bk01-migrations/20260926120000_bk01_entitlement_packs.sql',
   'supabase/bk01-migrations/20260927120000_bk01_runtime_route_rpcs.sql',
+  'supabase/bk01-migrations/20260927130000_bk01_trial_line_bind.sql',
 ];
 const fnCount = (await q(`select count(*)::int as n from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='local_service' and p.prokind='f'`))[0].n;
 console.log(`        frozen chain produced ${fnCount} local_service functions`);
@@ -342,12 +343,29 @@ record('platform bootstrap reapplies cleanly after its rollback', rebootstrapErr
   rebootstrapError ?? `runtime EXECUTE identities=${rebootstrapSet.length}`);
 
 // Apply the active product stream through the bootstrapped migrator identity, in
-// timestamp order. The runtime boundary becomes exact 10+8 only after this commit.
+// timestamp order. The runtime boundary becomes exact 11+8 only after this commit.
 const productErrors = [];
 await exec('set role bk01_migrator');
 for (const file of productMigrations) {
   try { await exec(read(file)); }
   catch (e) { productErrors.push({ file, error: String(e.message).split('\n')[0] }); break; }
+  if (file.endsWith('20260927120000_bk01_runtime_route_rpcs.sql')) {
+    await exec('reset role');
+    let wubBootstrapError = null;
+    try { await exec(bootstrap); }
+    catch (e) { wubBootstrapError = String(e.message).split('\n')[0]; }
+    const wubRuntimeSet = await effectiveRuntimeSet();
+    const wubExpected = [
+      ...BK01_RUNTIME_BOOTSTRAP_FUNCTIONS,
+      ...BK01_RUNTIME_ROUTE_FUNCTIONS.filter((identity) => !identity.includes('bk01_line_bind_booking_trial')),
+      ...BK01_PUBLIC_LEGACY_EXECUTE_EXCEPTIONS,
+    ].sort();
+    record('bootstrap accepts the exact WU-B-only migration phase (10+8)',
+      wubBootstrapError === null && JSON.stringify(wubRuntimeSet.slice().sort()) === JSON.stringify(wubExpected),
+      wubBootstrapError ?? `expected=${wubExpected.length}; observed=${wubRuntimeSet.length}`);
+    if (wubBootstrapError !== null) productErrors.push({ file: 'generated bootstrap at WU-B phase', error: wubBootstrapError });
+    await exec('set role bk01_migrator');
+  }
 }
 await exec('reset role');
 record('Swarm-1 and WU-B product migrations apply after frozen chain and bootstrap',
@@ -361,18 +379,21 @@ if (productErrors.length) {
 const actualRuntimeSet = await effectiveRuntimeSet();
 let exactRuntimeSet = true;
 try { validateBk01RuntimeEffectiveExecuteSet(actualRuntimeSet); } catch { exactRuntimeSet = false; }
-record('post-migration bk01_runtime EXECUTE identities equal exact 10+8 allowlist', exactRuntimeSet,
+record('post-migration bk01_runtime EXECUTE identities equal exact 11+8 allowlist', exactRuntimeSet,
   `expected=${BK01_RUNTIME_EFFECTIVE_FUNCTIONS.length}; observed=${actualRuntimeSet.length}`);
 const publicRouteReach = await q(`select p.oid::regprocedure::text as signature,
   has_function_privilege('anon',p.oid,'EXECUTE') as anon_exec,
-  has_function_privilege('authenticated',p.oid,'EXECUTE') as authenticated_exec
+  has_function_privilege('authenticated',p.oid,'EXECUTE') as authenticated_exec,
+  has_function_privilege('service_role',p.oid,'EXECUTE') as service_role_exec,
+  has_function_privilege('bk01_runtime',p.oid,'EXECUTE') as runtime_exec
   from pg_proc p join pg_namespace n on n.oid=p.pronamespace
   where n.nspname='local_service' and p.oid::regprocedure::text = any(array[
     ${BK01_RUNTIME_ROUTE_FUNCTIONS.map((identity) => `'${identity}'`).join(',')}
   ]) order by 1`);
-record('anon and authenticated cannot EXECUTE any of the five new route RPCs',
-  publicRouteReach.length === 5 && publicRouteReach.every((row) => !row.anon_exec && !row.authenticated_exec),
-  `checked=${publicRouteReach.length}; anon=${publicRouteReach.filter((row) => row.anon_exec).length}; authenticated=${publicRouteReach.filter((row) => row.authenticated_exec).length}`);
+record('anon and authenticated cannot EXECUTE any of the six route RPCs',
+  publicRouteReach.length === 6 && publicRouteReach.every((row) => !row.anon_exec && !row.authenticated_exec
+    && !row.service_role_exec && row.runtime_exec),
+  `checked=${publicRouteReach.length}; anon=${publicRouteReach.filter((row) => row.anon_exec).length}; authenticated=${publicRouteReach.filter((row) => row.authenticated_exec).length}; service_role=${publicRouteReach.filter((row) => row.service_role_exec).length}; runtime=${publicRouteReach.filter((row) => row.runtime_exec).length}`);
 
 await exec('create function local_service.wu2_extra_probe() returns integer language sql as $$ select 1 $$');
 await exec('grant execute on function local_service.wu2_extra_probe() to public');
@@ -385,10 +406,10 @@ record('non-vacuity rejects a 9th PUBLIC-executable function', publicProbeReject
 
 await exec('grant execute on function local_service.wu2_extra_probe() to bk01_runtime');
 let explicitProbeRejected = false;
-try { validateBk01RuntimeEffectiveExecuteSet(await effectiveRuntimeSet(), '11th explicit route RPC identity'); }
+try { validateBk01RuntimeEffectiveExecuteSet(await effectiveRuntimeSet(), '12th explicit route RPC identity'); }
 catch { explicitProbeRejected = true; }
 await exec('revoke execute on function local_service.wu2_extra_probe() from bk01_runtime; drop function local_service.wu2_extra_probe()');
-record('non-vacuity rejects an 11th explicit bk01_runtime RPC grant', explicitProbeRejected,
+record('non-vacuity rejects a 12th explicit bk01_runtime RPC grant', explicitProbeRejected,
   'temporary direct grant was detected then revoked');
 
 // ---------------------------------------------------------------------------
@@ -553,6 +574,7 @@ const runtimeFunctions = [
   ['local_service.authorize_deposit_slip_upload', "null::uuid, null::text, 'image/png'::text, 1::bigint"],
   ['local_service.bk01_finish_line_webhook_delivery', "null::text, null::uuid, 'processed'::text, null::text"],
   ['local_service.bk01_line_bind_booking', "null::text, null::text, null::text, null::uuid, null::text"],
+  ['local_service.bk01_line_bind_booking_trial', "null::text, null::text, null::text, null::text"],
   ['local_service.finish_stripe_webhook_event', "null::text, 'processed'::text, null::text"],
   ['local_service.get_line_notification_delivery_context', 'null::uuid, null::integer'],
 ];
@@ -570,6 +592,27 @@ await exec(`
     values ('00000000-0000-0000-0000-000000000004','${shopId}',
       '00000000-0000-0000-0000-000000000002','00000000-0000-0000-0000-000000000003',
       current_date,'10:00','10:30','hold','awaiting',100,'PROBE-BOOKING','TOKEN-123',now()+interval '1 hour',now()+interval '1 hour');
+  insert into local_service.shops(id,name,slug,line_oa_id)
+    values ('00000000-0000-0000-0000-000000000011','Trial Probe Shop','trial-probe-shop',null);
+  insert into local_service.customers(id,shop_id,name,phone)
+    values ('00000000-0000-0000-0000-000000000012','00000000-0000-0000-0000-000000000011','Trial Probe Customer','0899999999');
+  insert into local_service.services(id,shop_id,name,duration_minutes,price)
+    values ('00000000-0000-0000-0000-000000000013','00000000-0000-0000-0000-000000000011','Trial Probe Service',30,100);
+  insert into local_service.bookings(id,shop_id,customer_id,service_id,booking_date,start_time,end_time,
+      status,deposit_status,total_price,booking_code,link_token,link_token_expires_at,expires_at)
+    values ('00000000-0000-0000-0000-000000000014','00000000-0000-0000-0000-000000000011',
+      '00000000-0000-0000-0000-000000000012','00000000-0000-0000-0000-000000000013',
+      current_date,'11:00','11:30','hold','awaiting',100,'TRIAL-PROBE','TRIAL12345',now()+interval '1 hour',now()+interval '1 hour');
+  insert into local_service.bookings(id,shop_id,customer_id,service_id,booking_date,start_time,end_time,
+      status,deposit_status,total_price,booking_code,link_token,link_token_expires_at,expires_at)
+    values ('00000000-0000-0000-0000-000000000015','00000000-0000-0000-0000-000000000011',
+      '00000000-0000-0000-0000-000000000012','00000000-0000-0000-0000-000000000013',
+      current_date,'12:00','12:30','confirmed','not_required',100,'TRIAL-TOKEN-EXPIRED','EXPIRE1234',now()-interval '1 hour',null);
+  insert into local_service.bookings(id,shop_id,customer_id,service_id,booking_date,start_time,end_time,
+      status,deposit_status,total_price,booking_code,link_token,link_token_expires_at,expires_at)
+    values ('00000000-0000-0000-0000-000000000016','00000000-0000-0000-0000-000000000011',
+      '00000000-0000-0000-0000-000000000012','00000000-0000-0000-0000-000000000013',
+      current_date,'13:00','13:30','hold','awaiting',100,'TRIAL-HOLD-EXPIRED','HOLD123456',now()+interval '1 hour',now()-interval '1 minute');
   insert into local_service.stripe_webhook_events(id,type,created_at,processing_status,processing_started_at)
     values ('evt-probe-finish','customer.subscription.updated',now(),'processing',now());
   insert into local_service.line_notification_logs(id,shop_id,booking_id,event_type,recipient_type,status,
@@ -601,7 +644,7 @@ for (const [name, args] of runtimeFunctions) {
   }
 }
 record(
-  'bk01_runtime can EXECUTE each of its ten allowlisted RPCs',
+  'bk01_runtime can EXECUTE each of its eleven allowlisted RPCs',
   runtimeFunctionResults.every((item) => item.ok),
   runtimeFunctionResults.map((item) => `${item.name}: ${item.ok ? 'callable' : item.error}`).join(' | '),
 );
@@ -633,6 +676,43 @@ record('LINE webhookEventId binds once, replay is suppressed, malformed LINE ide
     && lineBadId.error !== null && finishLine.rows?.[0]?.done === true
     && replayLineFinish.rows?.[0]?.done === false && lineEvents === 1,
   `first=${lineFirst.rows?.[0]?.claimed}; firstError=${lineFirst.error}; replay=${lineReplay.rows?.[0]?.claimed}; badIdentity=${lineBadId.error !== null}; finish=${finishLine.rows?.[0]?.done}; finishReplay=${replayLineFinish.rows?.[0]?.done}; event=${JSON.stringify(lineEventDebug)}`);
+
+const trialUserId = `U${'b'.repeat(32)}`;
+const trialBindArgs = (eventId, lineUserId = trialUserId) =>
+  `'${eventId}'::text,'TRIAL-PROBE'::text,'TRIAL12345'::text,'${lineUserId}'::text`;
+const trialBadToken = await probeRun(`select * from local_service.bk01_line_bind_booking_trial('trial-bad-token','TRIAL-PROBE','WRONG12345','${trialUserId}')`);
+await adminQuery(`update local_service.shops set line_oa_id='trial-probe-owned-oa' where id='00000000-0000-0000-0000-000000000011'`);
+const trialMerchantShop = await probeRun(`select * from local_service.bk01_line_bind_booking_trial(${trialBindArgs('trial-merchant-shop')})`);
+await adminQuery(`update local_service.shops set line_oa_id=null where id='00000000-0000-0000-0000-000000000011'`);
+const trialBadLineId = await probeRun(`select * from local_service.bk01_line_bind_booking_trial('trial-bad-line-id','TRIAL-PROBE','TRIAL12345','bad-id')`);
+const trialExpiredToken = await probeRun(`select * from local_service.bk01_line_bind_booking_trial('trial-expired-token','TRIAL-TOKEN-EXPIRED','EXPIRE1234','${trialUserId}')`);
+const trialExpiredHold = await probeRun(`select * from local_service.bk01_line_bind_booking_trial('trial-expired-hold','TRIAL-HOLD-EXPIRED','HOLD123456','${trialUserId}')`);
+const trialFirst = await probeRun(`select * from local_service.bk01_line_bind_booking_trial(${trialBindArgs('trial-line-event')})`);
+const trialReplay = await probeRun(`select * from local_service.bk01_line_bind_booking_trial(${trialBindArgs('trial-line-event')})`);
+const trialFinishFailed = trialFirst.rows?.[0]?.lease_token
+  ? await probeRun(`select local_service.bk01_finish_line_webhook_delivery('trial-line-event','${trialFirst.rows[0].lease_token}','failed','LINE reply unavailable') as done`)
+  : { rows: null, error: 'Trial LINE bind did not return lease token' };
+const trialRetry = await probeRun(`select * from local_service.bk01_line_bind_booking_trial(${trialBindArgs('trial-line-event')})`);
+const trialFinishProcessed = trialRetry.rows?.[0]?.lease_token
+  ? await probeRun(`select local_service.bk01_finish_line_webhook_delivery('trial-line-event','${trialRetry.rows[0].lease_token}','processed',null) as done`)
+  : { rows: null, error: 'Trial LINE retry did not return lease token' };
+const trialSecondEvent = await probeRun(`select * from local_service.bk01_line_bind_booking_trial(${trialBindArgs('trial-line-event-2')})`);
+  const trialPersisted = (await adminQuery(`select b.line_binding_token_used_at is not null as token_used,
+  b.line_binding_webhook_event_id, c.line_user_id, s.line_oa_id
+  from local_service.bookings b join local_service.customers c on c.id=b.customer_id
+  join local_service.shops s on s.id=b.shop_id where b.id='00000000-0000-0000-0000-000000000014'`))[0];
+record('trial binding requires matching token and central OA, consumes once, dedupes event IDs, and permits same-event delivery retry',
+  trialBadToken.rows?.[0]?.claimed === false && trialMerchantShop.rows?.[0]?.claimed === false
+    && trialBadLineId.error !== null && trialExpiredToken.rows?.[0]?.claimed === false
+    && trialExpiredHold.rows?.[0]?.claimed === false && trialFirst.rows?.[0]?.claimed === true
+    && trialReplay.rows?.[0]?.claimed === false && trialFinishFailed.rows?.[0]?.done === true
+    && trialRetry.rows?.[0]?.claimed === true && trialFinishProcessed.rows?.[0]?.done === true
+    && trialSecondEvent.rows?.[0]?.claimed === false && trialPersisted?.token_used === true
+    && trialPersisted?.line_binding_webhook_event_id === 'trial-line-event'
+    && trialPersisted?.line_user_id === trialUserId && trialPersisted?.line_oa_id === null
+    && trialFirst.rows?.[0]?.booking_context?.shop_name === 'Trial Probe Shop'
+    && !('customer_name' in (trialFirst.rows?.[0]?.booking_context ?? {})),
+  `badToken=${trialBadToken.rows?.[0]?.claimed}; merchantShop=${trialMerchantShop.rows?.[0]?.claimed}; badLineId=${trialBadLineId.error !== null}; expiredToken=${trialExpiredToken.rows?.[0]?.claimed}; expiredHold=${trialExpiredHold.rows?.[0]?.claimed}; first=${trialFirst.rows?.[0]?.claimed}; replay=${trialReplay.rows?.[0]?.claimed}; failedFinish=${trialFinishFailed.rows?.[0]?.done}; retry=${trialRetry.rows?.[0]?.claimed}; processedFinish=${trialFinishProcessed.rows?.[0]?.done}; secondEvent=${trialSecondEvent.rows?.[0]?.claimed}; persisted=${JSON.stringify(trialPersisted)}`);
 
 const notificationAttempt = (await adminQuery(`select attempt_count from local_service.line_notification_logs where id='00000000-0000-0000-0000-000000000005'`))[0]?.attempt_count ?? 1;
 const contextOk = await probeRun(`select * from local_service.get_line_notification_delivery_context('00000000-0000-0000-0000-000000000005',${notificationAttempt})`);

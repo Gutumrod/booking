@@ -21,7 +21,7 @@ function sign(body: string, secret: string) {
 const lineConfig = { mode: 'merchant' as const, channelSecret: 'line-secret', accessToken: 'line-access' };
 const event = {
   type: 'message', webhookEventId: 'line-event-1', replyToken: 'reply-token', source: { userId: `U${'a'.repeat(32)}` },
-  message: { type: 'text', text: 'ผูกคิว BK-1234-ABCD' },
+  message: { type: 'text', text: 'ผูกคิว BK1234-ABCD123456' },
 };
 
 test('LINE rejects invalid signature before token issuer, and processes a signed merchant binding through RPCs', async () => {
@@ -66,7 +66,7 @@ test('LINE rejects invalid signature before token issuer, and processes a signed
   assert.equal(replyCalls.length, 1);
 });
 
-test('LINE replay, RPC failure, trial scope blocker, and issuer failure fail closed', async () => {
+test('LINE replay, RPC failure, trial RPC, and issuer failure fail closed', async () => {
   const body = JSON.stringify({ events: [event] });
   const headers = { 'x-line-signature': sign(body, lineConfig.channelSecret) };
   let replies = 0;
@@ -82,11 +82,45 @@ test('LINE replay, RPC failure, trial scope blocker, and issuer failure fail clo
   assert.equal((await responseJson(rpcFailure)).failedEvents, 1);
 
   let calls = 0;
-  const trial = await lineRoute.handleLineWebhook(request('/line', body, headers), lineConfig, undefined, async () => {
-    calls += 1; throw new Error('must not run');
+  const trialRpcCalls: Array<{ name: string; args: Record<string, unknown> }> = [];
+  const trial = await lineRoute.handleLineWebhook(request('/line', body, headers), { ...lineConfig, mode: 'central' }, undefined, async () => ({
+    rpc: async (name: string, args: Record<string, unknown>) => {
+      calls += 1;
+      trialRpcCalls.push({ name, args });
+      if (name === 'bk01_line_bind_booking_trial') return { data: [{
+        claimed: true, booking_id: 'booking-1', shop_id: 'shop-1',
+        booking_context: { booking_code: 'BK-1234', booking_date: '2026-10-01', start_time: '09:00', shop_name: 'ร้านทดสอบ' },
+        lease_token: 'lease-trial-1',
+      }], error: null };
+      return { data: true, error: null };
+    },
+  }) as any, async () => new Response('{}', { status: 200 }));
+  assert.equal(trial.status, 200);
+  assert.equal((await responseJson(trial)).processedEvents, 1);
+  assert.equal(calls, 2);
+  assert.deepEqual(trialRpcCalls.map(({ name }) => name), ['bk01_line_bind_booking_trial', 'bk01_finish_line_webhook_delivery']);
+  assert.deepEqual(trialRpcCalls[0].args, {
+    p_webhook_event_id: event.webhookEventId,
+    p_booking_code: 'BK1234',
+    p_link_token: 'ABCD123456',
+    p_line_user_id: event.source.userId,
   });
-  assert.equal(trial.status, 503);
-  assert.equal(calls, 0);
+
+  let trialTokenCalls = 0;
+  const trialRpcFailure = await lineRoute.handleLineWebhook(request('/line', body, headers), { ...lineConfig, mode: 'central' }, undefined, async () => {
+    trialTokenCalls += 1;
+    return { rpc: async () => ({ data: null, error: { code: 'XX000' } }) } as any;
+  });
+  assert.equal((await responseJson(trialRpcFailure)).failedEvents, 1);
+  assert.equal(trialTokenCalls, 1);
+
+  let invalidSignatureTokenCalls = 0;
+  const invalidTrialSignature = await lineRoute.handleLineWebhook(request('/line', body, { 'x-line-signature': 'bad' }), { ...lineConfig, mode: 'central' }, undefined, async () => {
+    invalidSignatureTokenCalls += 1;
+    throw new Error('must not run');
+  });
+  assert.equal(invalidTrialSignature.status, 401);
+  assert.equal(invalidSignatureTokenCalls, 0);
 
   const issuerFailure = await lineRoute.handleLineWebhook(request('/line', body, headers), lineConfig, 'shop-1', async () => {
     throw new Error('issuer down');

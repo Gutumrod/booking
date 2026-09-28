@@ -1009,15 +1009,18 @@ BEGIN
     'local_service.authorize_deposit_slip_upload(uuid,text,text,bigint)',
     'local_service.bk01_finish_line_webhook_delivery(text,uuid,text,text)',
     'local_service.bk01_line_bind_booking(text,text,text,uuid,text)',
+    'local_service.bk01_line_bind_booking_trial(text,text,text,text)',
     'local_service.finish_stripe_webhook_event(text,text,text)',
     'local_service.get_line_notification_delivery_context(uuid,integer)'
   );
-  IF v_route_function_count NOT IN (0, 5) THEN
+  IF v_route_function_count NOT IN (0, 5, 6)
+     OR (v_route_function_count = 5 AND to_regprocedure('local_service.bk01_line_bind_booking_trial(text,text,text,text)') IS NOT NULL) THEN
     RAISE EXCEPTION 'BK01 route RPC migration is partially present';
   END IF;
-  v_expected_exec_count := CASE WHEN v_route_function_count=0
-    THEN 13
-    ELSE 18 END;
+  v_expected_exec_count := CASE v_route_function_count
+    WHEN 0 THEN 13
+    WHEN 5 THEN 18
+    ELSE 19 END;
   IF EXISTS (
     SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
     WHERE n.nspname='local_service' AND has_function_privilege('bk01_runtime',p.oid,'EXECUTE')
@@ -1026,6 +1029,7 @@ BEGIN
         'local_service.authorize_deposit_slip_upload(uuid,text,text,bigint)',
         'local_service.bk01_finish_line_webhook_delivery(text,uuid,text,text)',
         'local_service.bk01_line_bind_booking(text,text,text,uuid,text)',
+        'local_service.bk01_line_bind_booking_trial(text,text,text,text)',
         'local_service.claim_due_line_notifications(integer)',
         'local_service.claim_stripe_webhook_event(text,text,timestamp with time zone)',
         'local_service.complete_line_notification(uuid,integer,text,timestamp with time zone,timestamp with time zone,text)',

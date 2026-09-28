@@ -68,10 +68,8 @@ export async function handleLineWebhook(
       skippedEvents += 1;
       continue;
     }
-    // The frozen WU-B RPC requires a trusted shop UUID. Trial routing has no such
-    // identity and must remain closed until the caretaker ships a follow-up RPC.
-    if (!expectedShopId) {
-      return Response.json({ error: 'LINE trial booking binding is unavailable pending a trusted shop scope' }, { status: 503 });
+    if (config.mode === 'merchant' && !expectedShopId) {
+      return Response.json({ error: 'Merchant LINE booking binding requires a trusted shop scope' }, { status: 503 });
     }
     if (!event.webhookEventId || event.webhookEventId.length > 200) {
       failures.push({ eventIndex, reason: 'EVENT_PROCESSING_FAILED' });
@@ -85,13 +83,22 @@ export async function handleLineWebhook(
     let deliverySucceeded = false;
     try {
       runtime = await runtimeProvider();
-      const { data, error } = await runtime.rpc('bk01_line_bind_booking', {
-        p_webhook_event_id: event.webhookEventId,
-        p_booking_code: bookingCode,
-        p_link_token: linkToken,
-        p_expected_shop_id: expectedShopId,
-        p_line_user_id: lineUserId,
-      });
+      const rpcName = config.mode === 'central' ? 'bk01_line_bind_booking_trial' : 'bk01_line_bind_booking';
+      const rpcArgs = config.mode === 'central'
+        ? {
+            p_webhook_event_id: event.webhookEventId,
+            p_booking_code: bookingCode,
+            p_link_token: linkToken,
+            p_line_user_id: lineUserId,
+          }
+        : {
+            p_webhook_event_id: event.webhookEventId,
+            p_booking_code: bookingCode,
+            p_link_token: linkToken,
+            p_expected_shop_id: expectedShopId,
+            p_line_user_id: lineUserId,
+          };
+      const { data, error } = await runtime.rpc(rpcName, rpcArgs);
       if (error) throw new Error('LINE booking binding RPC failed');
       binding = (Array.isArray(data) ? data[0] : data) as LineBinding | null;
       if (!binding?.claimed) {

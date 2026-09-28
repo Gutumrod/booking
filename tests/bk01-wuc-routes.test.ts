@@ -43,7 +43,7 @@ test('service-role client modules are removed and route integration uses only th
   for (const route of routes) {
     const source = fs.readFileSync(route, 'utf8');
     assert.match(source, /getBk01RuntimeClient/);
-    assert.doesNotMatch(source, /\.rpc\s*\(\s*['"](?!authorize_booking_recovery_attempt|claim_due_line_notifications|claim_stripe_webhook_event|complete_line_notification|sync_subscription_state_bk_a|authorize_deposit_slip_upload|bk01_finish_line_webhook_delivery|bk01_line_bind_booking|finish_stripe_webhook_event|get_line_notification_delivery_context)/);
+    assert.doesNotMatch(source, /\.rpc\s*\(\s*['"](?!authorize_booking_recovery_attempt|claim_due_line_notifications|claim_stripe_webhook_event|complete_line_notification|sync_subscription_state_bk_a|authorize_deposit_slip_upload|bk01_finish_line_webhook_delivery|bk01_line_bind_booking|bk01_line_bind_booking_trial|finish_stripe_webhook_event|get_line_notification_delivery_context)/);
   }
   const uploadRoute = fs.readFileSync(routes[2], 'utf8');
   assert.match(uploadRoute, /\.storage\.from\(['"]deposit-slips['"]\)\.createSignedUploadUrl/);
