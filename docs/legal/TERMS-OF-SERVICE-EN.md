@@ -16,7 +16,7 @@ These Terms of Service describe the agreement between you and the operator of BK
 
 ## 1. Who operates the Service
 
-The Service is operated under the brand "WSTERA" and the product name "BK01", as documented in this product's own repository. The formal contracting details are not supplied yet, so this draft leaves them blank: [[OWNER INPUT: registered legal entity name of the operator]], [[OWNER INPUT: company registration number of the operator]], [[OWNER INPUT: registered address of the operator]] and [[OWNER INPUT: address for legal notices]].
+This Service is operated under the WSTERA brand and the BK01 product name. The service provider is an individual and is not a registered company. The provider’s legal name remains to be supplied: [[OWNER INPUT: legal name of individual service provider]]. The provider’s registered and legal-notice addresses also remain to be supplied: [[OWNER INPUT: registered address of the operator]], [[OWNER INPUT: address for legal notices]].
 BK01 is software that a shop uses to publish a booking page, take bookings and keep deposit evidence. BK01 is not the appointment and it is not the service the shop provides.
 
 ## 2. Accepting these Terms
@@ -66,7 +66,7 @@ Basic is ฿390 or $11 per month and has no booking ceiling for a normal shop; a
 Basic uses manual deposit verification. Pro automatic slip verification is a precondition for selling Pro publicly, and its monthly allowance and any top-up price are not set yet: [[OWNER INPUT: approved Pro automatic slip-verification monthly allowance and top-up price]].
 The WSTERA central LINE account is the standard notification path for the Basic trial and for Basic. A shop-owned LINE account is an optional managed add-on; the shop remains responsible for its own LINE account and message costs, and the add-on price is not set yet: [[OWNER INPUT: approved shop-owned LINE OA managed add-on price]].
 Whether the published subscription price includes Thai VAT is not decided: [[OWNER INPUT: VAT treatment of the subscription price]].
-Whether a paid subscription fee is refundable is not decided: [[OWNER INPUT: approved subscription fee refund policy]].
+The first payment for a paid monthly subscription may be refunded within 7 days of that first payment.
 An upgrade takes effect only from the authoritative Stripe subscription state, never from a choice made in the interface alone. A downgrade does not delete historical records; capabilities above the new entitlement become impossible to create and impossible to reactivate. What happens to a paid plan when it is cancelled, or when its paid period ends, is not decided: [[OWNER INPUT: approved treatment of a paid plan when it is cancelled or its paid period ends]].
 
 ## 8. Cancellation and rescheduling by the customer
@@ -95,9 +95,11 @@ The liability cap and the exclusions that apply must be set by a qualified lawye
 
 ## 13. Governing law and disputes
 
-This draft intends these Terms to be governed by the law of Thailand and to be enforced in the courts of Thailand, but no dispute-resolution process has been approved yet: [[OWNER INPUT: approved governing law, jurisdiction and dispute-resolution process]].
+This draft intends these Terms to be governed by the law of Thailand and to be enforced in the courts of Thailand, but no dispute-resolution process has been approved yet: [[OWNER INPUT: approved governing law, jurisdiction and dispute-resolution process]]. If the Thai and English versions conflict, the Thai version prevails.
 
 ## 14. Contact
 
-Questions about these Terms are handled through the support channel published to customers and shops: [[OWNER INPUT: support contact channel shown to customers and merchants]], with published hours of [[OWNER INPUT: published support hours]].
-This draft states no support e-mail address and no response-time promise, because the Owner has not supplied them.
+Questions about these Terms are handled through e-mail at titazmth@gmail.com and LINE at https://lin.ee/WqDbJcl. Published support hours remain to be supplied: [[OWNER INPUT: published support hours]].
+Support is provided through written channels only. This draft makes no response-time promise.
+
+* This e-mail address is temporary and may be changed as approved by the Owner.

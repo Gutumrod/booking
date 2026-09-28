@@ -3,13 +3,18 @@
 import { Mail, MessageCircle, PhoneOff, Info } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
-import { resolveSupportChannels, type SupportChannel } from '@/lib/support-channel';
+import {
+  DEFAULT_SUPPORT_EMAIL,
+  DEFAULT_SUPPORT_LINE_OA_ID,
+  resolveSupportChannels,
+  type SupportChannel,
+} from '@/lib/support-channel';
 
-// Contact values come from configuration only (L-13). Nothing here may fall
-// back to a hard-coded address, LINE identifier, phone number or endpoint.
+// Owner-approved non-secret defaults are configurable via environment values;
+// no phone number, credential or other endpoint is embedded here.
 const supportEnv = {
-  NEXT_PUBLIC_SUPPORT_EMAIL: process.env.NEXT_PUBLIC_SUPPORT_EMAIL,
-  NEXT_PUBLIC_SUPPORT_LINE_OA_ID: process.env.NEXT_PUBLIC_SUPPORT_LINE_OA_ID,
+  NEXT_PUBLIC_SUPPORT_EMAIL: process.env.NEXT_PUBLIC_SUPPORT_EMAIL ?? DEFAULT_SUPPORT_EMAIL,
+  NEXT_PUBLIC_SUPPORT_LINE_OA_ID: process.env.NEXT_PUBLIC_SUPPORT_LINE_OA_ID ?? DEFAULT_SUPPORT_LINE_OA_ID,
 };
 
 function ChannelRow({

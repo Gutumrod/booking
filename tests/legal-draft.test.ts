@@ -189,19 +189,22 @@ test('the drafts cover the checklist headings for terms and privacy', () => {
   // Retention must name every class the checklist lists.
   for (const locale of locales) {
     const retention = messages[locale].legal.privacy.sections.retention.b;
-    const classes = [
-      'customer and booking records',
-      'deposit-slip images',
-      'LINE notification and binding logs',
-      'authentication and account data',
-      'Stripe and billing records',
-      'support tickets and attachments',
-      'security and audit logs',
-      'backups after account closure',
-    ];
-    for (const item of classes) {
+    const classes: Record<(typeof locales)[number], string[]> = {
+      en: [
+        'customer and booking records', 'deposit-slip images', 'LINE notification and binding logs',
+        'authentication and account data', 'Stripe and billing records', 'support tickets and attachments',
+        'security and audit logs', 'backups after account closure',
+      ],
+      th: [
+        'ข้อมูลลูกค้าและบันทึกการจอง', 'รูปสลิปมัดจำ', 'บันทึกการแจ้งเตือน LINE และการผูกบัญชี',
+        'ข้อมูลการยืนยันตัวตนและบัญชี', 'บันทึกการเรียกเก็บเงินและข้อมูล Stripe', 'เรื่องแจ้งปัญหาและไฟล์แนบ',
+        'บันทึกด้านความปลอดภัยและการตรวจสอบ', 'ข้อมูลสำรองหลังการปิดบัญชี',
+      ],
+    };
+    for (const item of classes[locale]) {
       assert.ok(retention.includes(item), `${locale} retention section is missing "${item}"`);
     }
+    assert.match(retention, locale === 'en' ? /60 days/ : /60 วัน/, `${locale} retention must reflect Owner-approved 60 days`);
   }
   // Subprocessors must name every party the dependency inventory lists.
   for (const locale of locales) {
@@ -212,7 +215,7 @@ test('the drafts cover the checklist headings for terms and privacy', () => {
   }
 });
 
-test('PDPA rights are enumerated and no response deadline or channel is invented', () => {
+test('PDPA rights are enumerated and unresolved response procedures remain explicit', () => {
   const rightTokens: Record<(typeof locales)[number], string[]> = {
     en: ['PDPA', 'access', 'correction', 'deletion', 'restriction', 'object', 'withdraw consent', 'complain'],
     th: [
@@ -236,9 +239,8 @@ test('PDPA rights are enumerated and no response deadline or channel is invented
   }
 });
 
-test('no invented company identity, contact address or commercial term appears', () => {
+test('only Owner-approved contact values appear, without inventing identity or commercial terms', () => {
   const forbidden = [
-    /[\w.+-]+@[\w-]+\.[\w.]+/, // any e-mail address
     /\b\d{13}\b/, // a company registration number / Thai tax id
     /100%|100 %/, // absolute outcome or security claim
     /ปลอดภัย 100|100% ปลอดภัย/,
@@ -247,9 +249,13 @@ test('no invented company identity, contact address or commercial term appears',
   ];
   for (const locale of locales) {
     const blob = JSON.stringify(messages[locale].legal);
+    const withoutOwnerApprovedContact = blob.replaceAll('titazmth@gmail.com', '').replaceAll('https://lin.ee/WqDbJcl', '');
     for (const pattern of forbidden) {
-      assert.doesNotMatch(blob, pattern, `${locale} legal copy matched forbidden ${pattern}`);
+      assert.doesNotMatch(withoutOwnerApprovedContact, pattern, `${locale} legal copy matched forbidden ${pattern}`);
     }
+    const contact = `${messages[locale].legal.terms.sections.contact.b} ${messages[locale].legal.privacy.sections.contact.b}`;
+    assert.match(contact, /titazmth@gmail.com/, `${locale} contact e-mail is missing`);
+    assert.match(contact, /https:\/\/lin\.ee\/WqDbJcl/, `${locale} contact LINE link is missing`);
   }
   // The retired commercial model must never come back: the old ฿490/฿990 pilot
   // reference points, the free-plan-as-14-day-trial reading, and the 100/500
@@ -343,12 +349,13 @@ test('the readable draft documents exist in both languages and stay in step with
   for (const [documentKey, locale, rel] of files) {
     assert.ok(existsSync(join(root, rel)), `${rel} must exist`);
     const text = read(rel);
+    const comparableText = text.replaceAll('titazmth@gmail.com*', 'titazmth@gmail.com');
     const doc = messages[locale].legal[documentKey];
-    assert.ok(text.includes(messages[locale].legal.meta.draftBadge), `${rel} must carry the draft badge`);
-    assert.ok(text.includes(doc.intro), `${rel} must contain the intro`);
+    assert.ok(comparableText.includes(messages[locale].legal.meta.draftBadge), `${rel} must carry the draft badge`);
+    assert.ok(comparableText.includes(doc.intro), `${rel} must contain the intro`);
     for (const [key, section] of Object.entries<{ h: string; b: string }>(doc.sections)) {
-      assert.ok(text.includes(section.h), `${rel} is missing heading ${key}`);
-      assert.ok(text.includes(section.b), `${rel} is missing body ${key}`);
+      assert.ok(comparableText.includes(section.h), `${rel} is missing heading ${key}`);
+      assert.ok(comparableText.includes(section.b), `${rel} is missing body ${key}`);
     }
     assert.ok(text.includes('OWNER INPUT'), `${rel} must keep its Owner inputs visible`);
   }

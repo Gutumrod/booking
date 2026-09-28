@@ -72,7 +72,7 @@ Some of the parties above may process data outside Thailand. The cross-border tr
 
 ## 8. How long data is kept
 
-The Service does not yet have approved retention periods. The exact durations are a launch blocker and must be decided by the Owner together with qualified legal review. The classes below are exactly the classes that the legal and privacy checklist requires a decision for:
+After a shop stops using the Service, its data-retention period is 60 days. The category-specific periods below still require confirmation and qualified legal review:
 - customer and booking records: [[OWNER INPUT: retention period for customer and booking records]];
 - deposit-slip images: [[OWNER INPUT: retention period for deposit-slip images]];
 - LINE notification and binding logs: [[OWNER INPUT: retention period for LINE notification and binding logs]];
@@ -80,14 +80,16 @@ The Service does not yet have approved retention periods. The exact durations ar
 - Stripe and billing records: [[OWNER INPUT: retention period for Stripe and billing records]];
 - support tickets and attachments: [[OWNER INPUT: retention period for support tickets and attachments]];
 - security and audit logs: [[OWNER INPUT: retention period for security and audit logs]];
-- backups after account closure: [[OWNER INPUT: retention period for backups after account closure]].
-Engineering documentation cannot determine these periods, so this draft states no number.
+- backups after account closure: 60 days.
+The 60-day period records the Owner’s current decision; the remaining category-specific periods are still open.
 
 ## 9. Your PDPA rights and how to use them
 
 Under the Thai Personal Data Protection Act (PDPA) you have the right to access and obtain a copy of your personal data, to request correction, to request deletion, to request restriction of processing, to object to processing, to withdraw consent where consent is the basis, and to complain to the Office of the Personal Data Protection Committee.
 A request is handled by verifying the requester and the scope of the request, then classifying the records into what can be removed, what can be anonymised and what must be retained for legal, accounting or security reasons, then executing the approved procedure and recording the outcome and any exception.
-Because no retention, role or lawful-basis decision has been approved yet, this draft promises no response deadline: [[OWNER INPUT: approved identity-verification steps and response deadline for data-subject requests]], [[OWNER INPUT: privacy request channel for customers, staff and merchants]].
+Because no retention, role or lawful-basis decision has been approved yet, this draft promises no response deadline: [[OWNER INPUT: approved identity-verification steps and response deadline for data-subject requests]], titazmth@gmail.com* or LINE at https://lin.ee/WqDbJcl.
+
+* This e-mail address is temporary and may be changed as approved by the Owner.
 
 ## 10. How the data is protected
 
@@ -110,5 +112,7 @@ This notice will change as the Service changes and as the Owner makes the decisi
 
 ## 14. Contact for privacy requests
 
-Privacy requests and questions about this notice are handled through: [[OWNER INPUT: privacy request channel for customers, staff and merchants]], with published hours of [[OWNER INPUT: published support hours]].
-This draft states no e-mail address and no response deadline, because the Owner has not supplied them.
+Privacy requests and questions about this notice can be sent by e-mail to titazmth@gmail.com or through LINE at https://lin.ee/WqDbJcl. Published support hours remain to be supplied: [[OWNER INPUT: published support hours]].
+This draft does not set a response deadline.
+
+* This e-mail address is temporary and may be changed as approved by the Owner.

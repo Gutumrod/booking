@@ -3,6 +3,8 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 import {
+  DEFAULT_SUPPORT_EMAIL,
+  DEFAULT_SUPPORT_LINE_OA_ID,
   buildLineOaUrl,
   normalizeLineOaId,
   resolveSupportChannels,
@@ -136,8 +138,15 @@ test('LINE identifier normalization always yields an @handle link', () => {
   assert.equal(buildLineOaUrl('example_oa'), 'https://line.me/R/ti/p/@example_oa');
 });
 
+test('Owner-approved LINE short link is preserved as the real customer destination', () => {
+  assert.equal(DEFAULT_SUPPORT_EMAIL, 'titazmth@gmail.com');
+  assert.equal(DEFAULT_SUPPORT_LINE_OA_ID, 'https://lin.ee/WqDbJcl');
+  assert.equal(normalizeLineOaId(DEFAULT_SUPPORT_LINE_OA_ID), 'https://lin.ee/WqDbJcl');
+  assert.equal(buildLineOaUrl(DEFAULT_SUPPORT_LINE_OA_ID), 'https://lin.ee/WqDbJcl');
+});
+
 // No invented contact value may sit in the support surface source.
-test('support surface source contains no hard-coded contact value', () => {
+test('support surface source contains only the Owner-approved contact values', () => {
   const sources = [
     'apps/booking-consumer/src/lib/support-channel.ts',
     'apps/booking-consumer/src/components/support-contact.tsx',
@@ -146,7 +155,8 @@ test('support surface source contains no hard-coded contact value', () => {
     .map(read)
     .join('\n');
 
-  assert.doesNotMatch(sources, /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/, 'no literal e-mail address');
-  assert.doesNotMatch(sources, /line\.me\/R\/ti\/p\/@[A-Za-z0-9._-]+/, 'no literal LINE OA identifier');
+  assert.equal((sources.match(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g) ?? []).join(','), DEFAULT_SUPPORT_EMAIL);
+  assert.equal((sources.match(/https:\/\/lin\.ee\/[A-Za-z0-9]+/g) ?? []).join(','), DEFAULT_SUPPORT_LINE_OA_ID);
+  assert.doesNotMatch(sources, /line\.me\/R\/ti\/p\/@[A-Za-z0-9._-]+/, 'no other literal LINE OA identifier');
   assert.doesNotMatch(sources, /(\+66|0[689])[\d\s-]{7,}/, 'no literal telephone number');
 });

@@ -11,12 +11,15 @@
 // absent the channel is reported as unresolved and the caller renders the
 // marked placeholder below instead of a fabricated value.
 //
-// NOTE for the Owner: the two values are deliberately NOT set anywhere in this
-// repository. They are listed as OWNER INPUT REQUIRED in
-// docs/house-swarm-1/WU4-SUPPORT.md.
+// The Owner has now supplied public defaults for both channels; deployment values
+// remain configurable through the environment. Support hours are still unset.
 
 export const SUPPORT_EMAIL_ENV_KEY = 'NEXT_PUBLIC_SUPPORT_EMAIL';
 export const SUPPORT_LINE_OA_ENV_KEY = 'NEXT_PUBLIC_SUPPORT_LINE_OA_ID';
+
+// Owner-approved public defaults; deployment env values can still override them.
+export const DEFAULT_SUPPORT_EMAIL = 'titazmth@gmail.com';
+export const DEFAULT_SUPPORT_LINE_OA_ID = 'https://lin.ee/WqDbJcl';
 
 /** Marker token that identifies a value only the Owner can supply. */
 export const OWNER_INPUT_REQUIRED_MARKER = 'OWNER_INPUT_REQUIRED';
@@ -49,14 +52,24 @@ function readValue(env: SupportEnv, key: string): string | null {
 }
 
 /** Normalize a LINE OA identifier to the `@handle` form used in LINE links. */
+function lineShortUrl(value: string): string | null {
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'https:' || url.hostname !== 'lin.ee' || !/^\/[A-Za-z0-9]+$/.test(url.pathname)) return null;
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
 export function normalizeLineOaId(value: string): string {
   const trimmed = value.trim();
-  return trimmed.startsWith('@') ? trimmed : `@${trimmed}`;
+  return lineShortUrl(trimmed) ?? (trimmed.startsWith('@') ? trimmed : `@${trimmed}`);
 }
 
 /** Standard LINE Official Account link for a given OA identifier. */
 export function buildLineOaUrl(value: string): string {
-  return `https://line.me/R/ti/p/${normalizeLineOaId(value)}`;
+  return lineShortUrl(value.trim()) ?? `https://line.me/R/ti/p/${normalizeLineOaId(value)}`;
 }
 
 export interface ResolvedSupportChannels {
