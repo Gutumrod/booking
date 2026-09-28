@@ -17,6 +17,7 @@
 //
 // No LAB. No network. No credential. PGlite is an embedded Postgres build.
 import fs from 'node:fs';
+import crypto from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { PGlite } from '@electric-sql/pglite';
@@ -99,7 +100,7 @@ const MANAGED_STUBS = `
   create table if not exists storage.buckets(id text primary key, name text, public boolean,
     file_size_limit bigint, allowed_mime_types text[]);
   create table if not exists storage.objects(id uuid primary key default gen_random_uuid(),
-    bucket_id text, name text, owner uuid);
+    bucket_id text, name text, owner uuid, metadata jsonb not null default '{}'::jsonb);
   alter table storage.objects enable row level security;
   create or replace function storage.foldername(name text) returns text[]
     language sql immutable as $$ select string_to_array(name, '/') $$;
@@ -198,6 +199,7 @@ const productMigrations = [
   'supabase/bk01-migrations/20260926120000_bk01_entitlement_packs.sql',
   'supabase/bk01-migrations/20260927120000_bk01_runtime_route_rpcs.sql',
   'supabase/bk01-migrations/20260927130000_bk01_trial_line_bind.sql',
+  'supabase/bk01-migrations/20260928120000_bk01_house_upload_grants.sql',
 ];
 const fnCount = (await q(`select count(*)::int as n from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='local_service' and p.prokind='f'`))[0].n;
 console.log(`        frozen chain produced ${fnCount} local_service functions`);
@@ -466,6 +468,15 @@ if (process.env.BK01_BASELINE_CATALOG_OUTPUT) {
 const productErrors = [];
 await exec('set role bk01_migrator');
 for (const file of productMigrations) {
+  if (file.endsWith('20260928120000_bk01_house_upload_grants.sql')) {
+    await exec('reset role');
+    const houseStorageSql = read('scripts/proofs/lane-b/fixtures/house_storage_upload_grants.sql');
+    await exec(houseStorageSql);
+    await exec('grant insert on storage.objects to bk01_runtime');
+    await exec('set role bk01_migrator');
+    record('full-chain proof applies the hash-pinned House Storage SQL before the BK01 integration migration', true,
+      `fixture=fixtures/house_storage_upload_grants.sql; sha256=${crypto.createHash('sha256').update(houseStorageSql).digest('hex')}`);
+  }
   try { await exec(read(file)); }
   catch (e) { productErrors.push({ file, error: String(e.message).split('\n')[0] }); break; }
   if (file.endsWith('20260927120000_bk01_runtime_route_rpcs.sql')) {
@@ -563,9 +574,26 @@ if (process.env.BK01_BASELINE_CATALOG_OUTPUT) {
     `rejected=${populatedRejected}; row-preserved=${populatedPreserved}`);
   await exec(`delete from local_service.line_webhook_events where webhook_event_id='rollback-negative-fixture'`);
 
+  await exec(`insert into wstera_platform_internal.storage_upload_grants
+      (product_code,runtime_role,bucket_id,object_path,grant_token_hash,content_type,size_bytes,expires_at)
+    values ('bk01','bk01_runtime','deposit-slips',
+      '00000000-0000-0000-0000-000000000004/eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee.png',
+      repeat('e',64),'image/png',8,now()+interval '1 minute')`);
+  let houseIntegrationRollbackRefused = false;
+  try { await exec(`reset role;\n${read('supabase/rollback/20260928120000_bk01_house_upload_grants.rollback.sql')}`); }
+  catch { houseIntegrationRollbackRefused = true; await exec('rollback;'); }
+  record('BK01 integration rollback refuses while a House BK01 grant remains', houseIntegrationRollbackRefused,
+    `refused=${houseIntegrationRollbackRefused}`);
+  await exec(`reset role;
+    delete from wstera_platform_internal.storage_upload_grants where grant_token_hash=repeat('e',64);
+    delete from local_service.deposit_slip_upload_grants;
+    delete from wstera_platform_internal.storage_upload_grants where product_code='bk01';
+    ${read('supabase/rollback/20260928120000_bk01_house_upload_grants.rollback.sql')}`);
+
   let fullRollbackError = null;
   try {
     for (const file of [
+      'supabase/rollback/20260928120000_bk01_house_upload_grants.rollback.sql',
       'supabase/rollback/20260927130000_bk01_trial_line_bind.rollback.sql',
       'supabase/rollback/20260927120000_bk01_runtime_route_rpcs.rollback.sql',
       'supabase/rollback/20260926120000_bk01_entitlement_packs.rollback.sql',
@@ -591,7 +619,7 @@ if (process.env.BK01_BASELINE_CATALOG_OUTPUT) {
   const comparableActual = { ...actualBaseline,
     views: actualBaseline.views.map(({ schemaname, viewname }) => ({ schemaname, viewname })) };
   const snapshotEqual = JSON.stringify(comparableActual) === JSON.stringify(comparableExpected);
-  record('all three compensating rollbacks restore schema, grants, functions, policies and triggers exactly',
+  record('four compensating BK01 rollbacks restore schema, grants, functions, policies and triggers exactly',
     fullRollbackError === null && snapshotEqual,
     fullRollbackError ?? `snapshot-equal=${snapshotEqual}; baseline-objects=${expectedBaseline.relations.length}`);
   const restoreFiles = fullRollbackError === null ? productMigrations : productMigrations.slice(1);
@@ -878,6 +906,7 @@ await exec(`
       stripe_subscription_id='sub-probe',plan='basic_490',status='trialing';
 `);
 await exec('set role authenticator; set role bk01_runtime;');
+await exec("select set_config('request.jwt.claim.role','bk01_runtime',false)");
 const runtimeCaller = (await q('select current_user as role'))[0].role;
 const loginState = (await q("select rolcanlogin from pg_roles where rolname='bk01_runtime'"))[0].rolcanlogin;
 record(
@@ -974,15 +1003,50 @@ record('notification context returns only the matching pending attempt',
   contextOk.rows?.length === 1 && contextStale.rows?.length === 0,
   `attempt=${notificationAttempt}; matching=${contextOk.rows?.length ?? 'error'}; stale=${contextStale.rows?.length ?? 'error'}`);
 
+await adminQuery(`delete from wstera_platform_internal.storage_upload_bucket_allowlist where product_code='bk01'`);
+const uploadAllowlistClosed = await probeRun(`select * from local_service.authorize_deposit_slip_upload('00000000-0000-0000-0000-000000000004','TOKEN-123','image/png',1024)`);
+await adminQuery(`insert into wstera_platform_internal.storage_upload_bucket_allowlist(product_code,bucket_id)
+  values ('bk01','deposit-slips')`);
+const noPartialGrant = (await adminQuery(`select
+  (select count(*)::int from local_service.deposit_slip_upload_grants) as product_grants,
+  (select count(*)::int from wstera_platform_internal.storage_upload_grants where product_code='bk01') as house_grants`))[0];
+record('House allowlist rejection rolls back both BK01 and House grant inserts',
+  uploadAllowlistClosed.error !== null && noPartialGrant.product_grants === 0 && noPartialGrant.house_grants === 0,
+  `rejected=${uploadAllowlistClosed.error !== null}; counts=${JSON.stringify(noPartialGrant)}`);
+
 const upload = await probeRun(`select * from local_service.authorize_deposit_slip_upload('00000000-0000-0000-0000-000000000004','TOKEN-123','image/png',1024)`);
 const uploadGrant = upload.rows?.[0];
 const storedGrant = uploadGrant ? (await adminQuery(`select object_path,content_type,size_bytes,expires_at,
   length(grant_token_hash)=64 as token_hash_shape
   from local_service.deposit_slip_upload_grants where id='${uploadGrant.grant_id}'`))[0] : null;
+const houseGrant = uploadGrant ? (await adminQuery(`select product_code,runtime_role,bucket_id,object_path,
+  content_type,size_bytes,expires_at,consumed_at, length(grant_token_hash)=64 as token_hash_shape
+  from wstera_platform_internal.storage_upload_grants where object_path='${uploadGrant.object_path}'`))[0] : null;
+const storageAuthority = uploadGrant ? (await adminQuery(`select has_schema_privilege('bk01_runtime','storage','USAGE') as schema_usage,
+  has_table_privilege('bk01_runtime','storage.objects','INSERT') as insert_privilege`))[0] : null;
+const storageInsert = uploadGrant ? await probeRun(`insert into storage.objects(bucket_id,name,metadata)
+  values ('deposit-slips','${uploadGrant.object_path}','{"mimetype":"image/png","size":"1024"}'::jsonb)`) : { rows: null, error: 'no BK01 upload grant' };
+const storageReplay = uploadGrant ? await probeRun(`insert into storage.objects(bucket_id,name,metadata)
+  values ('deposit-slips','${uploadGrant.object_path}','{"mimetype":"image/png","size":"1024"}'::jsonb)`) : { rows: null, error: 'no BK01 upload grant' };
+const houseConsumed = uploadGrant ? (await adminQuery(`select consumed_at is not null as consumed
+  from wstera_platform_internal.storage_upload_grants where object_path='${uploadGrant.object_path}'`))[0]?.consumed : false;
+record('BK01 authorization registers and consumes a matching House grant; replay is denied',
+  Boolean(uploadGrant && storageAuthority?.schema_usage && storageAuthority?.insert_privilege
+    && houseGrant?.product_code === 'bk01' && houseGrant?.runtime_role === 'bk01_runtime'
+    && houseGrant?.bucket_id === 'deposit-slips' && houseGrant?.object_path === uploadGrant.object_path
+    && houseGrant?.token_hash_shape && storageInsert.error === null && storageReplay.error !== null && houseConsumed),
+  `house=${JSON.stringify(houseGrant)}; storageAuthority=${JSON.stringify(storageAuthority)}; insertError=${storageInsert.error}; replayDenied=${storageReplay.error !== null}; consumed=${houseConsumed}`);
 const uploadBadMime = await probeRun(`select * from local_service.authorize_deposit_slip_upload('00000000-0000-0000-0000-000000000004','TOKEN-123','text/plain',1024)`);
 const uploadBadSize = await probeRun(`select * from local_service.authorize_deposit_slip_upload('00000000-0000-0000-0000-000000000004','TOKEN-123','image/png',5242881)`);
 await adminQuery(`update local_service.bookings set status='pending_review' where id='00000000-0000-0000-0000-000000000004'`);
 const uploadWrongState = await probeRun(`select * from local_service.authorize_deposit_slip_upload('00000000-0000-0000-0000-000000000004','TOKEN-123','image/png',1024)`);
+const rejectedUploadCounts = (await adminQuery(`select
+  (select count(*)::int from local_service.deposit_slip_upload_grants) as product_grants,
+  (select count(*)::int from wstera_platform_internal.storage_upload_grants where product_code='bk01') as house_grants`))[0];
+record('invalid BK01 authorization creates no partial local or House grant',
+  uploadBadMime.error !== null && uploadBadSize.error !== null && uploadWrongState.error !== null
+    && rejectedUploadCounts.product_grants === 1 && rejectedUploadCounts.house_grants === 1,
+  `badMime=${uploadBadMime.error !== null}; badSize=${uploadBadSize.error !== null}; wrongState=${uploadWrongState.error !== null}; counts=${JSON.stringify(rejectedUploadCounts)}`);
 const uploadPathParts = uploadGrant?.object_path.split('/') ?? [];
 const uploadPathMatches = uploadPathParts[0] === '00000000-0000-0000-0000-000000000004'
   && /^[0-9a-f-]{36}\.png$/.test(uploadPathParts[1] ?? '');
@@ -994,7 +1058,7 @@ record('upload RPC derives exact booking path and records MIME/size/token hash/T
     && storedGrant.content_type === 'image/png' && Number(storedGrant.size_bytes) === 1024
     && storedGrant.token_hash_shape && uploadExpiryValid
     && uploadBadMime.error !== null && uploadBadSize.error !== null && uploadWrongState.error !== null),
-  `issued=${Boolean(uploadGrant)}; stored=${JSON.stringify(storedGrant)}; path=${uploadGrant?.object_path ?? upload.error}; pathMatch=${uploadPathMatches}; expiryValid=${uploadExpiryValid}; badMime=${uploadBadMime.error !== null}; badSize=${uploadBadSize.error !== null}; wrongState=${uploadWrongState.error !== null}; DB-only proof does not test Storage consume/replay`);
+  `issued=${Boolean(uploadGrant)}; stored=${JSON.stringify(storedGrant)}; path=${uploadGrant?.object_path ?? upload.error}; pathMatch=${uploadPathMatches}; expiryValid=${uploadExpiryValid}; badMime=${uploadBadMime.error !== null}; badSize=${uploadBadSize.error !== null}; wrongState=${uploadWrongState.error !== null}; signed-URL issuance/expiry not emulated`);
 
 const stripeFirst = await probeRun(`select * from local_service.sync_subscription_state_bk_a('customer.subscription.updated',1750000000,'${shopId}','cus-probe','sub-probe','basic_490','active',1752592000,false)`);
 const stripeState1 = (await adminQuery(`select s.plan,s.status,s.current_period_end,s.cancel_at_period_end,s.last_stripe_event_created_at,
