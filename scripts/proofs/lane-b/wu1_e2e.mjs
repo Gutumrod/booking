@@ -21,6 +21,8 @@ import crypto from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { PGlite } from '@electric-sql/pglite';
+import { validateBk01MigrationSql } from '../../lib/bk01-migration-policy.mjs';
+import { parseBk01MigrationArgs, selectPendingBk01Migrations } from '../../lib/bk01-migration-selection.mjs';
 import {
   BK01_RUNTIME_BOOTSTRAP_FUNCTIONS,
   BK01_PUBLIC_LEGACY_EXECUTE_EXCEPTIONS,
@@ -201,6 +203,169 @@ const productMigrations = [
   'supabase/bk01-migrations/20260927130000_bk01_trial_line_bind.sql',
   'supabase/bk01-migrations/20260928120000_bk01_house_upload_grants.sql',
 ];
+
+async function proveRunnerThrough() {
+  // Prove the A2 runner schedule against two independent clones of the same
+  // bootstrapped PGlite state. The split path applies migrations 1-3 atomically,
+  // interleaves the exact House SQL, then applies migration 4. The comparison path
+  // applies the exact House SQL first and all four BK01 migrations in one transaction.
+  const runnerMigrationRows = productMigrations.map((file) => {
+    const filename = path.basename(file);
+    const sqlText = read(file).replace(/\r\n/g, '\n');
+    validateBk01MigrationSql(sqlText, filename);
+    return {
+      filename,
+      migrationId: filename.slice(0, -4),
+      sqlText,
+      sourceSha256: crypto.createHash('sha256').update(sqlText).digest('hex'),
+    };
+  });
+  const throughArgs = parseBk01MigrationArgs(['apply', '--through', runnerMigrationRows[2].filename]);
+  const baselineDataDir = await db.dumpDataDir();
+  const splitDb = new PGlite({ loadDataDir: baselineDataDir });
+  const oneShotDb = new PGlite({ loadDataDir: baselineDataDir });
+  const pgRows = async (database, sql, params = []) => (await database.query(sql, params)).rows;
+  const houseStorageSql = read('scripts/proofs/lane-b/fixtures/house_storage_upload_grants.sql');
+  const installHouseStorage = async (database) => {
+    await database.exec(houseStorageSql);
+    await database.exec('grant insert on storage.objects to bk01_runtime');
+  };
+  const readRunnerLedger = async (database) => {
+    const rows = await pgRows(database, `select migration_id, filename, source_sha256
+      from local_service_internal.schema_migrations order by migration_id`);
+    return new Map(rows.map((row) => [row.migration_id, row]));
+  };
+  const applyRunnerBatch = async (database, selected) => {
+    await database.exec('begin');
+    try {
+      await database.exec('set local role bk01_migrator');
+      for (const migration of selected) {
+        await database.exec(migration.sqlText);
+        await database.query(`insert into local_service_internal.schema_migrations
+          (migration_id, filename, source_sha256, release_id, runner_version)
+          values ($1, $2, $3, $4, $5)`, [migration.migrationId, migration.filename,
+          migration.sourceSha256, 'pglite-runner-through-proof', '1.1.0']);
+      }
+      await database.exec('commit');
+    } catch (error) {
+      await database.exec('rollback');
+      throw error;
+    }
+  };
+  const catalogSnapshot = async (database) => ({
+    schemas: await pgRows(database, `select nspname, pg_get_userbyid(nspowner) as owner, coalesce(nspacl::text,'') as acl
+      from pg_namespace where nspname in ('local_service','local_service_internal','wstera_platform_internal') order by 1`),
+    relations: await pgRows(database, `select n.nspname as schema, c.relname as name, c.relkind,
+        pg_get_userbyid(c.relowner) as owner, c.relrowsecurity, c.relforcerowsecurity, coalesce(c.relacl::text,'') as acl
+      from pg_class c join pg_namespace n on n.oid=c.relnamespace
+      where n.nspname in ('local_service','local_service_internal','wstera_platform_internal')
+        and c.relkind in ('r','p','v','m','S','f','i') order by 1,2`),
+    columns: await pgRows(database, `select table_schema, table_name, column_name, ordinal_position,
+        column_default, is_nullable, data_type, udt_name
+      from information_schema.columns where table_schema in
+        ('local_service','local_service_internal','wstera_platform_internal') order by 1,2,4`),
+    functions: await pgRows(database, `select n.nspname as schema, p.oid::regprocedure::text as identity,
+        pg_get_userbyid(p.proowner) as owner, pg_get_functiondef(p.oid) as definition, coalesce(p.proacl::text,'') as acl
+      from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+      where n.nspname in ('local_service','local_service_internal','wstera_platform_internal') order by 1,2`),
+    constraints: await pgRows(database, `select n.nspname as schema, c.relname as table, con.conname as name,
+        con.contype, pg_get_constraintdef(con.oid) as definition
+      from pg_constraint con join pg_class c on c.oid=con.conrelid
+      join pg_namespace n on n.oid=c.relnamespace
+      where n.nspname in ('local_service','local_service_internal','wstera_platform_internal') order by 1,2,3`),
+  indexes: await pgRows(database, `select schemaname, tablename, indexname, indexdef from pg_indexes
+    where schemaname in ('local_service','local_service_internal','wstera_platform_internal') order by 1,2,3`),
+  triggers: await pgRows(database, `select n.nspname as schema, c.relname as table, t.tgname as name,
+      pg_get_triggerdef(t.oid) as definition
+    from pg_trigger t join pg_class c on c.oid=t.tgrelid
+    join pg_namespace n on n.oid=c.relnamespace
+    where not t.tgisinternal and n.nspname in
+      ('local_service','local_service_internal','wstera_platform_internal') order by 1,2,3`),
+    policies: await pgRows(database, `select schemaname, tablename, policyname, permissive, roles, cmd, qual, with_check
+      from pg_policies where schemaname in ('local_service','local_service_internal','wstera_platform_internal') order by 1,2,3`),
+    ledger: await pgRows(database, `select migration_id, filename, source_sha256, release_id, runner_version
+      from local_service_internal.schema_migrations order by migration_id`),
+    // Compare seeded business values but normalize transaction-time metadata:
+    // split and one-shot applies necessarily call now() at different times.
+  seedRows: await pgRows(database, `select 'entitlement_plans' as table_name,
+        (to_jsonb(t)-'created_at'-'updated_at')::text as row
+        from local_service.entitlement_plans t
+      union all select 'trial_promotions', (to_jsonb(t)-'created_at'-'updated_at')::text from local_service.trial_promotions t
+    union all select 'business_types', (to_jsonb(t)-'created_at'-'updated_at')::text from local_service.business_types t order by 1,2`),
+  houseRegistryRows: await pgRows(database, `select to_jsonb(t)::text as row
+    from wstera_platform_internal.storage_upload_grants t order by 1`),
+});
+
+  const initialLedger = await readRunnerLedger(splitDb);
+  const splitFirstInterval = selectPendingBk01Migrations(runnerMigrationRows, initialLedger, throughArgs.throughFilename);
+  record('BK01 plan/apply selector targets migrations 1-3 inclusively',
+    splitFirstInterval.length === 3 && splitFirstInterval.at(-1)?.filename === runnerMigrationRows[2].filename,
+    splitFirstInterval.map((migration) => migration.filename).join(' → '));
+  let splitFirstError = null;
+  try { await applyRunnerBatch(splitDb, splitFirstInterval); }
+  catch (error) { splitFirstError = String(error.message).split('\n')[0]; }
+  const splitLedgerAfterFirst = await readRunnerLedger(splitDb);
+  record('BK01 first interval commits migrations 1-3 as one transaction',
+    splitFirstError === null && runnerMigrationRows.slice(0, 3).every((migration) => splitLedgerAfterFirst.has(migration.migrationId))
+      && !splitLedgerAfterFirst.has(runnerMigrationRows[3].migrationId),
+    splitFirstError ?? `ledger=${splitLedgerAfterFirst.size}; migration4 pending`);
+  if (splitFirstError === null) {
+    await installHouseStorage(splitDb);
+    const splitSecondInterval = selectPendingBk01Migrations(runnerMigrationRows, splitLedgerAfterFirst, undefined);
+    try { await applyRunnerBatch(splitDb, splitSecondInterval); }
+    catch (error) { splitFirstError = String(error.message).split('\n')[0]; }
+  }
+  record('BK01 second interval applies only migration 4 after House SQL',
+    splitFirstError === null && (await readRunnerLedger(splitDb)).size === 4,
+    splitFirstError ?? `ledger=${(await readRunnerLedger(splitDb)).size}`);
+
+  await installHouseStorage(oneShotDb);
+  const oneShotInterval = selectPendingBk01Migrations(runnerMigrationRows, await readRunnerLedger(oneShotDb), undefined);
+  let oneShotError = null;
+  try { await applyRunnerBatch(oneShotDb, oneShotInterval); }
+  catch (error) { oneShotError = String(error.message).split('\n')[0]; }
+  const splitSnapshot = splitFirstError === null ? await catalogSnapshot(splitDb) : null;
+  const oneShotSnapshot = oneShotError === null ? await catalogSnapshot(oneShotDb) : null;
+  const differingSnapshotSections = splitSnapshot === null || oneShotSnapshot === null ? []
+    : Object.keys(splitSnapshot).filter((section) =>
+      JSON.stringify(splitSnapshot[section]) !== JSON.stringify(oneShotSnapshot[section]));
+  const snapshotsEqual = splitSnapshot !== null && oneShotSnapshot !== null
+    && JSON.stringify(splitSnapshot) === JSON.stringify(oneShotSnapshot);
+  const splitSnapshotSha = splitSnapshot === null ? null
+    : crypto.createHash('sha256').update(JSON.stringify(splitSnapshot)).digest('hex');
+  const oneShotSnapshotSha = oneShotSnapshot === null ? null
+    : crypto.createHash('sha256').update(JSON.stringify(oneShotSnapshot)).digest('hex');
+  record('two-interval BK01 + House SQL final snapshot equals one-shot four-migration snapshot',
+    oneShotError === null && snapshotsEqual,
+    `split=${splitSnapshotSha}; one-shot=${oneShotSnapshotSha}; differing-sections=${differingSnapshotSections.join(',') || 'none'}; one-shot-error=${oneShotError ?? 'none'}`);
+
+  const rollbackDb = new PGlite({ loadDataDir: baselineDataDir });
+  let intervalFailureObserved = false;
+  await rollbackDb.exec('begin');
+  try {
+    await rollbackDb.exec('set local role bk01_migrator');
+    await rollbackDb.exec(runnerMigrationRows[0].sqlText);
+    await rollbackDb.query(`insert into local_service_internal.schema_migrations
+      (migration_id, filename, source_sha256, release_id, runner_version)
+      values ($1, $2, $3, $4, $5)`, [runnerMigrationRows[0].migrationId,
+      runnerMigrationRows[0].filename, runnerMigrationRows[0].sourceSha256,
+      'pglite-rollback-proof', '1.1.0']);
+    await rollbackDb.exec('select * from local_service.__bk01_runner_through_forced_failure__');
+    await rollbackDb.exec('commit');
+  } catch {
+    intervalFailureObserved = true;
+    await rollbackDb.exec('rollback');
+  }
+  const rolledBackFirstMigration = (await pgRows(rollbackDb, `select
+    to_regclass('local_service.entitlement_plans') is null as table_absent,
+    not exists(select 1 from local_service_internal.schema_migrations
+      where migration_id=$1) as ledger_absent`, [runnerMigrationRows[0].migrationId]))[0];
+  record('BK01 interval failure rolls back earlier migrations and ledger writes',
+    intervalFailureObserved && rolledBackFirstMigration.table_absent && rolledBackFirstMigration.ledger_absent,
+    JSON.stringify(rolledBackFirstMigration));
+  await Promise.all([splitDb.close(), oneShotDb.close(), rollbackDb.close()]);
+}
+
 const fnCount = (await q(`select count(*)::int as n from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='local_service' and p.prokind='f'`))[0].n;
 console.log(`        frozen chain produced ${fnCount} local_service functions`);
 
@@ -343,6 +508,7 @@ const rebootstrapSet = await effectiveRuntimeSet();
 record('platform bootstrap reapplies cleanly after its rollback', rebootstrapError === null
   && JSON.stringify(rebootstrapSet.slice().sort()) === JSON.stringify(preRouteExpected),
   rebootstrapError ?? `runtime EXECUTE identities=${rebootstrapSet.length}`);
+await proveRunnerThrough();
 
 // Optional offline source snapshot for the BK01 compensating rollback chain.
 // This records database definitions and grants immediately before the product

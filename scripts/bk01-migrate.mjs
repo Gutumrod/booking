@@ -4,12 +4,13 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import postgres from 'postgres';
 import { validateBk01MigrationSql } from './lib/bk01-migration-policy.mjs';
+import { parseBk01MigrationArgs, selectPendingBk01Migrations } from './lib/bk01-migration-selection.mjs';
 
-const RUNNER_VERSION = '1.0.0';
+const RUNNER_VERSION = '1.1.0';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const migrationDir = path.join(root, 'supabase', 'bk01-migrations');
 const baselinePath = path.join(root, 'supabase', 'shared-runtime', 'bk01-legacy-baseline.json');
-const mode = process.argv[2];
+const { mode, throughFilename } = parseBk01MigrationArgs(process.argv.slice(2));
 
 const log = (level, event, detail = {}) => {
   process.stdout.write(`${JSON.stringify({ level, event, ...detail })}\n`);
@@ -17,10 +18,6 @@ const log = (level, event, detail = {}) => {
 
 function fail(message) {
   throw new Error(message);
-}
-
-if (!['plan', 'apply'].includes(mode)) {
-  fail('Usage: node scripts/bk01-migrate.mjs <plan|apply>');
 }
 
 const databaseUrl = process.env.BK01_PLATFORM_DATABASE_URL?.trim();
@@ -91,6 +88,10 @@ const migrations = migrationFiles.map((filename) => {
   };
 });
 
+if (throughFilename !== undefined && !migrations.some((migration) => migration.filename === throughFilename)) {
+  fail(`Unknown BK01 migration filename for --through: ${throughFilename}`);
+}
+
 const sql = postgres(databaseUrl, {
   max: 1,
   prepare: false,
@@ -160,17 +161,13 @@ async function run() {
       order by migration_id
     `);
     const applied = new Map(appliedRows.map((row) => [row.migration_id, row]));
-    const pending = [];
-
     for (const migration of migrations) {
       const prior = applied.get(migration.migrationId);
       if (prior) {
         if (prior.filename !== migration.filename || prior.source_sha256 !== migration.sourceSha256) {
           fail(`Applied migration checksum mismatch: ${migration.migrationId}`);
         }
-        continue;
       }
-      pending.push(migration);
     }
 
     const localIds = new Set(migrations.map((migration) => migration.migrationId));
@@ -178,6 +175,8 @@ async function run() {
     if (orphaned.length > 0) {
       fail(`Repository is missing applied BK01 migration(s): ${orphaned.map((row) => row.migration_id).join(', ')}`);
     }
+
+    const pending = selectPendingBk01Migrations(migrations, applied, throughFilename);
 
     log('info', 'bk01.migration.plan', {
       appliedCount: appliedRows.length,
