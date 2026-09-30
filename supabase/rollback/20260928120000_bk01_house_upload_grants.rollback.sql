@@ -20,8 +20,10 @@ CREATE OR REPLACE FUNCTION local_service.authorize_deposit_slip_upload(
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, local_service AS $$
 DECLARE
     v_booking local_service.bookings%rowtype;
-    v_token text := encode(extensions.gen_random_bytes(32), 'hex');
-    v_grant_id uuid := extensions.uuid_generate_v4();
+    v_token text := encode(pg_catalog.sha256(
+      pg_catalog.uuid_send(pg_catalog.gen_random_uuid()) || pg_catalog.uuid_send(pg_catalog.gen_random_uuid())
+    ), 'hex');
+    v_grant_id uuid := pg_catalog.gen_random_uuid();
     v_path text;
     v_extension text;
     v_expiry timestamptz := now() + interval '5 minutes';
@@ -45,7 +47,7 @@ BEGIN
     v_path := v_booking.id::text || '/' || v_grant_id::text || '.' || v_extension;
     INSERT INTO local_service.deposit_slip_upload_grants
       (id,booking_id,grant_token_hash,object_path,content_type,size_bytes,expires_at)
-    VALUES(v_grant_id,v_booking.id,encode(extensions.digest(convert_to(v_token,'UTF8'),'sha256'),'hex'),
+    VALUES(v_grant_id,v_booking.id,encode(pg_catalog.sha256(convert_to(v_token,'UTF8')),'hex'),
       v_path,p_content_type,p_size_bytes,v_expiry);
     RETURN QUERY SELECT v_grant_id,v_path,v_expiry,v_token;
 END; $$;

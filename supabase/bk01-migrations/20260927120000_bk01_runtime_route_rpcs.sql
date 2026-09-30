@@ -18,7 +18,7 @@ REVOKE ALL ON TABLE local_service.line_webhook_events FROM PUBLIC, anon, authent
 GRANT ALL ON TABLE local_service.line_webhook_events TO service_role;
 
 CREATE TABLE local_service.deposit_slip_upload_grants (
-    id uuid PRIMARY KEY DEFAULT extensions.uuid_generate_v4(),
+    id uuid PRIMARY KEY DEFAULT pg_catalog.gen_random_uuid(),
     booking_id uuid NOT NULL REFERENCES local_service.bookings(id) ON DELETE CASCADE,
     grant_token_hash text NOT NULL UNIQUE,
     object_path text NOT NULL UNIQUE,
@@ -42,7 +42,7 @@ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, local_service AS
 DECLARE
     v_booking local_service.bookings%rowtype;
     v_event local_service.line_webhook_events%rowtype;
-    v_lease uuid := extensions.uuid_generate_v4();
+    v_lease uuid := pg_catalog.gen_random_uuid();
     v_inserted boolean := false;
 BEGIN
     IF p_webhook_event_id IS NULL OR length(p_webhook_event_id) NOT BETWEEN 1 AND 200
@@ -160,8 +160,10 @@ CREATE FUNCTION local_service.authorize_deposit_slip_upload(
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, local_service AS $$
 DECLARE
     v_booking local_service.bookings%rowtype;
-    v_token text := encode(extensions.gen_random_bytes(32), 'hex');
-    v_grant_id uuid := extensions.uuid_generate_v4();
+    v_token text := encode(pg_catalog.sha256(
+      pg_catalog.uuid_send(pg_catalog.gen_random_uuid()) || pg_catalog.uuid_send(pg_catalog.gen_random_uuid())
+    ), 'hex');
+    v_grant_id uuid := pg_catalog.gen_random_uuid();
     v_path text;
     v_extension text;
     v_expiry timestamptz := now() + interval '5 minutes';
@@ -185,7 +187,7 @@ BEGIN
     v_path := v_booking.id::text || '/' || v_grant_id::text || '.' || v_extension;
     INSERT INTO local_service.deposit_slip_upload_grants
       (id,booking_id,grant_token_hash,object_path,content_type,size_bytes,expires_at)
-    VALUES(v_grant_id,v_booking.id,encode(extensions.digest(convert_to(v_token,'UTF8'),'sha256'),'hex'),
+    VALUES(v_grant_id,v_booking.id,encode(pg_catalog.sha256(convert_to(v_token,'UTF8')),'hex'),
       v_path,p_content_type,p_size_bytes,v_expiry);
     RETURN QUERY SELECT v_grant_id,v_path,v_expiry,v_token;
 END; $$;

@@ -103,7 +103,7 @@ const TARGET_PATTERNS = [
 const ON_TARGET_PATTERNS = [
   { label: 'CREATE INDEX', re: /\bcreate(?:\s+unique)?\s+index(?:\s+if\s+not\s+exists)?\s+[^\s]+\s+on\s+(?:only\s+)?([^\s(;]+)/gi },
   { label: 'TRIGGER', re: /\bcreate(?:\s+or\s+replace)?\s+trigger\s+[^\s]+[\s\S]*?\bon\s+([^\s(;]+)/gi },
-  { label: 'POLICY', re: /\b(?:create|alter|drop)\s+policy(?:\s+if\s+exists)?\s+[^\s]+\s+on\s+([^\s(;]+)/gi },
+  { label: 'POLICY', re: /\b(?:create|alter|drop)\s+policy(?:\s+if\s+exists)?\s+(?:"(?:[^"]|"")*"|[a-z_][a-z0-9_]*)\s+on\s+([^\s(;]+)/gi },
 ];
 
 const COMMENT_TARGET = /\bcomment\s+on\s+(?:table|view|column|function|type|sequence)\s+([^\s(;]+)/gi;
@@ -121,6 +121,11 @@ const FUNCTION_CREATION =
 // arguments, which is the same signature written both ways).
 const FUNCTION_REVOKE_FROM_PUBLIC =
   /\brevoke\s+all\s+on\s+function\s+([a-z_][a-z0-9_]*\.[a-z_][a-z0-9_]*)\s*(\(([^)]*)\))?\s+from\s+[^;]*\bpublic\b/gi;
+// One legacy RPC is intentionally PUBLIC-executable. Its ACL predates BK01's
+// migration stream and A11 permits replacing its body only when the declaration
+// names this exact identity. This does not permit new PUBLIC grants or other
+// functions to bypass the default-revoke rule.
+const PRESERVE_PUBLIC_EXECUTE = /^[^\S\n]*--[^\S\n]*BK01-PRESERVE-EXISTING-PUBLIC-EXECUTE\s*:\s*(local_service\.generate_link_token\s*\(\s*\))\s*$/gim;
 
 const squash = (value) => value.replace(/\s+/g, ' ').trim().toLowerCase();
 
@@ -169,12 +174,28 @@ function assertFunctionsRevokePublic(body, sourceName) {
     }
   }
 
+  const preserved = new Set();
+  for (const match of Array.from(sourceName.sql?.matchAll(PRESERVE_PUBLIC_EXECUTE) ?? [])) {
+    preserved.add(functionSignature(match[1].replace(/\(\s*\)$/, ''), ''));
+  }
+  if (preserved.size > 1) throw new Error(`${sourceName.name}: multiple PUBLIC ACL preservation declarations are forbidden`);
+  if (preserved.size > 0 && sourceName.name !== '20260930120000_bk01_link_token_no_extensions.sql') {
+    throw new Error(`${sourceName.name}: legacy PUBLIC ACL preservation is limited to the A11 migration`);
+  }
+  for (const signature of preserved) {
+    const matching = creations.filter(creation => creation.signature === signature && creation.replaced);
+    if (matching.length !== 1) {
+      throw new Error(`${sourceName.name}: PUBLIC ACL preservation must match exactly one CREATE OR REPLACE of ${signature}`);
+    }
+  }
+
   for (const creation of creations) {
     if (revoked.has(creation.signature)) continue;
+    if (preserved.has(creation.signature)) continue;
     // A no-argument function may be revoked with either `fn()` or `fn` spelling.
     if (creation.argumentCount === 0 && revoked.has(functionSignature(creation.raw.split('(')[0], ''))) continue;
     throw new Error(
-      `${sourceName}: ${creation.replaced ? 'CREATE OR REPLACE FUNCTION (new signature)' : 'CREATE FUNCTION'} ${creation.signature} `
+      `${sourceName.name}: ${creation.replaced ? 'CREATE OR REPLACE FUNCTION (new signature)' : 'CREATE FUNCTION'} ${creation.signature} `
       + 'has no matching REVOKE ALL ON FUNCTION ... FROM PUBLIC. PostgreSQL grants EXECUTE on a new function to PUBLIC by default '
       + '(SECURITY INVOKER included), so the function would be callable by anyone holding the anon key.',
     );
@@ -289,7 +310,7 @@ export function validateBk01MigrationSql(sql, sourceName = 'migration') {
     assertAllowedGrantees(statement, sourceName);
   }
 
-  assertFunctionsRevokePublic(body, sourceName);
+  assertFunctionsRevokePublic(body, { name: sourceName, sql });
 
   return true;
 }

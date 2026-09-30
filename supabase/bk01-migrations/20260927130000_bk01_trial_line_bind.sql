@@ -28,7 +28,7 @@ DECLARE
     v_event local_service.line_webhook_events%rowtype;
     v_customer local_service.customers%rowtype;
     v_mapped_customer_id uuid;
-    v_lease uuid := extensions.uuid_generate_v4();
+    v_lease uuid := pg_catalog.gen_random_uuid();
     v_inserted boolean := false;
 BEGIN
     IF p_webhook_event_id IS NULL OR length(p_webhook_event_id) NOT BETWEEN 1 AND 200

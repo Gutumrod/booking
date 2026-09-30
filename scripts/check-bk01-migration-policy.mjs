@@ -15,6 +15,9 @@ for (const name of migrations) {
   const sql = fs.readFileSync(path.join(migrationsDir, name), 'utf8');
   if (!sql.trim()) throw new Error(`${name}: empty migration`);
   validateBk01MigrationSql(sql, name);
+  if (/\bextensions\s*\./i.test(sql.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/--.*$/gm, ' '))) {
+    throw new Error(`${name}: product migration references extensions schema`);
+  }
 }
 
 console.log(`Migrations accepted: ${migrations.length}; owned schemas: ${BK01_OWNED_SCHEMAS.join(', ')}; grant roles: ${BK01_ALLOWED_GRANTEES.join(', ')}`);
