@@ -49,7 +49,6 @@ DROP VIEW local_service.shop_public_profile;
 
 ALTER TABLE local_service.services DROP CONSTRAINT services_not_active_and_entitlement_disabled;
 
-REVOKE ALL ON FUNCTION local_service.add_ticket_timeline_entry(uuid,text,text,text) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 CREATE OR REPLACE FUNCTION local_service.add_ticket_timeline_entry(p_ticket_id uuid, p_event_type text, p_message text, p_actor text)
  RETURNS uuid
  LANGUAGE plpgsql
@@ -108,10 +107,10 @@ BEGIN
     RETURN v_entry_id;
 END;
 $function$;
+REVOKE ALL ON FUNCTION local_service.add_ticket_timeline_entry(uuid,text,text,text) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.add_ticket_timeline_entry(uuid,text,text,text) TO bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.add_ticket_timeline_entry(uuid,text,text,text) TO authenticated;
 
-REVOKE ALL ON FUNCTION local_service.apply_topup(uuid,integer,integer) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 CREATE OR REPLACE FUNCTION local_service.apply_topup(p_shop_id uuid, p_bookings_credits integer DEFAULT 0, p_auto_slip_credits integer DEFAULT 0)
  RETURNS json
  LANGUAGE plpgsql
@@ -157,10 +156,10 @@ BEGIN
     );
 END;
 $function$;
+REVOKE ALL ON FUNCTION local_service.apply_topup(uuid,integer,integer) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.apply_topup(uuid,integer,integer) TO bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.apply_topup(uuid,integer,integer) TO authenticated;
 
-REVOKE ALL ON FUNCTION local_service.approve_booking_deposit(uuid) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 CREATE OR REPLACE FUNCTION local_service.approve_booking_deposit(p_booking_id uuid)
  RETURNS json
  LANGUAGE plpgsql
@@ -213,10 +212,10 @@ BEGIN
     );
 END;
 $function$;
+REVOKE ALL ON FUNCTION local_service.approve_booking_deposit(uuid) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.approve_booking_deposit(uuid) TO bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.approve_booking_deposit(uuid) TO authenticated;
 
-REVOKE ALL ON FUNCTION local_service.audit_platform_admin_update() FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 CREATE OR REPLACE FUNCTION local_service.audit_platform_admin_update()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -239,9 +238,9 @@ BEGIN
     RETURN NEW;
 END;
 $function$;
+REVOKE ALL ON FUNCTION local_service.audit_platform_admin_update() FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.audit_platform_admin_update() TO PUBLIC;
 
-REVOKE ALL ON FUNCTION local_service.authorize_booking_recovery_attempt(uuid,text) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 CREATE OR REPLACE FUNCTION local_service.authorize_booking_recovery_attempt(p_booking_id uuid, p_recovery_token text)
  RETURNS boolean
  LANGUAGE plpgsql
@@ -269,11 +268,11 @@ BEGIN
     blocked_until=CASE WHEN booking_recovery_attempts.failed_attempts+1 >= 5 THEN now()+interval '30 minutes' ELSE booking_recovery_attempts.blocked_until END;
   RETURN false;
 END; $function$;
+REVOKE ALL ON FUNCTION local_service.authorize_booking_recovery_attempt(uuid,text) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.authorize_booking_recovery_attempt(uuid,text) TO bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.authorize_booking_recovery_attempt(uuid,text) TO service_role;
 GRANT EXECUTE ON FUNCTION local_service.authorize_booking_recovery_attempt(uuid,text) TO bk01_runtime;
 
-REVOKE ALL ON FUNCTION local_service.cancel_booking(uuid,text) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 CREATE OR REPLACE FUNCTION local_service.cancel_booking(p_booking_id uuid, p_reason text)
  RETURNS json
  LANGUAGE plpgsql
@@ -332,10 +331,10 @@ BEGIN
     );
 END;
 $function$;
+REVOKE ALL ON FUNCTION local_service.cancel_booking(uuid,text) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.cancel_booking(uuid,text) TO bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.cancel_booking(uuid,text) TO authenticated;
 
-REVOKE ALL ON FUNCTION local_service.claim_due_line_notifications(integer) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 CREATE OR REPLACE FUNCTION local_service.claim_due_line_notifications(p_limit integer DEFAULT 25)
  RETURNS SETOF local_service.line_notification_logs
  LANGUAGE plpgsql
@@ -363,11 +362,11 @@ BEGIN
     RETURNING l.*;
 END;
 $function$;
+REVOKE ALL ON FUNCTION local_service.claim_due_line_notifications(integer) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.claim_due_line_notifications(integer) TO bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.claim_due_line_notifications(integer) TO service_role;
 GRANT EXECUTE ON FUNCTION local_service.claim_due_line_notifications(integer) TO bk01_runtime;
 
-REVOKE ALL ON FUNCTION local_service.claim_stripe_webhook_event(text,text,timestamp with time zone) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 CREATE OR REPLACE FUNCTION local_service.claim_stripe_webhook_event(p_id text, p_type text, p_created_at timestamp with time zone)
  RETURNS boolean
  LANGUAGE plpgsql
@@ -384,11 +383,11 @@ BEGIN
   RETURNING true INTO v_claimed;
   RETURN coalesce(v_claimed,false);
 END; $function$;
+REVOKE ALL ON FUNCTION local_service.claim_stripe_webhook_event(text,text,timestamp with time zone) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.claim_stripe_webhook_event(text,text,timestamp with time zone) TO bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.claim_stripe_webhook_event(text,text,timestamp with time zone) TO service_role;
 GRANT EXECUTE ON FUNCTION local_service.claim_stripe_webhook_event(text,text,timestamp with time zone) TO bk01_runtime;
 
-REVOKE ALL ON FUNCTION local_service.complete_line_notification(uuid,integer,text,timestamp with time zone,timestamp with time zone,text) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 CREATE OR REPLACE FUNCTION local_service.complete_line_notification(p_id uuid, p_attempt_count integer, p_status text, p_sent_at timestamp with time zone, p_next_retry_at timestamp with time zone, p_error_message text)
  RETURNS boolean
  LANGUAGE plpgsql
@@ -404,11 +403,11 @@ BEGIN
   GET DIAGNOSTICS v_updated = ROW_COUNT;
   RETURN v_updated=1;
 END; $function$;
+REVOKE ALL ON FUNCTION local_service.complete_line_notification(uuid,integer,text,timestamp with time zone,timestamp with time zone,text) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.complete_line_notification(uuid,integer,text,timestamp with time zone,timestamp with time zone,text) TO bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.complete_line_notification(uuid,integer,text,timestamp with time zone,timestamp with time zone,text) TO service_role;
 GRANT EXECUTE ON FUNCTION local_service.complete_line_notification(uuid,integer,text,timestamp with time zone,timestamp with time zone,text) TO bk01_runtime;
 
-REVOKE ALL ON FUNCTION local_service.create_booking_hold(uuid,uuid,uuid,character varying,character varying,character varying,date,time without time zone,text) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 CREATE OR REPLACE FUNCTION local_service.create_booking_hold(p_shop_id uuid, p_service_id uuid, p_staff_id uuid DEFAULT NULL::uuid, p_customer_name character varying DEFAULT ''::character varying, p_customer_phone character varying DEFAULT ''::character varying, p_customer_email character varying DEFAULT NULL::character varying, p_booking_date date DEFAULT CURRENT_DATE, p_start_time time without time zone DEFAULT '09:00:00'::time without time zone, p_notes text DEFAULT NULL::text)
  RETURNS json
  LANGUAGE plpgsql
@@ -659,12 +658,12 @@ BEGIN
     );
 END;
 $function$;
+REVOKE ALL ON FUNCTION local_service.create_booking_hold(uuid,uuid,uuid,character varying,character varying,character varying,date,time without time zone,text) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.create_booking_hold(uuid,uuid,uuid,character varying,character varying,character varying,date,time without time zone,text) TO bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.create_booking_hold(uuid,uuid,uuid,character varying,character varying,character varying,date,time without time zone,text) TO anon;
 GRANT EXECUTE ON FUNCTION local_service.create_booking_hold(uuid,uuid,uuid,character varying,character varying,character varying,date,time without time zone,text) TO authenticated;
 GRANT EXECUTE ON FUNCTION local_service.create_booking_hold(uuid,uuid,uuid,character varying,character varying,character varying,date,time without time zone,text) TO service_role;
 
-REVOKE ALL ON FUNCTION local_service.create_service(uuid,text,text,integer,numeric,numeric,uuid) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 CREATE OR REPLACE FUNCTION local_service.create_service(p_shop_id uuid, p_name text, p_description text, p_duration_minutes integer, p_price numeric, p_deposit_amount numeric, p_idempotency_key uuid)
  RETURNS uuid
  LANGUAGE plpgsql
@@ -721,10 +720,10 @@ BEGIN
     RETURN v_service_id;
 END;
 $function$;
+REVOKE ALL ON FUNCTION local_service.create_service(uuid,text,text,integer,numeric,numeric,uuid) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.create_service(uuid,text,text,integer,numeric,numeric,uuid) TO bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.create_service(uuid,text,text,integer,numeric,numeric,uuid) TO authenticated;
 
-REVOKE ALL ON FUNCTION local_service.create_shop_holiday(uuid,date,text,uuid) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 CREATE OR REPLACE FUNCTION local_service.create_shop_holiday(p_shop_id uuid, p_holiday_date date, p_reason text, p_idempotency_key uuid)
  RETURNS uuid
  LANGUAGE plpgsql
@@ -779,10 +778,10 @@ BEGIN
     RETURN v_holiday_id;
 END;
 $function$;
+REVOKE ALL ON FUNCTION local_service.create_shop_holiday(uuid,date,text,uuid) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.create_shop_holiday(uuid,date,text,uuid) TO bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.create_shop_holiday(uuid,date,text,uuid) TO authenticated;
 
-REVOKE ALL ON FUNCTION local_service.create_staff(uuid,text,text,uuid) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 CREATE OR REPLACE FUNCTION local_service.create_staff(p_shop_id uuid, p_name text, p_phone text, p_idempotency_key uuid)
  RETURNS uuid
  LANGUAGE plpgsql
@@ -859,10 +858,10 @@ BEGIN
     RETURN v_staff_id;
 END;
 $function$;
+REVOKE ALL ON FUNCTION local_service.create_staff(uuid,text,text,uuid) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.create_staff(uuid,text,text,uuid) TO bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.create_staff(uuid,text,text,uuid) TO authenticated;
 
-REVOKE ALL ON FUNCTION local_service.create_ticket(uuid,uuid,uuid,text,text,text,text,text,text,text,text,text,text,timestamp with time zone,timestamp with time zone,timestamp with time zone,uuid) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 CREATE OR REPLACE FUNCTION local_service.create_ticket(p_shop_id uuid, p_booking_id uuid, p_service_id uuid, p_title text, p_type text, p_priority text, p_customer_name text, p_customer_phone text, p_normalized_phone text, p_contact_channel text, p_description text, p_issue_category text, p_related_product_service text, p_occurred_at timestamp with time zone, p_received_at timestamp with time zone, p_due_at timestamp with time zone, p_idempotency_key uuid)
  RETURNS uuid
  LANGUAGE plpgsql
@@ -991,10 +990,10 @@ BEGIN
     RETURN v_ticket_id;
 END;
 $function$;
+REVOKE ALL ON FUNCTION local_service.create_ticket(uuid,uuid,uuid,text,text,text,text,text,text,text,text,text,text,timestamp with time zone,timestamp with time zone,timestamp with time zone,uuid) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.create_ticket(uuid,uuid,uuid,text,text,text,text,text,text,text,text,text,text,timestamp with time zone,timestamp with time zone,timestamp with time zone,uuid) TO bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.create_ticket(uuid,uuid,uuid,text,text,text,text,text,text,text,text,text,text,timestamp with time zone,timestamp with time zone,timestamp with time zone,uuid) TO authenticated;
 
-REVOKE ALL ON FUNCTION local_service.current_staff_id(uuid) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 CREATE OR REPLACE FUNCTION local_service.current_staff_id(p_shop_id uuid)
  RETURNS uuid
  LANGUAGE sql
@@ -1013,10 +1012,10 @@ AS $function$
       AND s.is_active = true
     LIMIT 1
 $function$;
+REVOKE ALL ON FUNCTION local_service.current_staff_id(uuid) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.current_staff_id(uuid) TO bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.current_staff_id(uuid) TO authenticated;
 
-REVOKE ALL ON FUNCTION local_service.customer_cancel_booking(uuid,text,text) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 CREATE OR REPLACE FUNCTION local_service.customer_cancel_booking(p_booking_id uuid, p_recovery_token text, p_reason text)
  RETURNS json
  LANGUAGE plpgsql
@@ -1044,10 +1043,10 @@ BEGIN
     RETURN json_build_object('booking_id',p_booking_id,'status','cancelled');
 END;
 $function$;
+REVOKE ALL ON FUNCTION local_service.customer_cancel_booking(uuid,text,text) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.customer_cancel_booking(uuid,text,text) TO bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.customer_cancel_booking(uuid,text,text) TO anon;
 
-REVOKE ALL ON FUNCTION local_service.customer_reschedule_booking(uuid,text,date,time without time zone,text) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 CREATE OR REPLACE FUNCTION local_service.customer_reschedule_booking(p_booking_id uuid, p_recovery_token text, p_booking_date date, p_start_time time without time zone, p_reason text)
  RETURNS json
  LANGUAGE plpgsql
@@ -1104,10 +1103,10 @@ BEGIN
     RETURN json_build_object('booking_id',p_booking_id,'status','confirmed','start_timestamptz',v_start);
 END;
 $function$;
+REVOKE ALL ON FUNCTION local_service.customer_reschedule_booking(uuid,text,date,time without time zone,text) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.customer_reschedule_booking(uuid,text,date,time without time zone,text) TO bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.customer_reschedule_booking(uuid,text,date,time without time zone,text) TO anon;
 
-REVOKE ALL ON FUNCTION local_service.delete_closed_tickets_before(uuid,date) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 CREATE OR REPLACE FUNCTION local_service.delete_closed_tickets_before(p_shop_id uuid, p_cutoff_date date)
  RETURNS integer
  LANGUAGE plpgsql
@@ -1135,10 +1134,10 @@ BEGIN
     RETURN v_deleted_count;
 END;
 $function$;
+REVOKE ALL ON FUNCTION local_service.delete_closed_tickets_before(uuid,date) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.delete_closed_tickets_before(uuid,date) TO bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.delete_closed_tickets_before(uuid,date) TO authenticated;
 
-REVOKE ALL ON FUNCTION local_service.delete_shop_holiday(uuid) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 CREATE OR REPLACE FUNCTION local_service.delete_shop_holiday(p_holiday_id uuid)
  RETURNS void
  LANGUAGE plpgsql
@@ -1170,10 +1169,10 @@ BEGIN
     DELETE FROM local_service.shop_holidays WHERE id = p_holiday_id;
 END;
 $function$;
+REVOKE ALL ON FUNCTION local_service.delete_shop_holiday(uuid) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.delete_shop_holiday(uuid) TO bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.delete_shop_holiday(uuid) TO authenticated;
 
-REVOKE ALL ON FUNCTION local_service.enforce_booking_quota() FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 CREATE OR REPLACE FUNCTION local_service.enforce_booking_quota()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -1230,9 +1229,9 @@ BEGIN
     RETURN NEW;
 END;
 $function$;
+REVOKE ALL ON FUNCTION local_service.enforce_booking_quota() FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.enforce_booking_quota() TO bk01_migrator;
 
-REVOKE ALL ON FUNCTION local_service.enforce_booking_status_transition() FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 CREATE OR REPLACE FUNCTION local_service.enforce_booking_status_transition()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -1284,13 +1283,13 @@ BEGIN
     RETURN NEW;
 END;
 $function$;
+REVOKE ALL ON FUNCTION local_service.enforce_booking_status_transition() FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.enforce_booking_status_transition() TO PUBLIC;
 GRANT EXECUTE ON FUNCTION local_service.enforce_booking_status_transition() TO bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.enforce_booking_status_transition() TO anon;
 GRANT EXECUTE ON FUNCTION local_service.enforce_booking_status_transition() TO authenticated;
 GRANT EXECUTE ON FUNCTION local_service.enforce_booking_status_transition() TO service_role;
 
-REVOKE ALL ON FUNCTION local_service.enforce_shop_booking_acceptance() FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 CREATE OR REPLACE FUNCTION local_service.enforce_shop_booking_acceptance()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -1328,9 +1327,9 @@ BEGIN
     RETURN NEW;
 END;
 $function$;
+REVOKE ALL ON FUNCTION local_service.enforce_shop_booking_acceptance() FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.enforce_shop_booking_acceptance() TO bk01_migrator;
 
-REVOKE ALL ON FUNCTION local_service.enforce_ticket_owner_admin() FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 CREATE OR REPLACE FUNCTION local_service.enforce_ticket_owner_admin()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -1342,9 +1341,9 @@ BEGIN
     IF NOT local_service.has_shop_role(v_shop_id,ARRAY['owner','admin']::text[]) THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='Owner or admin role required for ticket operations'; END IF;
     RETURN COALESCE(NEW,OLD);
 END; $function$;
+REVOKE ALL ON FUNCTION local_service.enforce_ticket_owner_admin() FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.enforce_ticket_owner_admin() TO PUBLIC;
 
-REVOKE ALL ON FUNCTION local_service.enqueue_booking_notifications() FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 CREATE OR REPLACE FUNCTION local_service.enqueue_booking_notifications()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -1375,9 +1374,9 @@ BEGIN
     RETURN NEW;
 END;
 $function$;
+REVOKE ALL ON FUNCTION local_service.enqueue_booking_notifications() FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.enqueue_booking_notifications() TO PUBLIC;
 
-REVOKE ALL ON FUNCTION local_service.ensure_entitlement_row(uuid) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 CREATE OR REPLACE FUNCTION local_service.ensure_entitlement_row(p_shop_id uuid)
  RETURNS local_service.entitlement_usage
  LANGUAGE plpgsql
@@ -1463,10 +1462,10 @@ BEGIN
     RETURN v_usage;
 END;
 $function$;
+REVOKE ALL ON FUNCTION local_service.ensure_entitlement_row(uuid) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.ensure_entitlement_row(uuid) TO bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.ensure_entitlement_row(uuid) TO authenticated;
 
-REVOKE ALL ON FUNCTION local_service.export_core_business_data(uuid) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 CREATE OR REPLACE FUNCTION local_service.export_core_business_data(p_shop_id uuid)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -1488,10 +1487,10 @@ BEGIN
     RETURN v_result;
 END;
 $function$;
+REVOKE ALL ON FUNCTION local_service.export_core_business_data(uuid) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.export_core_business_data(uuid) TO bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.export_core_business_data(uuid) TO authenticated;
 
-REVOKE ALL ON FUNCTION local_service.extend_booking_hold(uuid) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 CREATE OR REPLACE FUNCTION local_service.extend_booking_hold(p_booking_id uuid)
  RETURNS json
  LANGUAGE plpgsql
@@ -1543,10 +1542,10 @@ BEGIN
     );
 END;
 $function$;
+REVOKE ALL ON FUNCTION local_service.extend_booking_hold(uuid) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.extend_booking_hold(uuid) TO bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.extend_booking_hold(uuid) TO authenticated;
 
-REVOKE ALL ON FUNCTION local_service.generate_booking_code() FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 CREATE OR REPLACE FUNCTION local_service.generate_booking_code()
  RETURNS text
  LANGUAGE plpgsql
@@ -1575,13 +1574,13 @@ BEGIN
     RETURN v_code;
 END;
 $function$;
+REVOKE ALL ON FUNCTION local_service.generate_booking_code() FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.generate_booking_code() TO PUBLIC;
 GRANT EXECUTE ON FUNCTION local_service.generate_booking_code() TO bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.generate_booking_code() TO anon;
 GRANT EXECUTE ON FUNCTION local_service.generate_booking_code() TO authenticated;
 GRANT EXECUTE ON FUNCTION local_service.generate_booking_code() TO service_role;
 
-REVOKE ALL ON FUNCTION local_service.generate_link_token() FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 CREATE OR REPLACE FUNCTION local_service.generate_link_token()
  RETURNS text
  LANGUAGE sql
@@ -1589,13 +1588,13 @@ CREATE OR REPLACE FUNCTION local_service.generate_link_token()
 AS $function$
     SELECT upper(substr(encode(extensions.gen_random_bytes(8), 'hex'), 1, 10))
 $function$;
+REVOKE ALL ON FUNCTION local_service.generate_link_token() FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.generate_link_token() TO PUBLIC;
 GRANT EXECUTE ON FUNCTION local_service.generate_link_token() TO bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.generate_link_token() TO anon;
 GRANT EXECUTE ON FUNCTION local_service.generate_link_token() TO authenticated;
 GRANT EXECUTE ON FUNCTION local_service.generate_link_token() TO service_role;
 
-REVOKE ALL ON FUNCTION local_service.get_entitlement_usage(uuid) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 CREATE OR REPLACE FUNCTION local_service.get_entitlement_usage(p_shop_id uuid)
  RETURNS json
  LANGUAGE plpgsql
@@ -1651,10 +1650,10 @@ BEGIN
     );
 END;
 $function$;
+REVOKE ALL ON FUNCTION local_service.get_entitlement_usage(uuid) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.get_entitlement_usage(uuid) TO bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.get_entitlement_usage(uuid) TO authenticated;
 
-REVOKE ALL ON FUNCTION local_service.get_tier_limits(text) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 CREATE OR REPLACE FUNCTION local_service.get_tier_limits(p_plan text)
  RETURNS TABLE(bookings_limit integer, staff_limit integer, auto_slip_limit integer)
  LANGUAGE sql
@@ -1666,10 +1665,10 @@ AS $function$
         CASE WHEN p_plan = 'pro_990' THEN 10 ELSE 5 END,
         CASE WHEN p_plan = 'basic_490' THEN 0 WHEN p_plan = 'pro_990' THEN 0 ELSE 0 END
 $function$;
+REVOKE ALL ON FUNCTION local_service.get_tier_limits(text) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.get_tier_limits(text) TO bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.get_tier_limits(text) TO authenticated;
 
-REVOKE ALL ON FUNCTION local_service.has_shop_role(uuid,text[]) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 CREATE OR REPLACE FUNCTION local_service.has_shop_role(target_shop_id uuid, allowed_roles text[])
  RETURNS boolean
  LANGUAGE sql
@@ -1686,10 +1685,10 @@ AS $function$
                AND role = ANY(allowed_roles)
        );
 $function$;
+REVOKE ALL ON FUNCTION local_service.has_shop_role(uuid,text[]) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.has_shop_role(uuid,text[]) TO bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.has_shop_role(uuid,text[]) TO authenticated;
 
-REVOKE ALL ON FUNCTION local_service.initialize_shop_subscription() FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 CREATE OR REPLACE FUNCTION local_service.initialize_shop_subscription()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -1729,9 +1728,9 @@ BEGIN
     RETURN NEW;
 END;
 $function$;
+REVOKE ALL ON FUNCTION local_service.initialize_shop_subscription() FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.initialize_shop_subscription() TO bk01_migrator;
 
-REVOKE ALL ON FUNCTION local_service.is_platform_admin() FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 CREATE OR REPLACE FUNCTION local_service.is_platform_admin()
  RETURNS boolean
  LANGUAGE sql
@@ -1744,10 +1743,10 @@ AS $function$
             SELECT 1 FROM local_service.platform_admins WHERE user_id = local_service_internal.request_user_id()
        );
 $function$;
+REVOKE ALL ON FUNCTION local_service.is_platform_admin() FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.is_platform_admin() TO bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.is_platform_admin() TO authenticated;
 
-REVOKE ALL ON FUNCTION local_service.is_shop_member(uuid) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 CREATE OR REPLACE FUNCTION local_service.is_shop_member(target_shop_id uuid)
  RETURNS boolean
  LANGUAGE plpgsql
@@ -1762,13 +1761,13 @@ BEGIN
     );
 END;
 $function$;
+REVOKE ALL ON FUNCTION local_service.is_shop_member(uuid) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.is_shop_member(uuid) TO PUBLIC;
 GRANT EXECUTE ON FUNCTION local_service.is_shop_member(uuid) TO bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.is_shop_member(uuid) TO anon;
 GRANT EXECUTE ON FUNCTION local_service.is_shop_member(uuid) TO authenticated;
 GRANT EXECUTE ON FUNCTION local_service.is_shop_member(uuid) TO service_role;
 
-REVOKE ALL ON FUNCTION local_service.is_shop_owner(uuid) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 CREATE OR REPLACE FUNCTION local_service.is_shop_owner(target_shop_id uuid)
  RETURNS boolean
  LANGUAGE sql
@@ -1777,10 +1776,10 @@ CREATE OR REPLACE FUNCTION local_service.is_shop_owner(target_shop_id uuid)
 AS $function$
     SELECT local_service.has_shop_role(target_shop_id, ARRAY['owner']::TEXT[]);
 $function$;
+REVOKE ALL ON FUNCTION local_service.is_shop_owner(uuid) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.is_shop_owner(uuid) TO bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.is_shop_owner(uuid) TO authenticated;
 
-REVOKE ALL ON FUNCTION local_service.link_staff_user(uuid,text) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 CREATE OR REPLACE FUNCTION local_service.link_staff_user(p_staff_id uuid, p_user_email text)
  RETURNS void
  LANGUAGE plpgsql
@@ -1797,10 +1796,10 @@ BEGIN
   IF NOT EXISTS(SELECT 1 FROM local_service.shop_users WHERE shop_id=v_staff.shop_id AND user_id=v_user_id AND role='staff') THEN RAISE EXCEPTION 'The user must first be a staff member of this shop'; END IF;
   UPDATE local_service.staff SET user_id=v_user_id WHERE id=p_staff_id;
 END; $function$;
+REVOKE ALL ON FUNCTION local_service.link_staff_user(uuid,text) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.link_staff_user(uuid,text) TO postgres;
 GRANT EXECUTE ON FUNCTION local_service.link_staff_user(uuid,text) TO authenticated;
 
-REVOKE ALL ON FUNCTION local_service.platform_admin_add_topup(uuid,integer,integer) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 CREATE OR REPLACE FUNCTION local_service.platform_admin_add_topup(p_shop_id uuid, p_bookings_credits integer DEFAULT 0, p_auto_slip_credits integer DEFAULT 0)
  RETURNS json
  LANGUAGE plpgsql
@@ -1815,10 +1814,10 @@ BEGIN
     RETURN local_service.apply_topup(p_shop_id, p_bookings_credits, p_auto_slip_credits);
 END;
 $function$;
+REVOKE ALL ON FUNCTION local_service.platform_admin_add_topup(uuid,integer,integer) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.platform_admin_add_topup(uuid,integer,integer) TO bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.platform_admin_add_topup(uuid,integer,integer) TO authenticated;
 
-REVOKE ALL ON FUNCTION local_service.platform_admin_extend_trial(uuid,integer) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 CREATE OR REPLACE FUNCTION local_service.platform_admin_extend_trial(p_shop_id uuid, p_days integer)
  RETURNS void
  LANGUAGE plpgsql
@@ -1848,10 +1847,10 @@ BEGIN
     WHERE id = p_shop_id;
 END;
 $function$;
+REVOKE ALL ON FUNCTION local_service.platform_admin_extend_trial(uuid,integer) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.platform_admin_extend_trial(uuid,integer) TO bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.platform_admin_extend_trial(uuid,integer) TO authenticated;
 
-REVOKE ALL ON FUNCTION local_service.platform_admin_list_shops() FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 CREATE OR REPLACE FUNCTION local_service.platform_admin_list_shops()
  RETURNS SETOF local_service.platform_admin_shop_row
  LANGUAGE plpgsql
@@ -1884,10 +1883,10 @@ BEGIN
     ORDER BY s.created_at DESC;
 END;
 $function$;
+REVOKE ALL ON FUNCTION local_service.platform_admin_list_shops() FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.platform_admin_list_shops() TO bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.platform_admin_list_shops() TO authenticated;
 
-REVOKE ALL ON FUNCTION local_service.platform_admin_set_shop_active(uuid,boolean) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 CREATE OR REPLACE FUNCTION local_service.platform_admin_set_shop_active(p_shop_id uuid, p_is_active boolean)
  RETURNS void
  LANGUAGE plpgsql
@@ -1905,10 +1904,10 @@ BEGIN
     WHERE id = p_shop_id;
 END;
 $function$;
+REVOKE ALL ON FUNCTION local_service.platform_admin_set_shop_active(uuid,boolean) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.platform_admin_set_shop_active(uuid,boolean) TO bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.platform_admin_set_shop_active(uuid,boolean) TO authenticated;
 
-REVOKE ALL ON FUNCTION local_service.platform_admin_update_plan(uuid,text) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 CREATE OR REPLACE FUNCTION local_service.platform_admin_update_plan(p_shop_id uuid, p_plan text)
  RETURNS void
  LANGUAGE plpgsql
@@ -1934,10 +1933,10 @@ BEGIN
     WHERE id = p_shop_id;
 END;
 $function$;
+REVOKE ALL ON FUNCTION local_service.platform_admin_update_plan(uuid,text) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.platform_admin_update_plan(uuid,text) TO bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.platform_admin_update_plan(uuid,text) TO authenticated;
 
-REVOKE ALL ON FUNCTION local_service.preview_ticket_retention(uuid,date) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 CREATE OR REPLACE FUNCTION local_service.preview_ticket_retention(p_shop_id uuid, p_cutoff_date date)
  RETURNS TABLE(id uuid, closed_at timestamp with time zone, customer_name text, title text, attachment_count integer)
  LANGUAGE plpgsql
@@ -1968,10 +1967,10 @@ BEGIN
     ORDER BY t.closed_at ASC;
 END;
 $function$;
+REVOKE ALL ON FUNCTION local_service.preview_ticket_retention(uuid,date) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.preview_ticket_retention(uuid,date) TO bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.preview_ticket_retention(uuid,date) TO authenticated;
 
-REVOKE ALL ON FUNCTION local_service.provision_owner_shop(text,text,text,text,text,text,text,text,uuid) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 CREATE OR REPLACE FUNCTION local_service.provision_owner_shop(p_shop_name text, p_shop_slug text, p_business_category text, p_owner_name text, p_owner_phone text, p_promptpay_number text, p_promptpay_name text, p_requested_plan text, p_idempotency_key uuid)
  RETURNS TABLE(shop_id uuid, shop_slug text)
  LANGUAGE plpgsql
@@ -2067,10 +2066,10 @@ BEGIN
     RETURN QUERY SELECT v_shop_id, v_shop_slug;
 END;
 $function$;
+REVOKE ALL ON FUNCTION local_service.provision_owner_shop(text,text,text,text,text,text,text,text,uuid) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.provision_owner_shop(text,text,text,text,text,text,text,text,uuid) TO bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.provision_owner_shop(text,text,text,text,text,text,text,text,uuid) TO authenticated;
 
-REVOKE ALL ON FUNCTION local_service.reject_deposit_slip(uuid,text) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 CREATE OR REPLACE FUNCTION local_service.reject_deposit_slip(p_booking_id uuid, p_reason text DEFAULT NULL::text)
  RETURNS json
  LANGUAGE plpgsql
@@ -2131,10 +2130,10 @@ BEGIN
     );
 END;
 $function$;
+REVOKE ALL ON FUNCTION local_service.reject_deposit_slip(uuid,text) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.reject_deposit_slip(uuid,text) TO bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.reject_deposit_slip(uuid,text) TO authenticated;
 
-REVOKE ALL ON FUNCTION local_service.request_account_closure(uuid,text) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 CREATE OR REPLACE FUNCTION local_service.request_account_closure(p_shop_id uuid, p_reason text)
  RETURNS uuid
  LANGUAGE plpgsql
@@ -2151,10 +2150,10 @@ BEGIN
     RETURN v_id;
 END;
 $function$;
+REVOKE ALL ON FUNCTION local_service.request_account_closure(uuid,text) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.request_account_closure(uuid,text) TO bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.request_account_closure(uuid,text) TO authenticated;
 
-REVOKE ALL ON FUNCTION local_service.save_ticket_resolution(uuid,text,text) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 CREATE OR REPLACE FUNCTION local_service.save_ticket_resolution(p_ticket_id uuid, p_resolution text, p_actor text)
  RETURNS void
  LANGUAGE plpgsql
@@ -2204,10 +2203,10 @@ BEGIN
     );
 END;
 $function$;
+REVOKE ALL ON FUNCTION local_service.save_ticket_resolution(uuid,text,text) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.save_ticket_resolution(uuid,text,text) TO bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.save_ticket_resolution(uuid,text,text) TO authenticated;
 
-REVOKE ALL ON FUNCTION local_service.set_booking_outcome(uuid,text,text) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 CREATE OR REPLACE FUNCTION local_service.set_booking_outcome(p_booking_id uuid, p_outcome text, p_reason text DEFAULT NULL::text)
  RETURNS json
  LANGUAGE plpgsql
@@ -2228,10 +2227,10 @@ BEGIN
     RETURN json_build_object('booking_id',p_booking_id,'status',p_outcome);
 END;
 $function$;
+REVOKE ALL ON FUNCTION local_service.set_booking_outcome(uuid,text,text) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.set_booking_outcome(uuid,text,text) TO bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.set_booking_outcome(uuid,text,text) TO authenticated;
 
-REVOKE ALL ON FUNCTION local_service.set_service_active(uuid,boolean) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 CREATE OR REPLACE FUNCTION local_service.set_service_active(p_service_id uuid, p_is_active boolean)
  RETURNS void
  LANGUAGE plpgsql
@@ -2259,10 +2258,10 @@ BEGIN
      WHERE id = p_service_id;
 END;
 $function$;
+REVOKE ALL ON FUNCTION local_service.set_service_active(uuid,boolean) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.set_service_active(uuid,boolean) TO bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.set_service_active(uuid,boolean) TO authenticated;
 
-REVOKE ALL ON FUNCTION local_service.set_staff_active(uuid,boolean) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 CREATE OR REPLACE FUNCTION local_service.set_staff_active(p_staff_id uuid, p_is_active boolean)
  RETURNS void
  LANGUAGE plpgsql
@@ -2326,10 +2325,10 @@ BEGIN
      WHERE id = p_staff_id;
 END;
 $function$;
+REVOKE ALL ON FUNCTION local_service.set_staff_active(uuid,boolean) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.set_staff_active(uuid,boolean) TO bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.set_staff_active(uuid,boolean) TO authenticated;
 
-REVOKE ALL ON FUNCTION local_service.submit_deposit_slip(uuid,text,text) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 CREATE OR REPLACE FUNCTION local_service.submit_deposit_slip(p_booking_id uuid, p_slip_url text, p_trans_ref text DEFAULT NULL::text)
  RETURNS json
  LANGUAGE plpgsql
@@ -2406,9 +2405,9 @@ BEGIN
     );
 END;
 $function$;
+REVOKE ALL ON FUNCTION local_service.submit_deposit_slip(uuid,text,text) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.submit_deposit_slip(uuid,text,text) TO postgres;
 
-REVOKE ALL ON FUNCTION local_service.submit_deposit_slip(uuid,text,text,text) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 CREATE OR REPLACE FUNCTION local_service.submit_deposit_slip(p_booking_id uuid, p_recovery_token text, p_slip_url text, p_trans_ref text DEFAULT NULL::text)
  RETURNS json
  LANGUAGE plpgsql
@@ -2436,10 +2435,10 @@ BEGIN
     RETURN json_build_object('booking_id',v_booking.id,'status',v_booking.status,'deposit_status',v_booking.deposit_status,'slip_object_path',v_booking.slip_url);
 END;
 $function$;
+REVOKE ALL ON FUNCTION local_service.submit_deposit_slip(uuid,text,text,text) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.submit_deposit_slip(uuid,text,text,text) TO postgres;
 GRANT EXECUTE ON FUNCTION local_service.submit_deposit_slip(uuid,text,text,text) TO anon;
 
-REVOKE ALL ON FUNCTION local_service.suppress_new_overdue_line_reminder() FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 CREATE OR REPLACE FUNCTION local_service.suppress_new_overdue_line_reminder()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -2456,9 +2455,9 @@ BEGIN
     RETURN NEW;
 END;
 $function$;
+REVOKE ALL ON FUNCTION local_service.suppress_new_overdue_line_reminder() FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.suppress_new_overdue_line_reminder() TO PUBLIC;
 
-REVOKE ALL ON FUNCTION local_service.sync_subscription_state(text,bigint,uuid,text,text,text,text,bigint,boolean) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 CREATE OR REPLACE FUNCTION local_service.sync_subscription_state(p_event_type text, p_event_created bigint, p_shop_id uuid, p_stripe_customer_id text, p_stripe_subscription_id text, p_plan text DEFAULT NULL::text, p_status text DEFAULT NULL::text, p_current_period_end bigint DEFAULT NULL::bigint, p_cancel_at_period_end boolean DEFAULT NULL::boolean)
  RETURNS TABLE(applied boolean, matched_shop_id uuid)
  LANGUAGE plpgsql
@@ -2594,10 +2593,10 @@ BEGIN
     RETURN QUERY SELECT true, v_target_shop_id;
 END;
 $function$;
+REVOKE ALL ON FUNCTION local_service.sync_subscription_state(text,bigint,uuid,text,text,text,text,bigint,boolean) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.sync_subscription_state(text,bigint,uuid,text,text,text,text,bigint,boolean) TO bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.sync_subscription_state(text,bigint,uuid,text,text,text,text,bigint,boolean) TO service_role;
 
-REVOKE ALL ON FUNCTION local_service.sync_subscription_state_bk_a(text,bigint,uuid,text,text,text,text,bigint,boolean) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 CREATE OR REPLACE FUNCTION local_service.sync_subscription_state_bk_a(p_event_type text, p_event_created bigint, p_shop_id uuid, p_stripe_customer_id text, p_stripe_subscription_id text, p_plan text, p_status text, p_current_period_end bigint, p_cancel_at_period_end boolean)
  RETURNS TABLE(out_applied boolean, out_matched_shop_id uuid)
  LANGUAGE plpgsql
@@ -2630,11 +2629,11 @@ BEGIN
   END IF;
   RETURN QUERY SELECT coalesce(v_result.applied,false),v_shop_id;
 END; $function$;
+REVOKE ALL ON FUNCTION local_service.sync_subscription_state_bk_a(text,bigint,uuid,text,text,text,text,bigint,boolean) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.sync_subscription_state_bk_a(text,bigint,uuid,text,text,text,text,bigint,boolean) TO bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.sync_subscription_state_bk_a(text,bigint,uuid,text,text,text,text,bigint,boolean) TO service_role;
 GRANT EXECUTE ON FUNCTION local_service.sync_subscription_state_bk_a(text,bigint,uuid,text,text,text,text,bigint,boolean) TO bk01_runtime;
 
-REVOKE ALL ON FUNCTION local_service.update_service(uuid,text,text,integer,numeric,numeric) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 CREATE OR REPLACE FUNCTION local_service.update_service(p_service_id uuid, p_name text, p_description text, p_duration_minutes integer, p_price numeric, p_deposit_amount numeric)
  RETURNS void
  LANGUAGE plpgsql
@@ -2680,10 +2679,10 @@ BEGIN
      WHERE id = p_service_id;
 END;
 $function$;
+REVOKE ALL ON FUNCTION local_service.update_service(uuid,text,text,integer,numeric,numeric) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.update_service(uuid,text,text,integer,numeric,numeric) TO bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.update_service(uuid,text,text,integer,numeric,numeric) TO authenticated;
 
-REVOKE ALL ON FUNCTION local_service.update_shop_settings(uuid,text,text,text,text,text,text) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 CREATE OR REPLACE FUNCTION local_service.update_shop_settings(p_shop_id uuid, p_name text, p_phone text, p_address text, p_promptpay_number text, p_promptpay_name text, p_line_oa_id text)
  RETURNS void
  LANGUAGE plpgsql
@@ -2726,10 +2725,10 @@ BEGIN
     END IF;
 END;
 $function$;
+REVOKE ALL ON FUNCTION local_service.update_shop_settings(uuid,text,text,text,text,text,text) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.update_shop_settings(uuid,text,text,text,text,text,text) TO bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.update_shop_settings(uuid,text,text,text,text,text,text) TO authenticated;
 
-REVOKE ALL ON FUNCTION local_service.update_ticket_assignee(uuid,text,text) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 CREATE OR REPLACE FUNCTION local_service.update_ticket_assignee(p_ticket_id uuid, p_new_assignee text, p_actor text)
  RETURNS void
  LANGUAGE plpgsql
@@ -2781,10 +2780,10 @@ BEGIN
     );
 END;
 $function$;
+REVOKE ALL ON FUNCTION local_service.update_ticket_assignee(uuid,text,text) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.update_ticket_assignee(uuid,text,text) TO bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.update_ticket_assignee(uuid,text,text) TO authenticated;
 
-REVOKE ALL ON FUNCTION local_service.update_ticket_priority(uuid,text,text) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 CREATE OR REPLACE FUNCTION local_service.update_ticket_priority(p_ticket_id uuid, p_new_priority text, p_actor text)
  RETURNS void
  LANGUAGE plpgsql
@@ -2834,10 +2833,10 @@ BEGIN
     );
 END;
 $function$;
+REVOKE ALL ON FUNCTION local_service.update_ticket_priority(uuid,text,text) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.update_ticket_priority(uuid,text,text) TO bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.update_ticket_priority(uuid,text,text) TO authenticated;
 
-REVOKE ALL ON FUNCTION local_service.update_ticket_status(uuid,text,text) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 CREATE OR REPLACE FUNCTION local_service.update_ticket_status(p_ticket_id uuid, p_new_status text, p_actor text)
  RETURNS void
  LANGUAGE plpgsql
@@ -2923,10 +2922,10 @@ BEGIN
     );
 END;
 $function$;
+REVOKE ALL ON FUNCTION local_service.update_ticket_status(uuid,text,text) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.update_ticket_status(uuid,text,text) TO bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.update_ticket_status(uuid,text,text) TO authenticated;
 
-REVOKE ALL ON FUNCTION local_service.upsert_staff_weekly_schedule(uuid,jsonb) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 CREATE OR REPLACE FUNCTION local_service.upsert_staff_weekly_schedule(p_staff_id uuid, p_days jsonb)
  RETURNS void
  LANGUAGE plpgsql
@@ -3022,10 +3021,10 @@ BEGIN
             break_end = EXCLUDED.break_end;
 END;
 $function$;
+REVOKE ALL ON FUNCTION local_service.upsert_staff_weekly_schedule(uuid,jsonb) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.upsert_staff_weekly_schedule(uuid,jsonb) TO bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service.upsert_staff_weekly_schedule(uuid,jsonb) TO authenticated;
 
-REVOKE ALL ON FUNCTION local_service_internal.request_user_id() FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 CREATE OR REPLACE FUNCTION local_service_internal.request_user_id()
  RETURNS uuid
  LANGUAGE sql
@@ -3037,6 +3036,7 @@ AS $function$
     (NULLIF(current_setting('request.jwt.claims', true), '')::jsonb ->> 'sub')
   )::uuid;
 $function$;
+REVOKE ALL ON FUNCTION local_service_internal.request_user_id() FROM PUBLIC, anon, authenticated, service_role, bk01_runtime, bk01_migrator;
 GRANT EXECUTE ON FUNCTION local_service_internal.request_user_id() TO postgres;
 GRANT EXECUTE ON FUNCTION local_service_internal.request_user_id() TO bk01_migrator;
 
