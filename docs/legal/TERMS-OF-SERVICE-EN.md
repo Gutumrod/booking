@@ -16,7 +16,7 @@ These Terms of Service describe the agreement between you and the operator of BK
 
 ## 1. Who operates the Service
 
-This Service is operated under the WSTERA brand and the BK01 product name. The service provider is an individual and is not a registered company. The provider’s legal name remains to be supplied: [[OWNER INPUT: legal name of individual service provider]]. The provider’s registered and legal-notice addresses also remain to be supplied: [[OWNER INPUT: registered address of the operator]], [[OWNER INPUT: address for legal notices]].
+This Service is operated under the WSTERA brand and the BK01 product name. The service provider is an individual and is not a registered company. The provider’s legal name is Mr. Wachiraya Jankhonkan. Contact address: 148/522 Soi Ramkhamhaeng 190, Ramkhamhaeng Road, Min Buri Subdistrict, Min Buri District, Bangkok 10510, Thailand. Any registered address or separate address for legal notices, if different from this contact address, remains to be supplied: [[OWNER INPUT: registered address of the operator]], [[OWNER INPUT: address for legal notices]].
 BK01 is software that a shop uses to publish a booking page, take bookings and keep deposit evidence. BK01 is not the appointment and it is not the service the shop provides.
 
 ## 2. Accepting these Terms
