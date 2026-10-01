@@ -90,6 +90,35 @@ const MUTATIONS = [
     to: '"planFreeQ3": "✓ 3 บริการ',
     test: 'tests/bk01-i18n.test.ts',
   },
+  // Round 1 review failures — the round-2 fixes must not be vacuous either.
+  {
+    id: 'm13-dispatcher-picks-a-merchant-oa-by-pack-name',
+    file: 'apps/booking-consumer/src/app/api/notifications/dispatch/route.ts',
+    from: '            const config = resolveCentralChannel();',
+    to: "            const config = context.subscription_plan === 'basic_490' ? await import('../../../../lib/merchant-line-config').then((m) => m.resolveMerchantLineChannel(context.shop_id)) : resolveCentralChannel();",
+    test: 'tests/house-pack-entitle.test.ts',
+  },
+  {
+    id: 'm14-cap-literal-back-into-the-route',
+    file: 'apps/booking-consumer/src/app/api/notifications/dispatch/route.ts',
+    from: '            cap: context.monthly_push_cap,',
+    to: '            cap: context.monthly_push_cap ?? 50,',
+    test: 'tests/house-pack-entitle.test.ts',
+  },
+  {
+    id: 'm15-unverified-cap-stops-alerting-ops',
+    file: 'apps/booking-consumer/src/app/api/notifications/dispatch/route.ts',
+    from: '            if (!capAlertSent) {',
+    to: '            if (false) {',
+    test: 'tests/house-pack-entitle.test.ts',
+  },
+  {
+    id: 'm16-ops-alert-ignores-the-day-ledger',
+    file: 'apps/booking-consumer/src/lib/notification-oa-breaker.ts',
+    from: "  if (!claimed) return { sent: false, reason: 'already_alerted_today', to, dedupeKey };",
+    to: '  // mutation: the once-per-day limit is ignored',
+    test: 'tests/house-pack-breaker-reply.test.ts',
+  },
 ];
 
 const original = new Map();

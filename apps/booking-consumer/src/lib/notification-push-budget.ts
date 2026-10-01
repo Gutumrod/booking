@@ -3,8 +3,11 @@
  *
  * Owner decision (A-21): each shop may receive a bounded number of LINE pushes
  * per month — Free 50, Basic/trial 600, Pro 1,500 — and the number is retunable,
- * so it arrives from the plan table and is never a literal in this file. The
- * window is the Thai calendar month: it resets on the 1st at 00:00 Asia/Bangkok,
+ * so it arrives as `monthly_push_cap` in the entitlement context and is never a
+ * literal anywhere in the app. There is no plan mirror of it either: a mirrored
+ * number would be a second source of truth for a value the operator can retune.
+ * With no cap in the context the guard is UNVERIFIED, not closed — see below.
+ * The window is the Thai calendar month: it resets on the 1st at 00:00 Asia/Bangkok,
  * the same month key `local_service.bk01_month_key` uses for the booking quota.
  *
  * Over the cap the message is NOT sent and the reason is recorded on the outbox
@@ -67,15 +70,16 @@ export type PushCapDecision =
 /**
  * Whether one more metered push may leave for this shop this month.
  *
- * `cap` is `monthly_push_cap` from the plan table; `used` is the count of metered
- * rows already delivered in the month. The boundary is `used >= cap`: the Nth push
- * is allowed and the (N+1)th is not, matching the booking quota's own `used <
- * limit` rule.
+ * `cap` is `monthly_push_cap` from the entitlement context (unit-7 SQL); `used` is
+ * the count of metered rows already delivered in the month. The boundary is
+ * `used >= cap`: the Nth push is allowed and the (N+1)th is not, matching the
+ * booking quota's own `used < limit` rule.
  *
  * `used === null` means the count could not be read. That is reported as
  * `unverified` and ALLOWED — see the fail-closed note at the top of this file. A
- * `cap` that is missing or nonsensical is treated the same way, because the plan
- * is the only authority for it and a bad plan row is not a reason to mute a shop.
+ * `cap` that is absent or nonsensical is treated the same way: the entitlement
+ * context is the only authority for it, and a context that does not carry the
+ * column yet is a guard that is not active, not a reason to mute a paid shop.
  */
 export function resolvePushCapDecision(input: {
   cap: number | null | undefined;

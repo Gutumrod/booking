@@ -6,7 +6,9 @@ import {
   CENTRAL_OA_CONSUMPTION_URL,
   CENTRAL_OA_QUOTA_URL,
   OA_QUOTA_BREAKER_THRESHOLD,
+  bangkokDayKey,
   breakerMutesPlan,
+  pushAlertDedupeKey,
   readCentralOaQuota,
   resolveBreakerDecision,
   sendOpsAlert,
@@ -129,28 +131,86 @@ test('an over-quota read combined with a free shop is what the route pauses', as
   assert.match(route, /OPS_ALERT_EMAIL|sendOpsAlert/);
 });
 
+test('the alert day key is the Thai day, not the UTC one', () => {
+  // 2026-10-02T00:00+07:00 is 2026-10-01T17:00Z — already the 2nd in Bangkok.
+  assert.equal(bangkokDayKey(new Date('2026-10-01T16:59:59Z')), '2026-10-01');
+  assert.equal(bangkokDayKey(new Date('2026-10-01T17:00:00Z')), '2026-10-02');
+  const day = bangkokDayKey(new Date('2026-10-01T06:00:00Z'));
+  assert.equal(pushAlertDedupeKey({ kind: 'breaker_open', at: new Date('2026-10-01T06:00:00Z') }), `oa_breaker_open:${day}`);
+  assert.equal(
+    pushAlertDedupeKey({ kind: 'cap_unverified', shopId: 'shop-1', at: new Date('2026-10-01T06:00:00Z') }),
+    `push_cap_unverified:shop-1:${day}`,
+  );
+});
+
+function dayLedger() {
+  const seen = new Set<string>();
+  return {
+    seen,
+    sink: {
+      async claim({ dedupeKey }: { dedupeKey: string }) {
+        if (seen.has(dedupeKey)) return { claimed: false };
+        seen.add(dedupeKey);
+        return { claimed: true };
+      },
+    },
+  };
+}
+
 test('the Owner alert is fail-closed: no address means no alert and no side channel', async () => {
   const sent: Array<{ to: string }> = [];
   const transport = { async send(input: { to: string }) { sent.push(input); return { ok: true, status: 200 }; } };
+  const { sink } = dayLedger();
+  const dedupeKey = pushAlertDedupeKey({ kind: 'breaker_open', at: new Date('2026-10-01T06:00:00Z') });
 
   const noAddress = await sendOpsAlert({
-    env: {}, subject: 's', text: 't', transport,
+    env: {}, subject: 's', text: 't', transport, sink, dedupeKey,
   });
-  assert.deepEqual(noAddress, { sent: false, reason: 'not_configured', to: null });
+  assert.deepEqual(noAddress, { sent: false, reason: 'not_configured', to: null, dedupeKey: null });
   assert.deepEqual(sent, [], 'nothing may be sent anywhere without OPS_ALERT_EMAIL');
 
   const withAddress = await sendOpsAlert({
-    env: { OPS_ALERT_EMAIL: 'owner@example.com' }, subject: 's', text: 't', transport,
+    env: { OPS_ALERT_EMAIL: 'owner@example.com' }, subject: 's', text: 't', transport, sink, dedupeKey,
   });
   assert.equal(withAddress.sent, true);
+  assert.equal(withAddress.dedupeKey, dedupeKey);
   assert.equal(sent.length, 1);
   assert.equal(sent[0].to, 'owner@example.com');
 
   const noTransport = await sendOpsAlert({
-    env: { OPS_ALERT_EMAIL: 'owner@example.com' }, subject: 's', text: 't', transport: null,
+    env: { OPS_ALERT_EMAIL: 'owner@example.com' }, subject: 's', text: 't', transport: null, sink, dedupeKey,
   });
   assert.equal(noTransport.sent, false);
   assert.equal(noTransport.reason, 'transport_unavailable');
+  assert.equal(sent.length, 1);
+
+  // No ledger ⇒ the once-per-day limit cannot be honoured ⇒ fail closed.
+  const noSink = await sendOpsAlert({
+    env: { OPS_ALERT_EMAIL: 'owner@example.com' }, subject: 's', text: 't', transport, sink: null, dedupeKey,
+  });
+  assert.equal(noSink.sent, false);
+  assert.equal(sent.length, 1, 'an unlimited alert burst is never the fallback');
+});
+
+test('the Owner alert is limited to once per key per Thai day', async () => {
+  const sent: Array<{ to: string }> = [];
+  const transport = { async send(input: { to: string }) { sent.push(input); return { ok: true, status: 200 }; } };
+  const { sink } = dayLedger();
+  const env = { OPS_ALERT_EMAIL: 'owner@example.com' };
+  const at = new Date('2026-10-01T06:00:00Z');
+  const today = pushAlertDedupeKey({ kind: 'breaker_open', at });
+  const tomorrow = pushAlertDedupeKey({ kind: 'breaker_open', at: new Date(at.getTime() + 24 * 60 * 60 * 1000) });
+  assert.notEqual(today, tomorrow);
+
+  const first = await sendOpsAlert({ env, subject: 's', text: 't', transport, sink, dedupeKey: today });
+  const repeat = await sendOpsAlert({ env, subject: 's', text: 't', transport, sink, dedupeKey: today });
+  const nextDay = await sendOpsAlert({ env, subject: 's', text: 't', transport, sink, dedupeKey: tomorrow });
+
+  assert.equal(first.sent, true);
+  assert.equal(repeat.sent, false);
+  assert.equal(repeat.reason, 'already_alerted_today', 'a second call on the same day is suppressed');
+  assert.equal(nextDay.sent, true, 'the day rolls over and the alert may fire again');
+  assert.equal(sent.length, 2);
 });
 
 // ---------------------------------------------------------------------------

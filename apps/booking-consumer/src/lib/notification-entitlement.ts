@@ -16,10 +16,15 @@
  * boundary cases the SQL is checked against in
  * `tests/bk01-entitlement-boundary.test.ts`.
  *
- * `monthly_push_cap` is a VALUE, not a code constant to be inlined: A-21 says it
- * may be retuned, so nothing else in the app may hard-code 50/600/1500. The
- * column of the same name carries the authoritative number once the unit-7
- * migration lands; this table is the app-side mirror of it.
+ * `monthly_push_cap` is NOT here, and must not come back. A-21 fixes the cap as a
+ * VALUE (50/600/1,500) that is retunable, so the entitlement context the unit-7
+ * SQL builds — `DeliveryContext.monthly_push_cap` — is its only source; a mirror
+ * of it in this file is a second source of truth that would silently win when
+ * the SQL was not extended, which is exactly what the round-1 review failed. The
+ * route therefore gets the cap from the context and nowhere else (no cap ⇒
+ * `unverified` ⇒ the push is allowed and the guard's blindness is reported). This
+ * table keeps only the BOOLEAN rights (is this event in the pack's allowance),
+ * which cannot be retuned by an operator and so cannot drift from a value.
  *
  * FAIL CLOSED. An unknown plan, or an unknown event, yields `null` and the
  * caller suppresses the send with that reason recorded — a push is never sent on
@@ -41,31 +46,30 @@ export interface PlanNotificationEntitlements {
   customer_slip_decision_push: boolean;
   shop_email_slip: boolean;
   shop_email_booking: boolean;
-  monthly_push_cap: number;
 }
 
-/** The locked table. Only `services_limit` and the new columns change in unit 7. */
+/**
+ * The locked table. Only `services_limit` and the boolean right columns change in
+ * unit 7. The monthly cap is deliberately absent — see the header.
+ */
 export const PLAN_NOTIFICATION_ENTITLEMENTS: Readonly<Record<EffectivePlan, PlanNotificationEntitlements>> = {
   free: {
     customer_reminder_push: true,
     customer_slip_decision_push: false,
     shop_email_slip: false,
     shop_email_booking: false,
-    monthly_push_cap: 50,
   },
   basic_490: {
     customer_reminder_push: true,
     customer_slip_decision_push: true,
     shop_email_slip: true,
     shop_email_booking: false,
-    monthly_push_cap: 600,
   },
   pro_990: {
     customer_reminder_push: true,
     customer_slip_decision_push: true,
     shop_email_slip: true,
     shop_email_booking: true,
-    monthly_push_cap: 1500,
   },
 };
 

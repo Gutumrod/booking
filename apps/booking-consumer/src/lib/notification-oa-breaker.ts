@@ -152,15 +152,69 @@ export function breakerMutesPlan(effectivePlan: unknown): boolean {
  * names; with no address there is NO fallback channel — the alert is recorded as
  * a log line and the reason states it was not e-mailed. Silence plus a working
  * breaker is acceptable; a hidden side channel to the Owner is not.
+ *
+ * The same function carries the two OTHER alerts this unit owes (a cap that could
+ * not be verified, and the breaker opening): the route decides WHAT to say and
+ * when, this decides whether anything may leave at all.
  */
 export interface OpsAlert {
   sent: boolean;
-  reason: 'sent' | 'not_configured' | 'transport_unavailable';
+  reason: 'sent' | 'not_configured' | 'transport_unavailable' | 'already_alerted_today';
   to: string | null;
+  /** The day key the alert was deduped on, or null when no sink/key was supplied. */
+  dedupeKey: string | null;
 }
 
 export interface OpsAlertTransport {
   send(input: { to: string; subject: string; text: string }): Promise<{ ok: boolean; status: number; error?: string }>;
+}
+
+/**
+ * The once-per-Thai-day ledger an alert must pass through. The route may only
+ * reach data through allowlisted RPCs, so the ledger is injected like the other
+ * transports — and a MISSING ledger is treated as fail-closed (below), never as
+ * "no ledger, alert freely".
+ */
+export interface PushAlertSink {
+  /**
+   * Atomically claims the day for `dedupeKey`.
+   *
+   * `delivered: true` means a previous attempt of this key already went out and
+   * the key must never fire again. `delivered: false` means the key may be
+   * re-claimed by a later attempt while the day lasts: if the mail was never
+   * delivered, silently swallowing it in the ledger would leave the operator
+   * believing they were told about a guard that is not running.
+   */
+  claim(input: { dedupeKey: string; delivered: boolean }): Promise<{ claimed: boolean }>;
+}
+
+/**
+ * `YYYY-MM-DD` in Asia/Bangkok — the day an alert is limited to.
+ *
+ * The limit is one alert per key per Thai day. It is keyed per shop for the cap
+ * alert (a broken counter is a per-shop fact) and not per shop for the breaker
+ * (which is a fact about the ONE central OA, not about any shop).
+ *
+ * The day boundary is computed from a fixed +07:00 offset rather than a time zone
+ * database: Thailand has had no DST since 1941, so the offset is exact, and this
+ * module stays dependency- and clock-free.
+ */
+export function bangkokDayKey(at: Date): string {
+  const shifted = new Date(at.getTime() + 7 * 60 * 60 * 1000);
+  const pad = (value: number) => String(value).padStart(2, '0');
+  return `${shifted.getUTCFullYear()}-${pad(shifted.getUTCMonth() + 1)}-${pad(shifted.getUTCDate())}`;
+}
+
+/** The ledger key for one alert kind on one Thai day. */
+export function pushAlertDedupeKey(input: {
+  kind: 'cap_unverified' | 'breaker_open';
+  shopId?: string;
+  at: Date;
+}): string {
+  const day = bangkokDayKey(input.at);
+  return input.kind === 'breaker_open'
+    ? `oa_breaker_open:${day}`
+    : `push_cap_unverified:${input.shopId ?? '-'}:${day}`;
 }
 
 export async function sendOpsAlert(input: {
@@ -168,16 +222,38 @@ export async function sendOpsAlert(input: {
   subject: string;
   text: string;
   transport: OpsAlertTransport | null;
+  /** The once-per-day ledger. Omitted ⇒ no alert is sent (fail-closed). */
+  sink?: PushAlertSink | null;
+  /** Required for any send that is deduped; omitted ⇒ no alert is sent. */
+  dedupeKey?: string | null;
+  /** Whether this alert is already-delivered before the ledger is consulted. */
+  delivered?: boolean;
 }): Promise<OpsAlert> {
   const to = input.env.OPS_ALERT_EMAIL?.trim() ?? '';
-  if (to.length === 0) return { sent: false, reason: 'not_configured', to: null };
-  if (!input.transport) return { sent: false, reason: 'transport_unavailable', to };
+  if (to.length === 0) return { sent: false, reason: 'not_configured', to: null, dedupeKey: null };
+  if (!input.transport) return { sent: false, reason: 'transport_unavailable', to, dedupeKey: null };
+
+  const dedupeKey = input.dedupeKey ?? null;
+  if (dedupeKey === null || !input.sink) {
+    // No way to honour the once-per-day limit: the alert is withheld and the
+    // caller can see why. Same direction as the missing address — never a second
+    // path, never an unlimited burst.
+    return { sent: false, reason: 'transport_unavailable', to, dedupeKey: null };
+  }
+  let claimed: boolean;
+  try {
+    claimed = (await input.sink.claim({ dedupeKey, delivered: input.delivered ?? true })).claimed;
+  } catch {
+    return { sent: false, reason: 'transport_unavailable', to, dedupeKey };
+  }
+  if (!claimed) return { sent: false, reason: 'already_alerted_today', to, dedupeKey };
+
   try {
     const result = await input.transport.send({ to, subject: input.subject, text: input.text });
     return result.ok
-      ? { sent: true, reason: 'sent', to }
-      : { sent: false, reason: 'transport_unavailable', to };
+      ? { sent: true, reason: 'sent', to, dedupeKey }
+      : { sent: false, reason: 'transport_unavailable', to, dedupeKey };
   } catch {
-    return { sent: false, reason: 'transport_unavailable', to };
+    return { sent: false, reason: 'transport_unavailable', to, dedupeKey };
   }
 }

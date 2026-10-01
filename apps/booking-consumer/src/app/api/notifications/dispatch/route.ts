@@ -11,18 +11,43 @@ import {
 } from '../../../../lib/notification-entitlement';
 import {
   countsAgainstPushCap,
-  bangkokMonthKey,
   resolvePushCapDecision,
 } from '../../../../lib/notification-push-budget';
 import {
   breakerMutesPlan,
   createLineQuotaTransport,
+  pushAlertDedupeKey,
   readCentralOaQuota,
   resolveBreakerDecision,
   sendOpsAlert,
   type OpsAlertTransport,
+  type PushAlertSink,
   type QuotaTransport,
 } from '../../../../lib/notification-oa-breaker';
+
+/**
+ * The channel decision (A-21, 2026-10-01): EVERY pack sends through the ONE
+ * central OA. The per-shop merchant OA stays in the repository but is switched
+ * off — `resolveMerchantLineChannel` / `merchant-line-config.ts` are deliberately
+ * NOT called from this route any more (an operator-configured merchant channel
+ * would contradict the Owner's decision and send the customer a message from a
+ * channel that was never provisioned).
+ *
+ * The merchant path is preserved for the future because the Owner described it as
+ * an add-on ("OA ร้านเอง = เก็บไว้ทำอนาคต", A-21 item 3): when it is re-enabled the
+ * decision must be made on a CAPABILITY the database reports (a per-shop channel
+ * entitlement in the delivery context) and never on the pack's NAME, which is the
+ * mistake the round-1 review found at this spot. The merchant webhook ingress
+ * (`/api/line/webhook/merchant/[shopId]`) still uses the module; only the outbound
+ * send path is closed.
+ */
+function resolveCentralChannel() {
+  return resolveLineChannelConfig({
+    mode: 'trial',
+    centralSecret: process.env.LINE_CHANNEL_SECRET,
+    centralAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN,
+  });
+}
 
 type ClaimedNotification = { id: string; shop_id: string; event_type: string; attempt_count: number };
 type DeliveryContext = {
@@ -45,9 +70,6 @@ type DeliveryContext = {
 type RuntimeClient = Awaited<ReturnType<typeof import('../../../../lib/bk01-runtime').getBk01RuntimeClient>>;
 type RuntimeProvider = () => Promise<RuntimeClient>;
 const defaultRuntimeProvider: RuntimeProvider = async () => (await import('../../../../lib/bk01-runtime')).getBk01RuntimeClient();
-type MerchantChannelResolver = (shopId: string) => Promise<ReturnType<typeof resolveLineChannelConfig>>;
-const defaultMerchantChannelResolver: MerchantChannelResolver = async (shopId) =>
-  (await import('../../../../lib/merchant-line-config')).resolveMerchantLineChannel(shopId);
 
 /** How many metered pushes this shop has already sent in the Thai month. */
 type PushUsageResolver = (shopId: string) => Promise<number | null>;
@@ -100,10 +122,10 @@ export async function handleNotificationDispatch(
   req: Request,
   runtimeProvider: RuntimeProvider = defaultRuntimeProvider,
   send: typeof fetch = fetch,
-  resolveMerchant: MerchantChannelResolver = defaultMerchantChannelResolver,
   quotaTransport: QuotaTransport | null = null,
   alertTransport: OpsAlertTransport | null = null,
   resolvePushUsage: PushUsageResolver | null = null,
+  capAlertSink: PushAlertSink | null = null,
 ) {
   const expectedSecret = process.env.NOTIFICATION_DISPATCH_SECRET;
   if (!expectedSecret || req.headers.get('authorization') !== `Bearer ${expectedSecret}`) {
@@ -145,6 +167,14 @@ export async function handleNotificationDispatch(
      */
     const usageResolver: PushUsageResolver = resolvePushUsage ?? (async () => null);
 
+    /*
+     * Unit 7 item 3/2 alerts, once per dispatched run — see the two call sites.
+     * `capAlertSent` is a one-per-run guard and a *retry* guard, not a
+     * once-per-day one: the day limit is the database ledger the controller owns
+     * (the `pushAlertDedupeKey` comment in notification-oa-breaker.ts).
+     */
+    let capAlertSent = false;
+
     const { data: claims, error: claimError } = await runtime.rpc('claim_due_line_notifications', { p_limit: 25 });
     if (claimError) return Response.json({ error: 'Notification claim failed' }, { status: 500 });
     if (!Array.isArray(claims)) return Response.json({ error: 'Notification claim response is invalid' }, { status: 500 });
@@ -185,8 +215,7 @@ export async function handleNotificationDispatch(
           // (a cost guard must not silently mute a paid-for reminder); a confirmed
           // over-cap send is suppressed. A customer never sees an error either way.
           const decision = resolvePushCapDecision({
-            cap: typeof context.monthly_push_cap === 'number' ? context.monthly_push_cap
-              : (entitlementsForPlan(plan)?.monthly_push_cap ?? null),
+            cap: context.monthly_push_cap,
             used: await usageResolver(context.shop_id),
           });
           if (!decision.allowed) {
@@ -194,6 +223,28 @@ export async function handleNotificationDispatch(
             failureMessage = 'Not sent: monthly push cap reached for this shop';
           } else if (decision.unverified) {
             unverifiedCaps += 1;
+            // Unit 3 (controller decision 2026-10-01): a cap that could not be
+            // measured must be reported, not just counted. The dedupe key is
+            // per shop and per Thai day so a broken counter on a busy shop does
+            // not turn into an alert storm; `delivered` is false so the sink may
+            // treat the day key as retryable until an attempt lands.
+            if (!capAlertSent) {
+              capAlertSent = true;
+              await sendOpsAlert({
+                env: process.env,
+                subject: '[BK01] push cap could not be verified — metering guard not active',
+                text: [
+                  `Shop: ${context.shop_id}`,
+                  'The monthly push cap could not be verified for this dispatch: the count or the',
+                  'cap from the entitlement context was unreadable, so the guard is NOT active.',
+                  'Pushes were NOT suppressed (the cap is a cost guard, not a right).',
+                ].join('\n'),
+                transport: alertTransport,
+                sink: capAlertSink,
+                dedupeKey: pushAlertDedupeKey({ kind: 'cap_unverified', shopId: context.shop_id, at: now }),
+                delivered: false,
+              });
+            }
           }
         }
 
@@ -212,6 +263,12 @@ export async function handleNotificationDispatch(
                 'Raise the LINE OA plan or wait for the monthly reset.',
               ].join('\n'),
               transport: alertTransport,
+              // One alert per open event: the ledger keeps it to once per Thai day
+              // and the alert is a fact about the OA, not about this shop. The
+              // breaker was READ successfully, so the day key is not retryable.
+              sink: capAlertSink,
+              dedupeKey: pushAlertDedupeKey({ kind: 'breaker_open', at: now }),
+              delivered: true,
             });
           }
         }
@@ -219,13 +276,11 @@ export async function handleNotificationDispatch(
         if (holdReason === null) {
           try {
             /*
-             * The channel decision is unchanged from B9(a): a paid shop with its
-             * own OA uses it, everything else uses the central OA.
+             * A-21 (2026-10-01): EVERY pack sends through the central OA. The
+             * per-shop merchant channel is kept in the repository but is not on
+             * this path any more — see `resolveCentralChannel` above.
              */
-            const isMerchantPlan = context.subscription_plan === 'basic_490' || context.subscription_plan === 'pro_990';
-            const config = isMerchantPlan
-              ? await resolveMerchant(context.shop_id)
-              : resolveLineChannelConfig({ mode: 'trial', centralSecret: process.env.LINE_CHANNEL_SECRET, centralAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN });
+            const config = resolveCentralChannel();
             const date = context.booking_date;
             const time = String(context.start_time).slice(0, 5);
             const message = context.event_type === 'reminder_3h' || context.event_type === 'reminder_24h'

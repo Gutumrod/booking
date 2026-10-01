@@ -2,7 +2,14 @@
 
 ผู้เขียนสเปก: Hermes session `HOUSE-BK01-PACK-NOTIFY-APP` · ผู้คุม Claude `dd7e55e1` · 2026-10-01
 บรีฟ: `25-BK01-PACK-NOTIFY-GROUP6-7.md` · ข้อเสนอ: `platform/PROPOSAL-BK01-PACKS-NOTIFY-2026-10-01.md` (A-21)
-branch ที่สเปกนี้อ้าง: `codex/bk01-pack-notify-20261001` @ `f97642c` (base) — **สเปกเท่านั้น ไม่มี SQL ถูกเขียนในก้อนนี้**
+branch ที่สเปกนี้อ้าง: `codex/bk01-pack-notify-20261001` — **สเปกเท่านั้น ไม่มี SQL ถูกเขียนในก้อนนี้**
+
+> **ฉบับแก้ตามรีวิว Codex รอบ 1 (2026-10-01)** — 3 จุดที่กระทบสเปก:
+> 1. **ทุกแพ็กใช้ OA กลาง** (A-21) — ฝั่งแอปปิดการใช้ OA ร้านแล้ว (ไม่มี SQL ต้องแก้ · ไม่มี path ส่งจริงที่เลือก OA ร้าน)
+> 2. **เพดานต้องถูกส่งมากับ entitlement context** — §7.1b ใหม่: `get_line_notification_delivery_context` ต้องคืน `monthly_push_cap` (แอปไม่มีสำเนาเพดานที่ไหนอีกแล้ว; ไม่มีค่า = `unverified` + แจ้ง OPS)
+> 3. **การแจ้ง `OPS_ALERT_EMAIL` ต้องจำกัดครั้ง/วัน** — §7.8 ใหม่: ตาราง + ฟังก์ชัน claim ledger ที่แอปเรียก (และเป็นชื่อที่ 2 ใน allowlist)
+> · ฐาน SQL ที่ต้องใช้ต่อ = `0a0d5aab5b09c19e9020b54379f00972c9c9036c` (ก้อน 5 รอบ 2 ผ่านรีวิวแล้ว)
+
 เจ้าของฟังก์ชัน SQL: **Codex (ก้อน 5/7)** · migration ใหม่เท่านั้น · ผู้คุมรวมเลข migration
 
 > สถานะสูงสุดของเอกสารนี้ = SPEC (source-level) · ยังไม่มีใคร apply · ไม่มี W-1 ในก้อนนี้ (เครื่องไม่มี PG)
@@ -163,6 +170,23 @@ UPDATE local_service.entitlement_plans SET services_limit = 5,
 - **`services_limit` Free = 5 พร้อมเพดาน `CHECK (services_limit > 0)` เดิม** — ไม่ต้องแก้ constraint
 - **หลัง apply แล้ว ต้อง mirror ฝั่งแอปด้วย:** `apps/booking-admin/src/lib/business-type-starter-services.ts` `SIGNUP_PLAN_SERVICES_LIMIT.free_trial` ต้องขยับ 3 → 5 ในงานที่ apply จริง (ก้อนนี้ *ไม่* ขยับ เพื่อไม่ให้หน้าสมัครสัญญาบริการตั้งต้น 5 รายการที่ DB ยังสร้างไม่ครบ) — `tests/ui-truth.test.ts` ปักทั้งสองค่าไว้
 
+### 7.1b **เพดานต้องถูกส่งมากับ entitlement context** (เพิ่มตามรีวิว Codex รอบ 1)
+
+แอปฝั่ง dispatch **ไม่มีสำเนาเพดานที่ไหนอีกแล้ว** (ตัด mirror `monthly_push_cap` ออกจาก `notification-entitlement.ts` ตามคำตัดสินผู้คุม) ⇒ ค่าที่แอปใช้ต้องมาจาก
+`get_line_notification_delivery_context` ซึ่งก้อน 5 แก้ไว้แล้ว:
+
+```sql
+-- ใน get_line_notification_delivery_context (ก้อน 5 · 0a0d5aa) — เพิ่มคอลัมน์ผลลัพธ์:
+--   ep.monthly_push_cap          AS monthly_push_cap
+-- โดย ep = local_service.entitlement_plans ของ effective plan ที่ bk01_effective_plan() คืน
+-- (LEFT JOIN — แถวที่ยังไม่มีค่าต้องคืน NULL ไม่ใช่ตัดแถว delivery context ทิ้ง)
+```
+
+- **`NULL` = ยังไม่รู้ ⇒ แอปส่งต่อ + นับ `unverifiedCapChecks` + แจ้ง `OPS_ALERT_EMAIL` (จำกัดครั้ง/วัน)** — ไม่ระงับ
+- เพดานที่ไม่รู้ต้องไม่กลายเป็นเพดาน 0: ถ้า `monthly_push_cap` เป็น `NULL` แล้วแอปตีความเป็น "ครบโควตา" = ปิดเตือนของลูกค้าที่จ่ายเงิน (สิ่งที่คำตัดสินห้าม)
+- **ห้ามใส่ตัวเลข 50/600/1,500 ในโค้ด TS ทุกไฟล์** (test สแกนแล้วทั้ง 4 โมดูล + route) — แหล่งความจริง = คอลัมน์นี้เท่านั้น
+- **ตัวนับ (`bk01_shop_push_usage`) ยังเป็นชื่อที่ 1 ใน allowlist** (§7.7) และแอปยังไม่เรียกชื่อนั้นในโค้ด (ฉีด resolver) — ไม่เปลี่ยนจากรอบก่อน
+
 ### 7.2 ตัวนับ push ต่อร้านต่อเดือน (นับจาก log เดิม — **ไม่สร้างตารางใหม่**)
 
 **ฟังก์ชันที่ต้องเพิ่ม (ชื่อตรงตัวสำหรับ allowlist):**
@@ -189,7 +213,7 @@ GRANT EXECUTE ON FUNCTION local_service.bk01_shop_push_usage(uuid,date) TO bk01_
 - รีเซ็ตวันที่ 1 เวลาไทย = `date_trunc('month', … AT TIME ZONE 'Asia/Bangkok')` ตรงกับ `bk01_month_key` ของก้อนสิทธิ์เดิม (`20260926120000_…`)
 - **`STABLE`** เพราะอ่านอย่างเดียว (ตรงกับสไตล์ `get_line_notification_delivery_context`)
 
-**ฝั่งแอป (ทำแล้วในก้อนนี้):** `apps/booking-consumer/src/lib/notification-push-budget.ts` ตัดสินจาก `cap` (จากแผน) + `used` (จากฟังก์ชันนี้) — ถ้า `used` อ่านไม่ได้ → `unverified` และ **ส่งต่อ** (ตัวคุมต้นทุนไม่ปิดกั้นสิทธิ์ที่จ่ายมาแล้ว) แล้วรายงานจำนวนในคำตอบ dispatch
+**ฝั่งแอป (ทำแล้วในก้อนนี้):** `apps/booking-consumer/src/lib/notification-push-budget.ts` ตัดสินจาก `cap` (จาก `DeliveryContext.monthly_push_cap` — §7.1b) + `used` (จากฟังก์ชันนี้) — ถ้า `used` **หรือ `cap`** อ่านไม่ได้ → `unverified` และ **ส่งต่อ** (ตัวคุมต้นทุนไม่ปิดกั้นสิทธิ์ที่จ่ายมาแล้ว) แล้วรายงานจำนวนในคำตอบ dispatch + แจ้ง `OPS_ALERT_EMAIL` จำกัดครั้ง/วัน (§7.8)
 
 ### 7.3 เบรกเกอร์โควตา OA กลาง 80%
 
@@ -208,7 +232,15 @@ GRANT EXECUTE ON FUNCTION local_service.bk01_shop_push_usage(uuid,date) TO bk01_
 - reply ล้ม (replyToken หมดอายุ) → **catch แยก ไม่ล้มการผูกคิว** และ finalize เป็น `processed` (`route.ts`) — พฤติกรรมที่ต้องการ
 - SQL ที่เกี่ยวข้อง: `bk01_line_bind_booking_trial` (`20260927130000_bk01_trial_line_bind.sql`) — **ไม่ต้องแก้**
 
-### 7.5 แจ้งลูกค้าเมื่อร้านตัดสินสลิป (B4 เดิม) — ผูกกับ `customer_slip_decision_push`
+### 7.9 ช่องทางส่ง — ทุกแพ็กใช้ OA กลาง (A-21 · เพิ่มตามรีวิว Codex รอบ 1)
+
+- **ไม่มี SQL ต้องแก้** สำหรับข้อนี้: เป็นการปิด *เส้นทางส่ง* ฝั่งแอป
+- ฝั่งแอป: `dispatch/route.ts` ตัดสินช่องทางด้วย `resolveCentralChannel()` เท่านั้น · ลบพารามิเตอร์/ตัวเลือก `resolveMerchant` ออกจากการเรียกจริง (เดิมมี fallback เลือก OA ร้านเมื่อ `subscription_plan` เป็น `basic_490`/`pro_990`)
+- **โค้ด OA ร้านคงไว้ใน repo ห้ามลบ:** `lib/merchant-line-config.ts` + ทางเข้า merchant webhook (`app/api/line/webhook/merchant/[shopId]/route.ts`) ยังใช้โมดูลนี้ · `lib/line-channel-config.ts` ยังมี `mode:'paid'` และเทสต์ `tests/line-config.test.ts` ยังปักไว้ (เป็นสัญญาของโมดูล ไม่ใช่ของเส้นทางส่ง)
+- **อนาคต (ถ้า Owner เปิด OA ร้าน):** ต้องตัดสินจาก **ความสามารถที่ฐานข้อมูลรายงาน** (คอลัมน์สิทธิ์ช่องทางต่อร้านใน delivery context) — **ห้ามตัดสินจากชื่อแพ็ก** ซึ่งเป็นข้อผิดพลาดที่รีวิวรอบ 1 จับได้
+- เทสต์ที่ปักพฤติกรรมใหม่: `tests/house-pack-entitle.test.ts` "EVERY pack sends through the central OA" (ยิงจริง 3 แพ็ก: free/basic/pro → ทุก push ใช้ `Bearer central-token`) + test static ว่าเส้นทางส่งไม่ import/เรียกโมดูล OA ร้าน
+
+### 7.5b สลิป — สถานะ
 
 - Free ไม่มีมัดจำ ⇒ คอลัมน์ false ไม่กระทบเส้นทางนี้ · Basic/ทดลอง true
 - **การสร้างแถว `deposit_slip_decision`** เมื่อร้านอนุมัติ/ปฏิเสธ: อยู่ในขอบเขตสเปกก้อน 2 ที่ส่งไปแล้ว (`docs/design/BK01-NOTIFY-DESIGN-2026-10-01.md` §5 ข้อ 5 `enqueue_merchant_slip_notifications` + ข้อ 6)
@@ -223,15 +255,51 @@ GRANT EXECUTE ON FUNCTION local_service.bk01_shop_push_usage(uuid,date) TO bk01_
 
 ## 7.7 รายชื่อฟังก์ชันที่ต้องเพิ่มใน allowlist (ผู้คุมทำ — ไม่ใช่ Codex)
 
-`scripts/lib/bk01-runtime-allowlist.mjs` → `BK01_RUNTIME_ROUTE_FUNCTIONS` **ชื่อตรงตัวเท่านั้น**:
+`scripts/lib/bk01-runtime-allowlist.mjs` → `BK01_RUNTIME_ROUTE_FUNCTIONS` **ชื่อตรงตัวเท่านั้น** (2 ชื่อในรอบนี้):
 
 ```
-local_service.bk01_shop_push_usage(uuid,date)
+local_service.bk01_shop_push_usage(uuid,date)          -- ตัวนับ push ต่อร้านต่อเดือน (§7.2)
+local_service.bk01_claim_push_alert_once(text,boolean) -- ledger กันแจ้ง OPS ซ้ำต่อวัน (§7.8)
 ```
 
 - เพิ่ม **พร้อม migration ที่ grant ให้ `bk01_runtime` จริง** (ไม่เพิ่มก่อน) · และต้องอัปเดต test ที่ปักจำนวน (`tests/bk01-trial-line-bind.test.ts:43-44` ปัก `BK01_RUNTIME_FUNCTIONS.length === 11` และ `EFFECTIVE === 19`) + โพรบ non-vacuity ใน `scripts/check-bk01-migration-policy.mjs:85-95` ให้ตรงกับชุดใหม่
 - **ห้าม wildcard / ห้าม grant PUBLIC/anon** (§5c-5)
-- **ฝั่งแอปของก้อนนี้ไม่เรียกชื่อนั้น** — `apps/booking-consumer/src/app/api/notifications/dispatch/route.ts` รับตัวนับผ่าน `resolvePushUsage` ที่ฉีดได้ (ค่าเริ่มต้น = `null` ⇒ `unverified`) ⇒ route ไม่มีชื่อ RPC ที่ยังไม่ถูก grant และ guard test เดิม (`tests/bk01-wuc-routes.test.ts:42-47`) ยังผ่าน
+- **ฝั่งแอปของก้อนนี้ไม่เรียกชื่อทั้งสอง** — `apps/booking-consumer/src/app/api/notifications/dispatch/route.ts` รับตัวนับผ่าน `resolvePushUsage` และ ledger ผ่าน `capAlertSink` ที่ฉีดได้ (ค่าเริ่มต้น = `null` ⇒ `unverified` / ไม่ส่ง alert) ⇒ route ไม่มีชื่อ RPC ที่ยังไม่ถูก grant และ guard test เดิม (`tests/bk01-wuc-routes.test.ts:42-47`) ยังผ่าน
+- **ลำดับการเปิดใช้:** ledger (§7.8) ต้อง apply + allowlist ก่อน ไม่งั้นแอปจะ **ไม่แจ้ง OPS เลย** (fail-closed — เขียนไว้ชัดว่าเป็นพฤติกรรมที่ตั้งใจ ไม่ใช่ความล้มเหลว) · ตัวนับเป็นตัวเปิดใช้ "เพดานมีผลจริง"
+
+## 7.8 ledger กันแจ้ง `OPS_ALERT_EMAIL` ซ้ำต่อวัน (เพิ่มตามรีวิว Codex รอบ 1)
+
+คำตัดสินผู้คุม: แจ้งทั้ง **ตอนเบรกเกอร์เปิด** และ **ตอนเพดาน/ตัวนับอ่านไม่ได้** — *จำกัดครั้ง/วัน*
+
+```sql
+-- ตาราง ledger (product-local) — ไม่ผูกกับ auth, ไม่เก็บ PII
+CREATE TABLE local_service.notification_alert_ledger (
+  alert_key     text        PRIMARY KEY,   -- '<kind>:<scope>:<YYYY-MM-DD>' (Thai day)
+  first_raised_at timestamptz NOT NULL DEFAULT now(),
+  delivered     boolean     NOT NULL DEFAULT false
+);
+
+-- ฟังก์ชัน claim: คืน true = เพิ่งเปิดวันนี้ (ส่งได้) · false = แจ้งไปแล้ววันนี้
+CREATE FUNCTION local_service.bk01_claim_push_alert_once(p_alert_key text, p_delivered boolean)
+RETURNS boolean
+LANGUAGE sql SECURITY DEFINER
+SET search_path = pg_catalog, local_service AS $$
+  INSERT INTO local_service.notification_alert_ledger(alert_key, delivered)
+  VALUES (p_alert_key, p_delivered)
+  ON CONFLICT (alert_key)
+    -- เดือนที่ส่งไม่สำเร็จ: เปิดให้ลองใหม่ได้ระหว่างวัน · ที่ส่งแล้ว: ล็อกทั้งวัน
+    DO UPDATE SET delivered = local_service.notification_alert_ledger.delivered OR EXCLUDED.delivered
+  RETURNING (xmax = 0 OR NOT local_service.notification_alert_ledger.delivered)
+$$;
+REVOKE ALL ON FUNCTION local_service.bk01_claim_push_alert_once(text,boolean) FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION local_service.bk01_claim_push_alert_once(text,boolean) TO bk01_runtime;
+```
+
+- **คีย์มาจากแอป** (ผ่าน `pushAlertDedupeKey()` ใน `notification-oa-breaker.ts`):
+  `push_cap_unverified:<shop_id>:<yyyy-mm-dd>` และ `oa_breaker_open:<yyyy-mm-dd>` (วันไทย +07:00)
+- **`p_delivered` = ความหมายของ "ส่งได้/ไม่ส่ง":** แอปส่ง `false` ตอนแจ้งเพดาน (ยังยืนยันการส่งไม่ได้ในจุดนั้น ถ้าส่งไม่สำเร็จต้องลองใหม่ได้ในวันเดียวกัน) และ `true` ตอนแจ้งเบรกเกอร์เปิด (อ่านค่าสำเร็จแล้ว = ข้อเท็จจริงของ OA ไม่ต้องยิงซ้ำ)
+- **ยังไม่มีฟังก์ชันนี้ → แอปไม่ส่ง alert** และคืน `sent:false` (fail-closed) · ไม่มี fallback ไป LINE/Telegram/ช่องทางอื่น
+- ควรมีตัวล้าง ledger เก่า (เช่น > 90 วัน) ในงานบำรุง — ไม่จำเป็นต่อฟังก์ชันการทำงานรอบนี้
 
 ## 8. จุดที่ชนกับก้อน 5 — ผู้คุมรวมเลข
 
@@ -252,4 +320,7 @@ local_service.bk01_shop_push_usage(uuid,date)
 - ไม่มี credential LINE จริง ⇒ breaker/quota พิสูจน์ได้แค่ fake transport + ชื่อ endpoint ที่ตรวจจากเอกสารทางการ
 - ไม่มีคีย์ Resend จริง (สืบเนื่องจากก้อน 2) ⇒ ไม่ส่งอีเมลจริง
 - `bk01_shop_push_usage` และ `customer_slip_decision_push` ในเส้นทาง DB → **ยังไม่มีผลจริงจน migration นี้ถูก apply + allowlist ถูกเพิ่ม**
+- **`monthly_push_cap` ยังไม่ถูกส่งมากับ delivery context จนกว่าก้อน 5 จะถูกแก้ (§7.1b)** ⇒ ตอนนี้แอปจะได้ `unverified` ทุกครั้ง (ส่งต่อ + รายงาน + แจ้ง OPS ถ้ามี ledger) — เป็นพฤติกรรมที่ตั้งใจ ไม่ใช่ความล้มเหลว
+- **การแจ้ง OPS จำกัดครั้ง/วัน ยังไม่ทำงานจริงจนกว่า ledger (§7.8) + allowlist จะถูกเพิ่ม** ⇒ ตอนนี้ `sendOpsAlert` ถูกเรียกในเส้นทางจริงด้วย sink = `null` จึง **ไม่ส่งอีเมลเลย** (fail-closed) — เทสต์พิสูจน์เส้นทาง/การจำกัดครั้ง/วันด้วย sink ปลอมเท่านั้น
+- **ไม่มี credential/transport อีเมลจริงในโค้ดก้อนนี้** (ยังไม่มี adapter อีเมลใน repo — §7.8 เป็นสเปก) ⇒ `OPS_ALERT_EMAIL` ถูกพิสูจน์ถึงระดับ "เรียกถูกที่ + ไม่มีออกนอกช่องทาง" เท่านั้น
 - สถานะสูงสุด = **SOURCE_LEVEL / BUILD_PASS** ไม่ใช่ "พร้อมใช้จริง"
