@@ -307,7 +307,7 @@ const freeShopsLimit = () => Number(planRow('free').shops_limit);
 
 test('forward migrations exist in timestamp order and the repository policy accepts each', () => {
   const files = readdirSync(MIGRATION_DIR).filter((name) => name.endsWith('.sql')).sort();
-  assert.deepEqual(files, [MIGRATION_FILE, '20260927120000_bk01_runtime_route_rpcs.sql', '20260927130000_bk01_trial_line_bind.sql', '20260928120000_bk01_house_upload_grants.sql', '20260930120000_bk01_link_token_no_extensions.sql', '20261001023000_bk01_queue_release.sql']);
+  assert.deepEqual(files, [MIGRATION_FILE, '20260927120000_bk01_runtime_route_rpcs.sql', '20260927130000_bk01_trial_line_bind.sql', '20260928120000_bk01_house_upload_grants.sql', '20260930120000_bk01_link_token_no_extensions.sql', '20261001023000_bk01_queue_release.sql', '20261001130000_bk01_sql_consolidate.sql']);
   assert.match(MIGRATION_FILE, /^\d{14}_[a-z0-9_]+\.sql$/);
   assert.equal(validateBk01MigrationSql(rawSql, MIGRATION_FILE), true);
   assert.equal(validateBk01MigrationSql(readFileSync(`${MIGRATION_DIR}/20260927120000_bk01_runtime_route_rpcs.sql`, 'utf8'), '20260927120000_bk01_runtime_route_rpcs.sql'), true);
@@ -324,6 +324,19 @@ test('forward migrations exist in timestamp order and the repository policy acce
   assert.match(queueReleaseMigration, /local_service\.bk01_pending_past_appointment_count/);
   assert.match(queueReleaseMigration, /status='pending_review'[\s\S]*?end_timestamptz < now\(\)/);
   assert.match(queueReleaseMigration, /SET queue_released_at = now\(\)[\s\S]*?tstzrange\(v_start_tz, v_end_tz, '\[\)'\)/);
+  const sqlConsolidation = readFileSync(`${MIGRATION_DIR}/20261001130000_bk01_sql_consolidate.sql`, 'utf8');
+  assert.equal(validateBk01MigrationSql(sqlConsolidation, '20261001130000_bk01_sql_consolidate.sql'), true);
+  assert.match(sqlConsolidation, /COALESCE\(customer_cancel_before_hours, 24\)/);
+  assert.match(sqlConsolidation, /COALESCE\(customer_reschedule_before_hours, 12\)/);
+  assert.match(sqlConsolidation, /p_customer_cancel_before_hours IS NULL OR p_customer_cancel_before_hours < 0/);
+  assert.match(sqlConsolidation, /p_customer_reschedule_before_hours IS NULL OR p_customer_reschedule_before_hours < 0/);
+  assert.match(sqlConsolidation, /p_outcome='no_show' AND v_booking\.start_timestamptz>now\(\)/);
+  assert.match(sqlConsolidation, /v_booking\.end_timestamptz <= now\(\)/);
+  assert.match(sqlConsolidation, /local_service\.audit_events/);
+  assert.match(sqlConsolidation, /event_type IN \('reminder_1h','reminder_24h'\)/);
+  assert.doesNotMatch(sqlConsolidation, /CREATE OR REPLACE FUNCTION local_service\.enforce_booking_status_transition/);
+  assert.doesNotMatch(sqlConsolidation, /prevent_overlapping_staff_bookings/);
+  assert.doesNotMatch(sqlConsolidation.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/--.*$/gm, ' '), /\bauth\s*\./i);
   assert.doesNotMatch(queueReleaseMigration, /bk01_release_overdue_queues|GRANT EXECUTE ON FUNCTION local_service\.bk01_[^;]+ TO service_role/i);
   assert.match(queueReleaseMigration, /queue_released_at IS NOT NULL THEN[\s\S]*?confirmation is unavailable/);
   assert.throws(() => validateBk01MigrationSql('CREATE OR REPLACE FUNCTION local_service.other() RETURNS int LANGUAGE sql AS $$ SELECT 1 $$;\n-- BK01-PRESERVE-EXISTING-PUBLIC-EXECUTE: local_service.generate_link_token()', '20260930120000_bk01_link_token_no_extensions.sql'), /must match exactly one/);
