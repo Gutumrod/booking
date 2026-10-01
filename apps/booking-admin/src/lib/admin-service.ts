@@ -68,6 +68,11 @@ export interface DashboardShop {
   requireDeposit: boolean;
   // null = not configured; never coerced to 0 (Amendment B1).
   defaultDepositAmount: number | null;
+  // The shop's OWN deposit / cancellation policy, in the shop's two languages.
+  // '' = the shop has published nothing in that language (never null, so the
+  // editor never has to tell "unset" from "cleared").
+  depositPolicyTh: string;
+  depositPolicyEn: string;
 }
 
 export interface DashboardService {
@@ -203,6 +208,11 @@ interface RawShop {
   line_oa_id: string | null;
   require_deposit: boolean | null;
   default_deposit_amount: number | string | null;
+  // The shop's own deposit / cancellation terms (brief 26). Public by design
+  // (shown to every visitor of the booking page) and never mixed with personal
+  // data. Null = not published. Rendered as plain text only.
+  deposit_policy_th: string | null;
+  deposit_policy_en: string | null;
 }
 
 interface RawStaff {
@@ -279,7 +289,7 @@ export async function fetchAdminDashboardData(): Promise<AdminDashboardData> {
   const [shopResult, bookingsResult, servicesResult, staffResult, entitlementResult, schedulesResult, holidaysResult, subscriptionResult] = await Promise.all([
     supabase
       .from('shops')
-      .select('id, name, slug, phone, address, promptpay_number, promptpay_name, line_oa_id, require_deposit, default_deposit_amount')
+      .select('id, name, slug, phone, address, promptpay_number, promptpay_name, line_oa_id, require_deposit, default_deposit_amount, deposit_policy_th, deposit_policy_en')
       .eq('id', membership.shop_id)
       .single(),
     supabase
@@ -442,6 +452,8 @@ export async function fetchAdminDashboardData(): Promise<AdminDashboardData> {
       role: membership.role as DashboardShop['role'],
       requireDeposit: rawShop.require_deposit ?? true,
       defaultDepositAmount: rawShop.default_deposit_amount == null ? null : Number(rawShop.default_deposit_amount),
+      depositPolicyTh: rawShop.deposit_policy_th ?? '',
+      depositPolicyEn: rawShop.deposit_policy_en ?? '',
     },
     bookings,
     services: ((servicesResult.data ?? []) as unknown as RawService[]).map((service) => ({
@@ -492,6 +504,11 @@ export async function fetchAdminDashboardData(): Promise<AdminDashboardData> {
   };
 }
 
+export interface ShopDepositPolicyInput {
+  depositPolicyTh: string;
+  depositPolicyEn: string;
+}
+
 export interface ShopSettingsInput {
   name: string;
   phone: string;
@@ -510,6 +527,26 @@ export async function updateShopSettings(shopId: string, input: ShopSettingsInpu
     p_promptpay_number: input.promptpayNumber,
     p_promptpay_name: input.promptpayName,
     p_line_oa_id: input.lineOaId,
+  });
+
+  if (error) throw new Error(error.message);
+}
+
+/**
+ * Save the shop's own deposit / cancellation policy (brief 26, section 3).
+ *
+ * A SEPARATE RPC, deliberately: `update_shop_settings` already takes nine
+ * arguments and the caretaker's ruling is to add a new function rather than
+ * change that signature for an app that is not live yet. The database enforces
+ * what this screen enforces — owner/admin only, non-null, and the per-language
+ * length limit — so an admin or staff account that hides the field in the UI
+ * still cannot write it, and a cross-shop call is refused by the RPC itself.
+ */
+export async function updateShopDepositPolicy(shopId: string, input: ShopDepositPolicyInput): Promise<void> {
+  const { error } = await supabase.rpc('update_shop_deposit_policy', {
+    p_shop_id: shopId,
+    p_deposit_policy_th: input.depositPolicyTh,
+    p_deposit_policy_en: input.depositPolicyEn,
   });
 
   if (error) throw new Error(error.message);

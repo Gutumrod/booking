@@ -16,6 +16,7 @@ import {
 } from '../../../lib/booking-service';
 import { LanguageToggle } from '@/components/language-toggle';
 import { LegalLinks } from '@/components/legal-document';
+import { ShopDepositPolicyNotice } from '@/components/shop-deposit-policy';
 import { QRCodeSVG } from 'qrcode.react';
 import { resolveBookingPageState, type BookingPageState } from '../../../lib/booking-state';
 import { resolvePaymentInstruction, preHoldServiceDeposit, isServicePaymentBlocked } from '../../../lib/payment-instruction';
@@ -225,6 +226,14 @@ function BookingRoute({ slug }: { slug: string }) {
     promptpayName,
     holdDepositAmount: holdResult?.deposit_amount,
   });
+
+  // The shop's own deposit / cancellation policy (brief 26). Public by design,
+  // rendered as plain text only, and shown BEFORE the slip upload and the
+  // deposit confirmation button on the payment step. The column is only carried
+  // while the loaded snapshot is for the current route (the route loader already
+  // drops every field on a failed load), so a stale or foreign shop can never
+  // contribute policy text.
+  const shopDepositPolicy = shop ? { th: shop.deposit_policy_th, en: shop.deposit_policy_en } : null;
 
   const handleCopyPromptpay = () => {
     if (!paymentInstruction.ok) return;
@@ -822,6 +831,10 @@ function BookingRoute({ slug }: { slug: string }) {
                     </button>
                   </div>
                 )}
+
+                {/* The shop's own terms, shown before any slip is chosen and
+                    before the deposit is confirmed (brief 26 section 2). */}
+                <ShopDepositPolicyNotice policy={shopDepositPolicy} />
 
                 {/* PromptPay Card */}
                 <div className="bg-slate-900 border border-emerald-500/30 rounded-2xl p-4 text-center relative overflow-hidden space-y-3">

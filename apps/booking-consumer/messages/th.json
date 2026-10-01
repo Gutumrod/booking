@@ -141,7 +141,16 @@
     "entitlementOverPlan": "เกินสิทธิ์ของแพ็กที่ใช้อยู่",
     "entitlementSystemOff": "ระบบปิดไว้ชั่วคราว",
     "entitlementOwnerOff": "เจ้าของร้านปิดไว้เอง",
-    "entitlementNotInUse": "ยังไม่เปิดใช้"
+    "entitlementNotInUse": "ยังไม่เปิดใช้",
+    "policy": {
+      "shopTitle": "เงื่อนไขมัดจำ/ยกเลิกของร้าน",
+      "fallbackNote": "ร้านระบุเงื่อนไขเป็น{language}เท่านั้น",
+      "languageNameTh": "ภาษาไทย",
+      "languageNameEn": "ภาษาอังกฤษ",
+      "shopOwnedNote": "เงื่อนไขนี้ร้านเป็นผู้กำหนดและรับผิดชอบเอง WSTERA ไม่ได้ตรวจสอบเนื้อหา",
+      "notSet": "ร้านยังไม่ได้ระบุเงื่อนไขการมัดจำ/ยกเลิก ติดต่อร้านก่อนชำระเงิน",
+      "legalLinkNote": "ดูเงื่อนไขการให้บริการของระบบได้ที่"
+    }
   },
   "manageBooking": {
     "title": "จัดการคิวของคุณ",

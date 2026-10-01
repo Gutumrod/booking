@@ -141,7 +141,16 @@
     "entitlementOverPlan": "Above this plan's entitlement",
     "entitlementSystemOff": "Switched off by the system",
     "entitlementOwnerOff": "Switched off by the shop owner",
-    "entitlementNotInUse": "Not in use"
+    "entitlementNotInUse": "Not in use",
+    "policy": {
+      "shopTitle": "The shop's deposit / cancellation terms",
+      "fallbackNote": "The shop published these terms in {language} only.",
+      "languageNameTh": "Thai",
+      "languageNameEn": "English",
+      "shopOwnedNote": "The shop sets these terms and is responsible for them. WSTERA does not review this text.",
+      "notSet": "This shop has not set deposit or cancellation terms yet. Contact the shop before paying.",
+      "legalLinkNote": "The system's own terms are at"
+    }
   },
   "manageBooking": {
     "title": "Manage your booking",

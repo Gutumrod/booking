@@ -25,6 +25,7 @@ import {
   startBillingCheckout,
   startBillingPortal,
   updateService,
+  updateShopDepositPolicy,
   updateShopSettings,
   type DashboardBooking,
   type DashboardService,
@@ -42,6 +43,15 @@ import { PreviewCustomerPageLink, useSelectedShopIdentity } from '@/components/p
 import { customerPageUrl, isExactShopIdentityMatch } from '@/lib/customer-page-url';
 import { createLatestRequestGate } from '@/lib/latest-request-gate';
 import { commitNumericField, DURATION_INPUT_PROPS, DURATION_RULES } from '@/lib/numeric-field';
+import {
+  SHOP_DEPOSIT_POLICY_MAX_CHARS,
+  normalizePolicyText,
+  policyCharLength,
+  resolveShopDepositPolicyPreview,
+  validateShopDepositPolicy,
+  type ShopDepositPolicyDraft,
+  type ShopDepositPolicyLocale,
+} from '@/lib/shop-deposit-policy';
 import { computeReadiness, isShopReady, needsMerchantAttention, type ReadinessKey } from '@/lib/readiness';
 import { TimeField } from '@/components/time-field';
 import { mergeServerSchedules } from '@/lib/schedule-merge';
@@ -56,7 +66,7 @@ import {
   Settings, AlertCircle, Plus, ShieldCheck,
   QrCode, ExternalLink, CalendarOff, Coffee, Save,
   Copy, MessageCircle, Check, Trash2, Edit3,
-  Scissors, Store, Globe, Phone, X
+  Scissors, Store, Globe, Phone, X, FileText
 } from 'lucide-react';
 
 type Booking = DashboardBooking;
@@ -206,6 +216,15 @@ export default function AdminDashboard() {
   const dashboardCustomerUrl = tenantSnapshotReady ? customerPageUrl(shopSlug) : null;
   const [shopSettingsSaved, setShopSettingsSaved] = useState(false);
   const [copiedLinkNotice, setCopiedLinkNotice] = useState(false);
+  /**
+   * The shop's own deposit / cancellation policy (brief 26). Held as one draft
+   * object so the editor, the length validation and the preview all read the
+   * same values; saved by its own owner/admin RPC, not by update_shop_settings.
+   */
+  const [depositPolicyDraft, setDepositPolicyDraft] = useState<ShopDepositPolicyDraft>({ th: '', en: '' });
+  const [depositPolicySaved, setDepositPolicySaved] = useState(false);
+  /** Which language the preview is shown in — the merchant's own reading choice. */
+  const [policyPreviewLocale, setPolicyPreviewLocale] = useState<ShopDepositPolicyLocale>('th');
 
   // Service Form State
   const [editingService, setEditingService] = useState<ServiceItem | null>(null);
@@ -255,6 +274,13 @@ export default function AdminDashboard() {
   });
 
   // Readiness is derived from data already loaded; it never blocks Preview.
+  // Brief 26: the policy editor's own validation, computed from the draft so the
+  // save button and the message can never disagree.
+  const depositPolicyError = validateShopDepositPolicy(depositPolicyDraft);
+  const depositPolicyThLength = policyCharLength(normalizePolicyText(depositPolicyDraft.th));
+  const depositPolicyEnLength = policyCharLength(normalizePolicyText(depositPolicyDraft.en));
+  const depositPolicyPreview = resolveShopDepositPolicyPreview(depositPolicyDraft, policyPreviewLocale);
+
   const readinessRows = computeReadiness({
     shopName: shopName === tCommon('loading') ? '' : shopName,
     shopPhone,
@@ -274,6 +300,15 @@ export default function AdminDashboard() {
     schedule: 'schedules',
     payment: 'settings',
   };
+  // The policy card is editable by owner and admin (the RPC enforces the same),
+  // so its button label follows shopRole, not the owner-only payment fields.
+  const depositPolicyCanEdit = shopRole === 'owner' || shopRole === 'admin';
+  const depositPolicySaveLabel = !depositPolicyCanEdit
+    ? t('policyEditorOnly')
+    : mutatingResourceId === 'shop-deposit-policy'
+      ? tCommon('saving')
+      : depositPolicySaved ? tCommon('saved') : tCommon('save');
+
   const readinessLabel: Record<ReadinessKey, string> = {
     profile: t('readiness_profile'),
     services: t('readiness_services'),
@@ -342,6 +377,10 @@ export default function AdminDashboard() {
       setRequireDeposit(data.shop.requireDeposit);
       setDefaultDepositAmount(data.shop.defaultDepositAmount);
       setLineOaId(data.shop.lineOaId);
+      setDepositPolicyDraft({
+        th: normalizePolicyText(data.shop.depositPolicyTh),
+        en: normalizePolicyText(data.shop.depositPolicyEn),
+      });
       setServices(data.services);
       setStaffList(data.staff);
       setSchedules((prev) => mergeServerSchedules(prev, data.schedules, dirtyStaffIdsRef.current));
@@ -584,6 +623,37 @@ export default function AdminDashboard() {
       await loadDashboardBookings(false);
       setShopSettingsSaved(true);
       setTimeout(() => setShopSettingsSaved(false), 2000);
+    } catch (error) {
+      setManagementError(error instanceof Error ? error.message : t('saveShopFailed'));
+    } finally {
+      setMutatingResourceId(null);
+    }
+  };
+
+  /**
+   * Save the shop's own deposit / cancellation policy (brief 26).
+   *
+   * Same authority as update_shop_settings: OWNER or ADMIN. The owner-only rule
+   * that guards PromptPay/LINE is a payment-identity rule (PRODUCT_RULES_V1
+   * section 7) and does not apply to the shop's published terms — but staff
+   * still cannot write them, and the RPC refuses a cross-shop call regardless of
+   * what this screen allows.
+   */
+  const handleSaveDepositPolicy = async () => {
+    if (!tenantSnapshotReady || !shopId) return;
+    if (shopRole !== 'owner' && shopRole !== 'admin') return;
+    if (depositPolicyError) return;
+
+    setMutatingResourceId('shop-deposit-policy');
+    setManagementError('');
+    try {
+      await updateShopDepositPolicy(shopId, {
+        depositPolicyTh: normalizePolicyText(depositPolicyDraft.th),
+        depositPolicyEn: normalizePolicyText(depositPolicyDraft.en),
+      });
+      await loadDashboardBookings(false);
+      setDepositPolicySaved(true);
+      setTimeout(() => setDepositPolicySaved(false), 2000);
     } catch (error) {
       setManagementError(error instanceof Error ? error.message : t('saveShopFailed'));
     } finally {
@@ -1850,6 +1920,122 @@ export default function AdminDashboard() {
             {managementError && (
               <p role="alert" className="rounded-xl border border-rose-500/40 bg-rose-500/10 p-3 text-xs text-rose-300">{managementError}</p>
             )}
+
+            {/* BRIEF 26 — the shop's own deposit / cancellation policy.
+                A section of its own, with its own submit button, because it is
+                saved by a different RPC (update_shop_deposit_policy) and has a
+                different edit rule (owner OR admin, not owner only). */}
+            <section
+              data-testid="shop-deposit-policy-editor"
+              className="space-y-4 rounded-xl border border-amber-500/30 bg-slate-950 p-5"
+            >
+              <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-800 pb-3">
+                <div className="min-w-0">
+                  <h3 className="flex items-center gap-2 text-sm font-bold text-white">
+                    <FileText className="h-5 w-5 text-amber-400" />
+                    {t('policyTitle')}
+                  </h3>
+                  <p className="text-xs text-slate-400">{t('policySubtitle')}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void handleSaveDepositPolicy()}
+                  disabled={!depositPolicyCanEdit || Boolean(depositPolicyError) || mutatingResourceId === 'shop-deposit-policy'}
+                  className="flex items-center gap-1.5 rounded-xl bg-amber-500 px-4 py-2 text-xs font-bold text-slate-950 shadow-md hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  <Save className="h-4 w-4" />
+                  {depositPolicySaveLabel}
+                </button>
+              </div>
+
+              <p className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-[11px] text-amber-200">
+                {t('policyDisclaimer')}
+              </p>
+
+              {depositPolicyError && (
+                <p role="alert" data-testid="shop-deposit-policy-error" className="rounded-xl border border-rose-500/40 bg-rose-500/10 p-3 text-xs text-rose-300">
+                  {t('policyTooLong', {
+                    language: depositPolicyError.locale === 'th' ? t('policyLanguageTh') : t('policyLanguageEn'),
+                    length: depositPolicyError.length,
+                    max: SHOP_DEPOSIT_POLICY_MAX_CHARS,
+                  })}
+                </p>
+              )}
+
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                {(['th', 'en'] as const).map((policyLocale) => (
+                  <div key={policyLocale} className="min-w-0">
+                    <label className="mb-1 block text-xs font-semibold text-slate-300">
+                      {policyLocale === 'th' ? t('policyThLabel') : t('policyEnLabel')}
+                    </label>
+                    <textarea
+                      rows={8}
+                      data-testid={`shop-deposit-policy-input-${policyLocale}`}
+                      disabled={!depositPolicyCanEdit}
+                      value={depositPolicyDraft[policyLocale]}
+                      onChange={(e) => setDepositPolicyDraft((prev) => ({ ...prev, [policyLocale]: e.target.value }))}
+                      placeholder={t('policyPublicNote')}
+                      className="w-full resize-y rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-xs text-white focus:border-amber-500 focus:outline-none disabled:opacity-60"
+                    />
+                    <p className="mt-1 text-[10px] text-slate-500">
+                      {policyLocale === 'th' ? depositPolicyThLength : depositPolicyEnLength} / {SHOP_DEPOSIT_POLICY_MAX_CHARS} · {t('policyLimitNote', { max: SHOP_DEPOSIT_POLICY_MAX_CHARS })}
+                    </p>
+                  </div>
+                ))}
+              </div>
+
+              <p className="text-[11px] text-slate-400">{t('policyPublicNote')}</p>
+
+              {/* PREVIEW — exactly what the customer is shown, in the customer's
+                  own language. Plain text only: the merchant's string is passed
+                  as a React child, so markup in it can never become markup. */}
+              <div data-testid="shop-deposit-policy-preview" className="space-y-2 rounded-xl border border-slate-800 bg-slate-900/60 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h4 className="text-xs font-bold text-white">{t('policyPreviewTitle')}</h4>
+                  <div className="flex items-center gap-1 rounded-lg border border-slate-700 bg-slate-950 p-0.5">
+                    {(['th', 'en'] as const).map((previewLocale) => (
+                      <button
+                        key={previewLocale}
+                        type="button"
+                        data-testid={`shop-deposit-policy-preview-${previewLocale}`}
+                        onClick={() => setPolicyPreviewLocale(previewLocale)}
+                        className={`rounded-md px-2.5 py-1 text-[11px] font-semibold ${
+                          policyPreviewLocale === previewLocale
+                            ? 'bg-amber-500 text-slate-950'
+                            : 'text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        {previewLocale === 'th' ? t('policyLanguageTh') : t('policyLanguageEn')}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {depositPolicyPreview.kind === 'empty' ? (
+                  <p data-testid="shop-deposit-policy-preview-text" className="text-xs text-amber-200">
+                    {t('policyPreviewEmpty')}
+                  </p>
+                ) : (
+                  <div className="min-w-0 space-y-2">
+                    <p className="text-[11px] font-bold text-white">{t('policyTitle')}</p>
+                    {depositPolicyPreview.kind === 'fallback' && (
+                      <p data-testid="shop-deposit-policy-preview-fallback" className="text-[11px] text-slate-400">
+                        {t('policyPreviewFallback', {
+                          language: depositPolicyPreview.locale === 'th' ? t('policyLanguageTh') : t('policyLanguageEn'),
+                        })}
+                      </p>
+                    )}
+                    <p
+                      data-testid="shop-deposit-policy-preview-text"
+                      className="min-w-0 whitespace-pre-wrap break-words text-xs leading-relaxed text-slate-300 [overflow-wrap:anywhere]"
+                    >
+                      {depositPolicyPreview.text}
+                    </p>
+                    <p className="text-[11px] text-slate-500">{t('policyDisclaimer')}</p>
+                  </div>
+                )}
+              </div>
+            </section>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="bg-slate-950 border border-emerald-500/30 rounded-xl p-5 space-y-4">

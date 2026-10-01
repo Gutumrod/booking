@@ -21,6 +21,12 @@ export interface Shop {
   promptpay_number: string;
   promptpay_name: string;
   require_deposit: boolean;
+  // The shop's OWN deposit / cancellation policy, published by the merchant
+  // (brief 26). Public by design: it is exactly what any visitor of this booking
+  // page is meant to read, and it carries no personal data. Null = not set.
+  // Rendered as plain text only — see lib/shop-deposit-policy.ts.
+  deposit_policy_th: string | null;
+  deposit_policy_en: string | null;
   // default_deposit_amount is intentionally NOT read by the consumer: the client
   // never derives a displayed deposit from a shop-level default (Codex F2). The
   // authoritative amount for an awaiting instruction comes only from the hold RPC.
@@ -101,11 +107,14 @@ export async function getShopBySlug(slug: string): Promise<Shop | null> {
   // active shops -- unauthenticated clients can no longer select(*) on the
   // shops table itself, which used to also return subscription_status,
   // trial_ends_at, owner_name, etc.
+  // deposit_policy_th / deposit_policy_en are the shop's own published terms
+  // (brief 26): public by design, carried here so the customer can read them
+  // BEFORE uploading a slip or confirming a deposit. Plain text only.
   // maybeSingle(): no row -> { data: null, error: null } (SHOP_NOT_FOUND); a
   // query/network error throws so the page shows LOAD_ERROR (Codex R2-5).
   const result = await supabase
     .from('shop_public_profile')
-    .select('id, name, slug, phone, address, line_oa_id, promptpay_number, promptpay_name, require_deposit, is_accepting_online_bookings')
+    .select('id, name, slug, phone, address, line_oa_id, promptpay_number, promptpay_name, require_deposit, deposit_policy_th, deposit_policy_en, is_accepting_online_bookings')
     .eq('slug', slug)
     .maybeSingle();
 
