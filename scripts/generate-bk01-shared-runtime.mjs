@@ -626,13 +626,14 @@ BEGIN
   WHERE n.nspname='local_service' AND p.oid::regprocedure::text IN (
 ${BK01_RUNTIME_ROUTE_FUNCTIONS.map((identity) => `    '${identity}'`).join(',\n')}
   );
-  IF v_route_function_count NOT IN (0, 5, ${BK01_RUNTIME_ROUTE_FUNCTIONS.length})
+  IF v_route_function_count NOT IN (0, 5, 6, ${BK01_RUNTIME_ROUTE_FUNCTIONS.length})
      OR (v_route_function_count = 5 AND to_regprocedure('local_service.bk01_line_bind_booking_trial(text,text,text,text)') IS NOT NULL) THEN
     RAISE EXCEPTION 'BK01 route RPC migration is partially present';
   END IF;
   v_expected_exec_count := CASE v_route_function_count
     WHEN 0 THEN ${BK01_RUNTIME_BOOTSTRAP_FUNCTIONS.length + BK01_PUBLIC_LEGACY_EXECUTE_EXCEPTIONS.length}
     WHEN 5 THEN ${BK01_RUNTIME_BOOTSTRAP_FUNCTIONS.length + 5 + BK01_PUBLIC_LEGACY_EXECUTE_EXCEPTIONS.length}
+    WHEN 6 THEN ${BK01_RUNTIME_BOOTSTRAP_FUNCTIONS.length + 6 + BK01_PUBLIC_LEGACY_EXECUTE_EXCEPTIONS.length}
     ELSE ${BK01_RUNTIME_EFFECTIVE_FUNCTIONS.length} END;
   IF EXISTS (
     SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace

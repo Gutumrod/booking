@@ -307,7 +307,7 @@ const freeShopsLimit = () => Number(planRow('free').shops_limit);
 
 test('forward migrations exist in timestamp order and the repository policy accepts each', () => {
   const files = readdirSync(MIGRATION_DIR).filter((name) => name.endsWith('.sql')).sort();
-  assert.deepEqual(files, [MIGRATION_FILE, '20260927120000_bk01_runtime_route_rpcs.sql', '20260927130000_bk01_trial_line_bind.sql', '20260928120000_bk01_house_upload_grants.sql', '20260930120000_bk01_link_token_no_extensions.sql', '20261001023000_bk01_queue_release.sql', '20261001130000_bk01_sql_consolidate.sql']);
+  assert.deepEqual(files, [MIGRATION_FILE, '20260927120000_bk01_runtime_route_rpcs.sql', '20260927130000_bk01_trial_line_bind.sql', '20260928120000_bk01_house_upload_grants.sql', '20260930120000_bk01_link_token_no_extensions.sql', '20261001023000_bk01_queue_release.sql', '20261001130000_bk01_sql_consolidate.sql', '20261001140000_bk01_pack_notify_group67.sql']);
   assert.match(MIGRATION_FILE, /^\d{14}_[a-z0-9_]+\.sql$/);
   assert.equal(validateBk01MigrationSql(rawSql, MIGRATION_FILE), true);
   assert.equal(validateBk01MigrationSql(readFileSync(`${MIGRATION_DIR}/20260927120000_bk01_runtime_route_rpcs.sql`, 'utf8'), '20260927120000_bk01_runtime_route_rpcs.sql'), true);
@@ -326,6 +326,13 @@ test('forward migrations exist in timestamp order and the repository policy acce
   assert.match(queueReleaseMigration, /SET queue_released_at = now\(\)[\s\S]*?tstzrange\(v_start_tz, v_end_tz, '\[\)'\)/);
   const sqlConsolidation = readFileSync(`${MIGRATION_DIR}/20261001130000_bk01_sql_consolidate.sql`, 'utf8');
   assert.equal(validateBk01MigrationSql(sqlConsolidation, '20261001130000_bk01_sql_consolidate.sql'), true);
+  const packNotify = readFileSync(`${MIGRATION_DIR}/20261001140000_bk01_pack_notify_group67.sql`, 'utf8');
+  assert.equal(validateBk01MigrationSql(packNotify, '20261001140000_bk01_pack_notify_group67.sql'), true);
+  assert.match(packNotify, /ALTER TABLE local_service\.entitlement_plans[\s\S]*monthly_push_cap/);
+  assert.match(packNotify, /reminder_3h/);
+  assert.match(packNotify, /FORCE ROW LEVEL SECURITY/);
+  assert.match(packNotify, /SKIP LOCKED/);
+  assert.doesNotMatch(packNotify, /ALTER TABLE local_service\.shops/i);
   assert.match(sqlConsolidation, /COALESCE\(customer_cancel_before_hours, 24\)/);
   assert.match(sqlConsolidation, /COALESCE\(customer_reschedule_before_hours, 12\)/);
   assert.match(sqlConsolidation, /p_customer_cancel_before_hours IS NULL OR p_customer_cancel_before_hours < 0/);

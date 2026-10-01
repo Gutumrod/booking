@@ -127,7 +127,7 @@ const FUNCTION_REVOKE_FROM_PUBLIC =
 // migration stream and A11 permits replacing its body only when the declaration
 // names this exact identity. This does not permit new PUBLIC grants or other
 // functions to bypass the default-revoke rule.
-const PRESERVE_PUBLIC_EXECUTE = /^[^\S\n]*--[^\S\n]*BK01-PRESERVE-EXISTING-PUBLIC-EXECUTE\s*:\s*(local_service\.generate_link_token\s*\(\s*\))\s*$/gim;
+const PRESERVE_PUBLIC_EXECUTE = /^[^\S\n]*--[^\S\n]*BK01-PRESERVE-EXISTING-PUBLIC-EXECUTE\s*:\s*(local_service\.(?:generate_link_token|enqueue_booking_notifications|suppress_new_overdue_line_reminder)\s*\(\s*\))\s*$/gim;
 
 const squash = (value) => value.replace(/\s+/g, ' ').trim().toLowerCase();
 
@@ -180,9 +180,20 @@ function assertFunctionsRevokePublic(body, sourceName) {
   for (const match of Array.from(sourceName.sql?.matchAll(PRESERVE_PUBLIC_EXECUTE) ?? [])) {
     preserved.add(functionSignature(match[1].replace(/\(\s*\)$/, ''), ''));
   }
-  if (preserved.size > 1) throw new Error(`${sourceName.name}: multiple PUBLIC ACL preservation declarations are forbidden`);
-  if (preserved.size > 0 && sourceName.name !== '20260930120000_bk01_link_token_no_extensions.sql') {
-    throw new Error(`${sourceName.name}: legacy PUBLIC ACL preservation is limited to the A11 migration`);
+  if (preserved.size > 2) throw new Error(`${sourceName.name}: too many PUBLIC ACL preservation declarations`);
+  const allowedPreservationFiles = new Set([
+    '20260930120000_bk01_link_token_no_extensions.sql',
+    '20261001140000_bk01_pack_notify_group67.sql',
+  ]);
+  if (preserved.size > 0 && !allowedPreservationFiles.has(sourceName.name)) {
+    throw new Error(`${sourceName.name}: legacy PUBLIC ACL preservation is limited to the A11 migration or reviewed Group67 migration`);
+  }
+  if (sourceName.name === '20261001140000_bk01_pack_notify_group67.sql'
+      && [...preserved].some(signature => ![
+        'local_service.enqueue_booking_notifications()',
+        'local_service.suppress_new_overdue_line_reminder()',
+      ].includes(signature))) {
+    throw new Error(`${sourceName.name}: unapproved PUBLIC ACL preservation identity`);
   }
   for (const signature of preserved) {
     const matching = creations.filter(creation => creation.signature === signature && creation.replaced);
