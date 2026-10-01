@@ -25,6 +25,26 @@
 
 export const QUEUE_LOCK_COUNTER_RPC = 'bk01_pending_past_appointment_count';
 
+/**
+ * The argument name the function actually declares. PostgREST resolves named
+ * arguments, so a wrong key is a call failure, not a typo that still works.
+ *
+ * Verified against the queue-lock unit's own migration on its pushed tip
+ * (`codex/bk01-queue-lock-20261001` @ `0daf558e8`):
+ * `supabase/bk01-migrations/20261001023000_bk01_queue_release.sql:112`
+ * declares `bk01_pending_past_appointment_count(p_shop_id uuid) RETURNS integer`,
+ * `REVOKE ... FROM ... bk01_runtime` and `GRANT EXECUTE ... TO authenticated`
+ * (line 128-129). Two consequences this module must respect:
+ *   - the argument key is `p_shop_id`
+ *   - the caller must be an authenticated merchant, not the runtime role
+ *
+ * And verified by calling the extracted function on PostgreSQL 17.11, not just by
+ * reading the migration: `p_shop_id =>` returns a count while `shop_id =>` raises
+ * "function ... (shop_id => unknown) does not exist". Evidence:
+ * `runtime/relay/house-20260927/codex-par/HOUSE-BK01-NOTIFY/pg17/verify-counter-contract.out`.
+ */
+export const QUEUE_LOCK_COUNTER_ARG = 'p_shop_id';
+
 export interface PendingPastAppointmentResult {
   /** True only when a real number came back from the database. */
   available: boolean;
@@ -92,7 +112,7 @@ export async function fetchPendingPastAppointmentCount(
 
   let result: QueryResultLike;
   try {
-    result = await rpc(QUEUE_LOCK_COUNTER_RPC, { shop_id: shopId });
+    result = await rpc(QUEUE_LOCK_COUNTER_RPC, { [QUEUE_LOCK_COUNTER_ARG]: shopId });
   } catch {
     return { available: false, count: null, status: 'call_failed' };
   }

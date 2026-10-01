@@ -5,6 +5,7 @@ import test from 'node:test';
 import {
   classifyQueueLockCounterError,
   fetchPendingPastAppointmentCount,
+  QUEUE_LOCK_COUNTER_ARG,
   QUEUE_LOCK_COUNTER_RPC,
 } from '../apps/booking-admin/src/lib/queue-lock-counter.ts';
 
@@ -84,10 +85,25 @@ test('an empty shop id is refused without calling the database', async () => {
   assert.equal(called, false, 'no cross-tenant read may be attempted with no shop id');
 });
 
-test('the shop id is passed as a parameter, so the count is scoped to one shop', async () => {
+test('the shop id is passed under the parameter name the function declares', async () => {
+  // The queue-lock migration declares `p_shop_id`, not `shop_id`. PostgREST
+  // resolves named arguments, so the wrong key is a 404 call failure, not a
+  // harmless typo -- this is what stops the adapter drifting from the contract.
+  assert.equal(QUEUE_LOCK_COUNTER_ARG, 'p_shop_id');
   const seen: Array<{ name: string; args: Record<string, unknown> }> = [];
   await fetchPendingPastAppointmentCount(async (name, args) => { seen.push({ name, args }); return { data: 2, error: null }; }, 'shop-9');
   assert.equal(seen.length, 1);
   assert.equal(seen[0].name, 'bk01_pending_past_appointment_count');
-  assert.deepEqual(seen[0].args, { shop_id: 'shop-9' });
+  assert.deepEqual(seen[0].args, { p_shop_id: 'shop-9' });
+  assert.deepEqual(Object.keys(seen[0].args), ['p_shop_id'], 'no extra argument may be invented');
+});
+
+test('the contract is recorded against the queue-lock migration it came from', () => {
+  // A reviewer must be able to check this module against the migration without
+  // re-deriving it; the pin is in the source next to the constant.
+  const source = readFileSync('apps/booking-admin/src/lib/queue-lock-counter.ts', 'utf8');
+  assert.match(source, /20261001023000_bk01_queue_release\.sql:112/);
+  assert.match(source, /0daf558e8/);
+  assert.match(source, /bk01_runtime/);
+  assert.match(source, /authenticated/);
 });
