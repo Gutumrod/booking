@@ -1,8 +1,8 @@
 # BK01 SQL Consolidation — Module Reuse Check
 
-**Task:** `HOUSE-BK01-SQL-CONSOLIDATE`  
-**Repository base:** `codex/bk01-queue-lock-20261001` @ `f97642cc6a8ed950b528ed40d2e498fc8213c48e`  
-**Module Hub inspected:** `D:\AI-Workspace\projects\modules-hub` @ `cd88c570ab57f6976d15f85d09973d0cfbf0cd63`  
+**Task:** `HOUSE-BK01-SQL-CONSOLIDATE`
+**Repository base:** `codex/bk01-queue-lock-20261001` @ `f97642cc6a8ed950b528ed40d2e498fc8213c48e`
+**Module Hub inspected:** `D:\AI-Workspace\projects\modules-hub` @ `cd88c570ab57f6976d15f85d09973d0cfbf0cd63`
 **Date:** 2026-10-01
 
 ## Gate
