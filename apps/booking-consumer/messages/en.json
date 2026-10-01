@@ -126,6 +126,7 @@
       "nameRequired": "Please enter the customer name.",
       "phoneInvalid": "Please enter a valid Thai mobile number, for example 08X-XXX-XXXX.",
       "slotUnavailable": "The selected time is outside the work schedule or falls on a holiday. Please choose another time.",
+      "slotTaken": "That time slot has just been taken. Please choose another time.",
       "invalidBookingStatus": "Invalid booking status. Please contact the shop.",
       "createHoldFailed": "Could not lock the time slot. Please try again.",
       "slipRequired": "Please attach the payment slip before confirming the transfer.",

@@ -845,8 +845,19 @@ test('a hold refused for entitlement is named in the customer language and re-re
   assert.match(page, /const data = await loadBookingRoute\(slug, \{/);
   assert.match(page, /getShopEntitlementKinds/);
   // A refusal never passes silently: the branch that recognises neither code
-  // still surfaces the error the database returned.
-  assert.match(page, /\} else \{\s*\n\s*setErrorMessage\(getErrorMessage\(err, t\('errors\.createHoldFailed'\)\)\);/);
+  // still surfaces a message to the customer. S1 (HOUSE-BK01-BOOKING-ERROR-I18N)
+  // changed *how*: this page used to echo the database text, which is how the
+  // raw English "Selected staff is unavailable during this time slot" (raised as
+  // a generic P0001 by create_booking_hold) reached a Thai customer. The
+  // fallback now goes through the shared mapper, so the customer still gets a
+  // sentence while the server text stays off the screen.
+  assert.match(page, /manageBookingErrorMessage\(\s*\{ message: refusal \},/);
+  assert.match(page, /setErrorMessage\(refusal === t\('errors\.invalidBookingStatus'\) \? refusal : mapped\)/);
+  assert.doesNotMatch(
+    page,
+    /setErrorMessage\(getErrorMessage\(err, t\('errors\.createHoldFailed'\)\)\)/,
+    'the hold path must not print the raw server message',
+  );
 
   // Both messages exist in both languages, are non-empty, carry no number, and
   // are not the same sentence for two different refusals.

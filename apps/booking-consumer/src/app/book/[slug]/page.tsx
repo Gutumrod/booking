@@ -20,6 +20,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { resolveBookingPageState, type BookingPageState } from '../../../lib/booking-state';
 import { resolvePaymentInstruction, preHoldServiceDeposit, isServicePaymentBlocked } from '../../../lib/payment-instruction';
 import { loadBookingRoute, createRequestGate } from '../../../lib/booking-route-load';
+import { manageBookingErrorMessage } from '../../../lib/manage-booking-error';
 
 const CENTRAL_LINE_OA_ID = process.env.NEXT_PUBLIC_CENTRAL_LINE_OA_ID || 'central_booking_oa';
 
@@ -419,7 +420,28 @@ function BookingRoute({ slug }: { slug: string }) {
         setErrorMessage(t('errors.staffOutsidePlan'));
         await reloadChoices();
       } else {
-        setErrorMessage(getErrorMessage(err, t('errors.createHoldFailed')));
+        // S1: the customer never sees the server's own text. `create_booking_hold`
+        // raises the taken-slot refusal as a generic P0001 carrying an English
+        // sentence ("Selected staff is unavailable during this time slot",
+        // phase_a:265-273 / entitlement_packs:1927), so the message is mapped
+        // through the same helper the manage-booking page uses -- the specific
+        // slotTaken copy for that one fact, and errors.createHoldFailed for
+        // everything unrecognised. Only the invalidBookingStatus throw above is
+        // kept verbatim: that string is our own translated sentence, never
+        // database text, and the helper cannot classify it.
+        const mapped = manageBookingErrorMessage(
+          { message: refusal },
+          {
+            slotTaken: t('errors.slotTaken'),
+            outsideAvailability: t('errors.createHoldFailed'),
+            dateClosed: t('errors.createHoldFailed'),
+            staffInactive: t('errors.createHoldFailed'),
+            policyClosed: t('errors.createHoldFailed'),
+            invalidLink: t('errors.createHoldFailed'),
+            outcomeFailed: t('errors.createHoldFailed'),
+          },
+        );
+        setErrorMessage(refusal === t('errors.invalidBookingStatus') ? refusal : mapped);
       }
     } finally {
       setIsSubmitting(false);
@@ -452,7 +474,27 @@ function BookingRoute({ slug }: { slug: string }) {
       await submitDepositSlip(holdResult.booking_id, holdResult.link_token, slipObjectPath);
       setBookingSuccess(true);
     } catch (err: unknown) {
-      setErrorMessage(getErrorMessage(err, t('errors.slipSubmitFailed')));
+      // S1: no raw server text is printed from this page. The slip upload and
+      // submit calls raise either our own translated strings (unsupported type,
+      // too large, URL failed) or PostgREST/storage text ("Booking hold has
+      // expired", a bucket/permission sentence). Only the former may be shown
+      // verbatim; everything else goes through the same mapper as the hold path,
+      // which resolves to a translated string and never echoes the server text.
+      const raw = getErrorMessage(err, '');
+      const ownCopy = [t('errors.slipUnsupportedType'), t('errors.slipTooLarge'), t('errors.slipUrlFailed')];
+      setErrorMessage(
+        ownCopy.includes(raw)
+          ? raw
+          : manageBookingErrorMessage({ message: raw }, {
+            slotTaken: t('errors.slipSubmitFailed'),
+            outsideAvailability: t('errors.slipSubmitFailed'),
+            dateClosed: t('errors.slipSubmitFailed'),
+            staffInactive: t('errors.slipSubmitFailed'),
+            policyClosed: t('errors.slipSubmitFailed'),
+            invalidLink: t('errors.slipSubmitFailed'),
+            outcomeFailed: t('errors.slipSubmitFailed'),
+          }),
+      );
     } finally {
       setIsSubmitting(false);
     }
