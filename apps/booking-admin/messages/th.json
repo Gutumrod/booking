@@ -138,7 +138,7 @@
     "statToday": "คิวจองวันนี้ ({date})",
     "statUpcoming": "คิวจองล่วงหน้าทั้งหมด",
     "statPendingSlip": "รอตรวจสลิปมัดจำ",
-    "statDepositCollected": "ยอดมัดจำรวมที่โอนแล้ว",
+    "statDepositCollected": "ยอดมัดจำที่ร้านถืออยู่ (หักที่คืนแล้ว)",
     "countItems": "{count} รายการ",
     "bookingsTitle": "ตารางจองคิวงาน & ตรวจสอบสลิป",
     "bookingsSubtitle": "ดูคิวงานล่วงหน้า กรองคิวตามวัน และอนุมัติสลิปมัดจำจากลูกค้า",

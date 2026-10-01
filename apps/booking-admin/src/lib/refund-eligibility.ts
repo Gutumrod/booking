@@ -26,6 +26,15 @@ export const REFUND_HELD_DEPOSIT_STATES: ReadonlyArray<RefundableDepositStatus> 
   'rejected',
 ]);
 
+/**
+ * B8b — the single "is the shop holding this deposit right now?" predicate.
+ * Shared by the refund eligibility rule and the dashboard's collected total so a
+ * deposit state can never be counted as money in one place and not the other.
+ */
+export function holdsDepositMoney(depositStatus: string): boolean {
+  return (REFUND_HELD_DEPOSIT_STATES as ReadonlyArray<string>).includes(depositStatus);
+}
+
 /** The RPC names B8 proposes to the caretaker — both are NEW functions (ก้อน 1 owns none of them). */
 export const DEPOSIT_REFUND_RPC = 'record_deposit_refund';
 export const DEPOSIT_REFUND_HISTORY_RPC = 'get_deposit_refund_history';

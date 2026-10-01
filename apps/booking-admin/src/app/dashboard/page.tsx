@@ -35,6 +35,7 @@ import {
   type DepositRefundAuditEntry,
 } from '@/lib/admin-service';
 import { canRecordRefund } from '@/lib/refund-eligibility';
+import { depositCollectedTotal } from '@/lib/deposit-collected';
 import { LanguageToggle } from '@/components/language-toggle';
 import { PreviewCustomerPageLink, useSelectedShopIdentity } from '@/components/preview-customer-page';
 import { customerPageUrl, isExactShopIdentityMatch } from '@/lib/customer-page-url';
@@ -233,7 +234,10 @@ export default function AdminDashboard() {
   const totalToday = bookings.filter(b => b.date === todayStr).length;
   const totalUpcoming = bookings.filter(b => b.date > todayStr).length;
   const pendingDeposit = bookings.filter(b => b.status === 'pending_review').length;
-  const depositCollected = bookings.reduce((sum, b) => sum + (b.status === 'confirmed' ? b.depositPrice : 0), 0);
+  // B8b: count deposits the shop has actually received and still holds, by
+  // deposit_state only — never by appointment status (completed / no_show used to
+  // erase the money from the card), and minus anything recorded as refunded (B8).
+  const depositCollected = depositCollectedTotal(bookings);
 
   const filteredBookings = bookings.filter(b => {
     if (bookingFilter === 'today') return b.date === todayStr;
