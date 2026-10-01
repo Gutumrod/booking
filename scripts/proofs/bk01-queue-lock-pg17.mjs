@@ -29,8 +29,10 @@ const otherShop = crypto.randomUUID();
 const owner = crypto.randomUUID();
 const service = crypto.randomUUID();
 const staff = crypto.randomUUID();
+const secondStaff = crypto.randomUUID();
 const prefix = `queue-lock-${crypto.randomUUID()}`;
 let slipBooking;
+const storagePaths = [];
 
 try {
   const preflight = await db`
@@ -67,8 +69,10 @@ try {
   await db`insert into local_service.services(id,shop_id,name,duration_minutes,price,deposit_amount,is_active)
     values (${service},${shop},'Queue test',60,500,100,true)`;
   await db`insert into local_service.staff(id,shop_id,name,is_active) values (${staff},${shop},'Queue staff',true)`;
+  await db`insert into local_service.staff(id,shop_id,name,is_active) values (${secondStaff},${shop},'Second Queue staff',true)`;
   await db`insert into local_service.staff_schedules(shop_id,staff_id,day_of_week,work_start,work_end,is_working_day)
-    select ${shop},${staff},d,'00:00','23:59',true from generate_series(0,6) d`;
+    select ${shop},u.staff_id,d,'00:00','23:59',true from unnest(array[${staff}::uuid,${secondStaff}::uuid]) u(staff_id)
+    cross join generate_series(0,6) d`;
   await db`insert into storage.buckets(id,name,public) values ('deposit-slips','Deposit slips',false) on conflict(id) do nothing`;
 
   const hold = await callAs('anon', async (tx) => tx`
@@ -77,6 +81,7 @@ try {
   const holdResult = parsedJson(hold[0].result);
   slipBooking = holdResult.booking_id;
   const slipPath = `${slipBooking}/${crypto.randomUUID()}.jpg`;
+  storagePaths.push(slipPath);
   await db`insert into storage.objects(bucket_id,name) values ('deposit-slips',${slipPath})`;
   const slip = await callAs('anon', async (tx) => tx`
     select local_service.submit_deposit_slip(${slipBooking},${holdResult.link_token},${slipPath},null)::text as result`);
@@ -118,6 +123,13 @@ try {
       from local_service.bookings where id=${slipBooking}`;
     record('shop count calculates overdue pending review live before lazy release',
       Number(overdueBeforeLazySweep[0].count) === 1 && unreleased[0].unreleased === true);
+    const preRebook = await db`select b.end_timestamptz <= now() as ended,b.expires_at <= now() as expired,
+      tstzrange(b.start_timestamptz,b.end_timestamptz,'[)') && tstzrange(
+        (${day[0].today}::date+${day[0].past_time}::time) at time zone 'Asia/Bangkok',
+        ((${day[0].today}::date+${day[0].past_time}::time) at time zone 'Asia/Bangkok')+interval '60 minutes','[)') as overlaps
+      from local_service.bookings b where b.id=${slipBooking}`;
+    record('overdue fixture is expired and overlaps the requested slot',preRebook[0].ended && preRebook[0].expired && preRebook[0].overlaps,
+      JSON.stringify(preRebook[0]));
     const rebook = await callAs('anon', async (tx) => tx`
       select local_service.create_booking_hold(${shop},${service},${staff},'Rebook Customer','0800000103',null,
         ${day[0].today}::date,${day[0].past_time}::time,null)::text as result`);
@@ -156,6 +168,129 @@ try {
       if (!approvalDenied) throw error;
     }
     record('released row cannot be confirmed after another booking overlaps it', approvalDenied);
+
+    const operatorUrl = new URL(url);
+    operatorUrl.username = 'operator';
+    const mutationNotices = [];
+    const operator = postgres(operatorUrl.toString(), { max: 1, prepare: false, connect_timeout: 5,
+      onnotice: (notice) => mutationNotices.push(notice.message) });
+    let mutationRejected = false;
+    try {
+      await operator.begin(async (tx) => {
+        await tx`set local role bk01_migrator`;
+        await tx.unsafe(`DO $mutation$
+        BEGIN
+          BEGIN
+            ALTER TABLE local_service.bookings DROP CONSTRAINT prevent_overlapping_staff_bookings;
+            ALTER TABLE local_service.bookings ADD CONSTRAINT prevent_overlapping_staff_bookings
+              EXCLUDE USING gist (staff_id WITH =, booking_range WITH &&)
+              WHERE (status IN ('hold','pending_review','confirmed'));
+          EXCEPTION WHEN exclusion_violation THEN
+            RAISE NOTICE 'EXPECTED_EXCLUSION_VIOLATION';
+            RETURN;
+          END;
+          RAISE EXCEPTION 'queue predicate mutation unexpectedly succeeded';
+        END;
+        $mutation$`);
+      });
+    } catch (error) {
+      if (!/queue predicate mutation unexpectedly succeeded/i.test(error.message)) throw error;
+    } finally {
+      await operator.end();
+    }
+    mutationRejected = mutationNotices.some((notice) => notice.includes('EXPECTED_EXCLUSION_VIOLATION'));
+    record('mutation removing queue_released_at from GiST predicate is rejected', mutationRejected,
+      'operator SET ROLE bk01_migrator; released pending row overlaps its successor');
+
+    let releasedExtendDenied = false;
+    try {
+      await callAs('authenticated', async (tx) => {
+        await tx`select set_config('request.jwt.claim.sub',${owner},true)`;
+        return tx`select local_service.extend_booking_hold(${slipBooking})`;
+      });
+    } catch (error) {
+      releasedExtendDenied = /Only hold bookings can be extended/i.test(error.message);
+      if (!releasedExtendDenied) throw error;
+    }
+    record('hold extension cannot reactivate a released pending row', releasedExtendDenied);
+
+    const rejection = await callAs('authenticated', async (tx) => {
+      await tx`select set_config('request.jwt.claim.sub',${owner},true)`;
+      return tx`select local_service.reject_deposit_slip(${slipBooking},'H1 released rejection proof')::text as result`;
+    });
+    const rejectionResult = parsedJson(rejection[0].result);
+    const afterReject = await db`select status,deposit_status,expires_at,end_timestamptz,queue_released_at,
+      slip_url, exists(select 1 from local_service.booking_status_history h where h.booking_id=b.id
+        and h.new_status='cancelled' and h.reason ilike '%H1 released rejection proof%') as reason_saved
+      from local_service.bookings b where id=${slipBooking}`;
+    const overlapPairs = await db`select count(*)::int as n
+      from local_service.bookings a join local_service.bookings b
+        on b.staff_id=a.staff_id and b.id>a.id
+       and tstzrange(b.start_timestamptz,b.end_timestamptz,'[)')
+           && tstzrange(a.start_timestamptz,a.end_timestamptz,'[)')
+     where a.staff_id is not null
+       and a.status in ('hold','pending_review','confirmed')
+       and b.status in ('hold','pending_review','confirmed')`;
+    record('H1 released rejection closes terminally and catalog overlap pair scan is zero',
+      rejectionResult.status === 'cancelled' && afterReject[0].status === 'cancelled'
+        && afterReject[0].deposit_status === 'rejected' && afterReject[0].queue_released_at !== null
+        && afterReject[0].expires_at.getTime() === afterReject[0].end_timestamptz.getTime()
+        && afterReject[0].slip_url === slipPath && afterReject[0].reason_saved === true
+        && overlapPairs[0].n === 0,
+      `status=${afterReject[0].status}/${afterReject[0].deposit_status}; active_overlap_pairs=${overlapPairs[0].n}`);
+
+    let uploadGrantDenied = false;
+    try {
+      await callAs('bk01_runtime', async (tx) => tx`
+        select * from local_service.authorize_deposit_slip_upload(
+          ${slipBooking},${holdResult.link_token},'image/jpeg',1024)`);
+    } catch (error) {
+      uploadGrantDenied = /Booking is not authorized for deposit upload/i.test(error.message);
+      if (!uploadGrantDenied) throw error;
+    }
+    record('terminal released rejection cannot issue another upload grant', uploadGrantDenied);
+
+    const noSuccessorHold = await callAs('anon', async (tx) => tx`
+      select local_service.create_booking_hold(${shop},${service},${secondStaff},'No Successor','0800000111',null,
+        ${day[0].today}::date,${day[0].past_time}::time,null)::text as result`);
+    const noSuccessorResult = parsedJson(noSuccessorHold[0].result);
+    const noSuccessorPath = `${noSuccessorResult.booking_id}/${crypto.randomUUID()}.jpg`;
+    storagePaths.push(noSuccessorPath);
+    await db`insert into storage.objects(bucket_id,name) values ('deposit-slips',${noSuccessorPath})`;
+    await callAs('anon', async (tx) => tx`
+      select local_service.submit_deposit_slip(${noSuccessorResult.booking_id},${noSuccessorResult.link_token},${noSuccessorPath},null)`);
+    await db`update local_service.bookings set end_timestamptz=now()-interval '1 minute',
+      expires_at=now()-interval '1 minute',queue_released_at=now() where id=${noSuccessorResult.booking_id}`;
+    await callAs('authenticated', async (tx) => {
+      await tx`select set_config('request.jwt.claim.sub',${owner},true)`;
+      return tx`select local_service.reject_deposit_slip(${noSuccessorResult.booking_id},'H1 no successor proof')`;
+    });
+    const noSuccessorState = await db`select status,deposit_status,slip_url from local_service.bookings where id=${noSuccessorResult.booking_id}`;
+    record('released rejection is terminal even when no successor exists',
+      noSuccessorState[0].status === 'cancelled' && noSuccessorState[0].deposit_status === 'rejected'
+        && noSuccessorState[0].slip_url === noSuccessorPath);
+
+    const futureDate = await db`select (current_date+2)::text as d`;
+    const futureHold = await callAs('anon', async (tx) => tx`
+      select local_service.create_booking_hold(${shop},${service},${secondStaff},'Future Reject','0800000112',null,
+        ${futureDate[0].d}::date,'14:00'::time,null)::text as result`);
+    const futureResult = parsedJson(futureHold[0].result);
+    const futurePath = `${futureResult.booking_id}/${crypto.randomUUID()}.jpg`;
+    storagePaths.push(futurePath);
+    await db`insert into storage.objects(bucket_id,name) values ('deposit-slips',${futurePath})`;
+    await callAs('anon', async (tx) => tx`
+      select local_service.submit_deposit_slip(${futureResult.booking_id},${futureResult.link_token},${futurePath},null)`);
+    await callAs('authenticated', async (tx) => {
+      await tx`select set_config('request.jwt.claim.sub',${owner},true)`;
+      return tx`select local_service.reject_deposit_slip(${futureResult.booking_id},'Future rejection proof')`;
+    });
+    const futureState = await db`select status,deposit_status,queue_released_at,slip_url,
+      expires_at between now()+interval '14 minutes' and now()+interval '16 minutes' as fifteen_minutes
+      from local_service.bookings where id=${futureResult.booking_id}`;
+    record('future rejection keeps the original 15-minute hold behavior',
+      futureState[0].status === 'hold' && futureState[0].deposit_status === 'rejected'
+        && futureState[0].queue_released_at === null && futureState[0].slip_url === futurePath
+        && futureState[0].fifteen_minutes === true);
 
     const raceA = postgres(url, { max: 1, prepare: false, connect_timeout: 5, application_name: 'bk01-queue-race-a' });
     const raceB = postgres(url, { max: 1, prepare: false, connect_timeout: 5, application_name: 'bk01-queue-race-b' });
@@ -208,34 +343,13 @@ try {
     }
     record('20 simultaneous two-connection races: one hold accepted, one overlap rejected each round', true, '20/20; barrier observed two waiters per round');
 
-    const operatorUrl = new URL(url);
-    operatorUrl.username = 'operator';
-    const operator = postgres(operatorUrl.toString(), { max: 1, prepare: false, connect_timeout: 5 });
-    let mutationRejected = false;
-    try {
-      await operator.begin(async (tx) => {
-        await tx`set local role bk01_migrator`;
-        await tx`alter table local_service.bookings drop constraint prevent_overlapping_staff_bookings`;
-        await tx`alter table local_service.bookings add constraint prevent_overlapping_staff_bookings
-          exclude using gist (staff_id with =, booking_range with &&)
-          where (status in ('hold','pending_review','confirmed'))`;
-      });
-    } catch (error) {
-      mutationRejected = error.code === '23P01';
-      if (!mutationRejected) throw error;
-    } finally {
-      await operator.end();
-    }
-    record('mutation removing queue_released_at from GiST predicate is rejected', mutationRejected,
-      'operator SET ROLE bk01_migrator; released pending row overlaps its successor');
-
     const mutation = await db`select pg_get_constraintdef(oid) as def from pg_constraint
       where conname='prevent_overlapping_staff_bookings' and conrelid='local_service.bookings'::regclass`;
     const detectsMissingFlag = !/queue_released_at/i.test(mutation[0]?.def ?? '');
     record('constraint catalog exposes queue_released_at guard for mutation assertion', !detectsMissingFlag, mutation[0]?.def ?? 'missing');
   }
 } finally {
-  if (slipBooking) await db`delete from storage.objects where name like ${`${slipBooking}/%`}`;
+  for (const path of storagePaths) await db`delete from storage.objects where name=${path}`;
   await db`delete from local_service.subscriptions where shop_id in (${shop},${otherShop})`;
   await db`delete from local_service.entitlement_usage where shop_id in (${shop},${otherShop})`;
   await db`delete from local_service.shops where id in (${shop},${otherShop})`;

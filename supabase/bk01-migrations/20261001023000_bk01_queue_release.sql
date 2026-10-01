@@ -18,11 +18,11 @@ RETURNS boolean
 LANGUAGE plpgsql
 SET search_path = pg_catalog, local_service
 AS $$
-DECLARE v_conflicts uuid[];
+DECLARE v_conflicts text[];
 BEGIN
-  SELECT array_agg(x.id) INTO v_conflicts
+  SELECT array_agg(x.booking_pair) INTO v_conflicts
   FROM (
-    SELECT a.id
+    SELECT a.id::text || '/' || b.id::text AS booking_pair
     FROM local_service.bookings a
     JOIN local_service.bookings b
       ON b.staff_id = a.staff_id
@@ -500,4 +500,77 @@ $function$;
 
 REVOKE ALL ON FUNCTION local_service.approve_booking_deposit(uuid) FROM PUBLIC,anon,service_role,bk01_runtime;
 GRANT EXECUTE ON FUNCTION local_service.approve_booking_deposit(uuid) TO authenticated;
+
+-- A released pending review row has already stopped reserving its appointment.
+-- Rejecting its slip must close the booking instead of recreating an unprotected
+-- hold over a successor. Future appointments retain the original 15-minute hold.
+CREATE OR REPLACE FUNCTION local_service.reject_deposit_slip(
+    p_booking_id uuid,
+    p_reason text DEFAULT NULL::text
+) RETURNS json
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, local_service
+AS $function$
+DECLARE
+    v_booking local_service.bookings%ROWTYPE;
+    v_terminal boolean;
+    v_reason text := COALESCE(NULLIF(btrim(p_reason), ''), 'Slip Rejected by Shop');
+BEGIN
+    SELECT * INTO v_booking
+      FROM local_service.bookings
+     WHERE id = p_booking_id
+     FOR UPDATE;
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'Booking not found';
+    END IF;
+    IF local_service_internal.request_user_id() IS NULL
+       OR NOT local_service.is_shop_member(v_booking.shop_id) THEN
+        RAISE EXCEPTION USING ERRCODE='42501', MESSAGE='Not authorized for this shop';
+    END IF;
+    IF v_booking.status <> 'pending_review' OR v_booking.deposit_status <> 'submitted' THEN
+        RAISE EXCEPTION 'Only submitted deposit slips can be rejected';
+    END IF;
+
+    v_terminal := v_booking.queue_released_at IS NOT NULL OR v_booking.end_timestamptz <= now();
+
+    IF v_terminal THEN
+        UPDATE local_service.bookings
+           SET status = 'cancelled',
+               deposit_status = 'rejected',
+               updated_at = now()
+         WHERE id = p_booking_id;
+    ELSE
+        UPDATE local_service.bookings
+           SET status = 'hold',
+               deposit_status = 'rejected',
+               expires_at = now() + interval '15 minutes',
+               updated_at = now()
+         WHERE id = p_booking_id;
+    END IF;
+
+    INSERT INTO local_service.booking_status_history (
+        booking_id, old_status, new_status, old_deposit_status, new_deposit_status, changed_by, reason
+    ) VALUES (
+        p_booking_id, v_booking.status,
+        CASE WHEN v_terminal THEN 'cancelled' ELSE 'hold' END,
+        v_booking.deposit_status, 'rejected', local_service_internal.request_user_id(),
+        CASE WHEN v_terminal THEN v_reason || ' (past appointment; closed terminally)'
+             ELSE v_reason END
+    );
+
+    RETURN json_build_object(
+        'success', true,
+        'status', CASE WHEN v_terminal THEN 'cancelled' ELSE 'hold' END,
+        'deposit_status', 'rejected',
+        'message', CASE WHEN v_terminal
+            THEN 'Slip rejected; appointment has passed and booking was closed. Please book again.'
+            ELSE 'Slip rejected, hold reset to 15 minutes' END
+    );
+END;
+$function$;
+
+REVOKE ALL ON FUNCTION local_service.reject_deposit_slip(uuid,text) FROM PUBLIC, anon, service_role, bk01_runtime;
+GRANT EXECUTE ON FUNCTION local_service.reject_deposit_slip(uuid,text) TO authenticated;
 

@@ -1,4 +1,12 @@
--- Rollback refuses to discard released-queue state. The runner owns the transaction.
+-- Rollback refuses to discard released-queue state and is only valid before the
+-- first row has queue_released_at set. The operator owns the transaction.
+-- After this SQL succeeds and commits, reconcile the BK01 runner ledger as
+-- bk01_migrator before reapplying:
+--   DELETE FROM local_service_internal.schema_migrations
+--    WHERE migration_id='20261001023000_bk01_queue_release';
+-- Then run `node scripts/bk01-migrate.mjs plan` (must show this migration as the
+-- single pending item) and `node scripts/bk01-migrate.mjs apply`. Without that
+-- ledger cleanup the runner treats the rolled-back migration as already applied.
 CREATE FUNCTION local_service_internal.bk01_assert_no_released_queue_rows()
 RETURNS boolean
 LANGUAGE plpgsql
@@ -21,6 +29,59 @@ DROP FUNCTION local_service_internal.bk01_assert_no_released_queue_rows();
 DROP TRIGGER trg_bk01_set_pending_review_expiry ON local_service.bookings;
 DROP FUNCTION local_service.trg_bk01_set_pending_review_expiry();
 DROP FUNCTION local_service.bk01_pending_past_appointment_count(uuid);
+CREATE OR REPLACE FUNCTION local_service.reject_deposit_slip(p_booking_id uuid, p_reason text DEFAULT NULL::text)
+ RETURNS json
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog', 'local_service'
+AS $function$
+DECLARE
+    v_booking local_service.bookings%ROWTYPE;
+BEGIN
+    SELECT * INTO v_booking
+    FROM local_service.bookings
+    WHERE id = p_booking_id
+    FOR UPDATE;
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'Booking not found';
+    END IF;
+    IF local_service_internal.request_user_id() IS NULL OR NOT local_service.is_shop_member(v_booking.shop_id) THEN
+        RAISE EXCEPTION USING
+            ERRCODE = '42501',
+            MESSAGE = 'Not authorized for this shop';
+    END IF;
+    IF v_booking.status <> 'pending_review' OR v_booking.deposit_status <> 'submitted' THEN
+        RAISE EXCEPTION 'Only submitted deposit slips can be rejected';
+    END IF;
+
+    UPDATE local_service.bookings
+    SET status = 'hold',
+        deposit_status = 'rejected',
+        expires_at = NOW() + INTERVAL '15 minutes',
+        updated_at = NOW()
+    WHERE id = p_booking_id;
+
+    INSERT INTO local_service.booking_status_history (
+        booking_id, old_status, new_status, old_deposit_status, new_deposit_status, changed_by, reason
+    ) VALUES (
+        p_booking_id,
+        v_booking.status,
+        'hold',
+        v_booking.deposit_status,
+        'rejected',
+        local_service_internal.request_user_id(),
+        COALESCE(NULLIF(btrim(p_reason), ''), 'Slip Rejected by Shop')
+    );
+
+    RETURN json_build_object(
+        'success', true,
+        'message', 'Slip rejected, hold reset to 15 minutes'
+    );
+END;
+$function$;
+REVOKE ALL ON FUNCTION local_service.reject_deposit_slip(uuid,text) FROM PUBLIC, anon, authenticated, service_role, bk01_runtime;
+GRANT EXECUTE ON FUNCTION local_service.reject_deposit_slip(uuid,text) TO authenticated;
 CREATE OR REPLACE FUNCTION local_service.create_booking_hold(p_shop_id uuid, p_service_id uuid, p_staff_id uuid DEFAULT NULL::uuid, p_customer_name character varying DEFAULT ''::character varying, p_customer_phone character varying DEFAULT ''::character varying, p_customer_email character varying DEFAULT NULL::character varying, p_booking_date date DEFAULT CURRENT_DATE, p_start_time time without time zone DEFAULT '09:00:00'::time without time zone, p_notes text DEFAULT NULL::text)
  RETURNS json
  LANGUAGE plpgsql
