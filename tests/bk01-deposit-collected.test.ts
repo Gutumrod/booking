@@ -46,6 +46,12 @@ test('cancellation does not erase a deposit the shop has not refunded', () => {
   assert.equal(depositCollectedTotal([row('pending_review', 'submitted')]), 500);
 });
 
+test('§5c-3: a rejected slip is NOT money the shop holds', () => {
+  assert.equal(depositCollectedTotal([row('cancelled', 'rejected')]), 0);
+  assert.equal(depositCollectedTotal([row('confirmed', 'rejected')]), 0);
+  assert.equal(depositCollectedTotal([row('hold', 'rejected')]), 0);
+});
+
 test('B8: a recorded refund is subtracted from the collected total', () => {
   assert.equal(depositCollectedTotal([row('cancelled', 'refunded')]), 0);
   assert.equal(
@@ -60,19 +66,20 @@ test('refuses rows that carry no received money', () => {
   assert.equal(depositCollectedTotal([row('hold', 'awaiting')]), 0);
   assert.equal(depositCollectedTotal([row('confirmed', 'not_required', 0)]), 0);
   assert.equal(depositCollectedTotal([row('cancelled', 'refunded')]), 0);
+  assert.equal(depositCollectedTotal([row('cancelled', 'rejected')]), 0);
   assert.equal(depositCollectedTotal([]), 0);
 });
 
 test('the card and the refund rule cannot drift apart', () => {
   // Both features answer the same question — "is the shop holding this money?" —
   // so a state that counts as collected must also be refundable-visible.
-  for (const state of ['submitted', 'verified', 'rejected'] as const) {
+  for (const state of ['submitted', 'verified'] as const) {
     assert.ok(
       REFUND_HELD_DEPOSIT_STATES.includes(state),
       `${state} counts as collected but the refund rule no longer sees it`,
     );
   }
-  for (const state of ['awaiting', 'not_required', 'refunded'] as const) {
+  for (const state of ['awaiting', 'not_required', 'refunded', 'rejected'] as const) {
     assert.equal(
       REFUND_HELD_DEPOSIT_STATES.includes(state),
       false,

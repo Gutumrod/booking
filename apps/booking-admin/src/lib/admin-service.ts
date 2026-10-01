@@ -40,6 +40,13 @@ export interface DashboardBooking {
   staffName: string;
   date: string;
   time: string;
+  /** Service duration in minutes — the fallback source for the appointment end. */
+  durationMinutes: number | null;
+  /**
+   * Appointment end, from `bookings.end_timestamptz` (read-only). Null when the
+   * column is unset; the refund rule then derives the end from date+time+duration.
+   */
+  endTime: string | null;
   totalPrice: number;
   depositPrice: number;
   status: BookingStatus;
@@ -145,6 +152,11 @@ interface RelationName {
   name: string;
 }
 
+/** A service relation as the booking select returns it (duration included). */
+interface RelationService extends RelationName {
+  duration_minutes: number;
+}
+
 interface RelationCustomer extends RelationName {
   phone: string;
 }
@@ -163,8 +175,10 @@ interface RawBooking {
   deposit_amount: number | string | null;
   total_price: number | string;
   slip_url: string | null;
+  /** Read-only timeline the database already stores; used by the refund rule. */
+  end_timestamptz: string | null;
+  services: RelationName | RelationService | RelationService[] | null;
   customers: RelationCustomer | RelationCustomer[] | null;
-  services: RelationName | RelationName[] | null;
   staff: RelationStaff | RelationStaff[] | null;
 }
 
@@ -280,8 +294,9 @@ export async function fetchAdminDashboardData(): Promise<AdminDashboardData> {
         deposit_amount,
         total_price,
         slip_url,
+        end_timestamptz,
         customers ( name, phone ),
-        services ( name ),
+        services ( name, duration_minutes ),
         staff ( name, nickname )
       `)
       .eq('shop_id', membership.shop_id)
@@ -402,6 +417,8 @@ export async function fetchAdminDashboardData(): Promise<AdminDashboardData> {
       staffName: staff?.nickname || staff?.name || 'ยังไม่ระบุพนักงาน',
       date: booking.booking_date,
       time: booking.start_time.slice(0, 5),
+      durationMinutes: (service as RelationService | null)?.duration_minutes ?? null,
+      endTime: booking.end_timestamptz,
       totalPrice: toAmount(booking.total_price),
       depositPrice: toAmount(booking.deposit_amount),
       status: booking.status,

@@ -1177,7 +1177,14 @@ export default function AdminDashboard() {
                           {b.status === 'cancelled' && (
                             <span className="text-slate-500 text-xs italic">{t('cancelledNote')}</span>
                           )}
-                          {b.depositStatus !== 'refunded' && canRecordRefund(b, new Date().toISOString()) && shopRole !== 'staff' && (
+                          {b.depositStatus !== 'refunded' && canRecordRefund({
+                            status: b.status,
+                            depositStatus: b.depositStatus,
+                            date: b.date,
+                            time: b.time,
+                            durationMinutes: b.durationMinutes,
+                            endTime: b.endTime,
+                          }, new Date().toISOString()) && shopRole !== 'staff' && (
                             <button
                               type="button"
                               onClick={() => {
