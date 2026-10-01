@@ -1,6 +1,8 @@
 # BK01 queue lock design — HOUSE-BK01-QUEUE-LOCK
 
-Status: design before SQL; partial reproduction complete, clean W-1 replay pending. Base `c5e6650d9c3e46c76d05e27fdcf76f49da62ffd1`. No LAB or production change.
+Status: implementation prepared on `codex/bk01-queue-lock-20261001`; scheduled invocation remains a runtime-contract decision. Base `c5e6650d9c3e46c76d05e27fdcf76f49da62ffd1`. No LAB or production change.
+
+> The proposal below records the design considered before the caretaker decision. The approved resolution at the end of this note supersedes the advisory-lock proposal and updates the proof criteria.
 
 ## Reproduction finding (2026-10-01, isolated PG 17 clone)
 
@@ -24,3 +26,19 @@ Pure remediation of existing product-local booking capability: `Reuse Gate: N/A`
 ## Required proof before implementation can be accepted
 
 PG 17 W-1 scaffold with non-superuser CREATEROLE actor, no PUBLIC usage of `extensions`, and no `bk01_migrator` usage there; exact base migrations 1–5; raw B1/B2 fail-before; 20 synchronized two-connection races pass-after; slip past 15 minutes and past appointment end; real-role function calls; rollback/catalog comparison/reapply; static and catalog forbidden-reference scans; mutation checks for removed lock and reintroduced time predicate.
+
+## Approved resolution and implementation evidence (2026-10-01)
+
+The caretaker correction at brief `23-BK01-PRESALE-FIXES-B1-B8.md`, section 2, block `แก้ไข 2026-10-01` (vault `54b20df`) supersedes the historical advisory-lock proposal above:
+
+- Keep `prevent_overlapping_staff_bookings` as the GiST exclusion constraint. Do not add trigger/advisory locking or change UUID extension privileges.
+- On slip submission, set `expires_at = end_timestamptz`. Keep the booking `pending_review` after appointment end; set `queue_released_at` so its interval no longer blocks a successor.
+- Keep both lazy release in `create_booking_hold` and an operator-scheduled sweep. The sweep function is implemented, but calling it from the existing five-minute Cloudflare Cron is held: that Worker currently uses `bk01_runtime`, whose exact House RPC allowlist does not include this function, and the Worker has no service-role credential. Do not widen that contract or substitute another credential in this task.
+- `bk01_pending_past_appointment_count(shop_id)` enforces shop membership. Approval rejects a released row clearly, including after a successor has booked the interval.
+- Clean W-1 replay used PG 17.11: the 30 frozen legacy migrations, generated bootstrap, and active migrations 1–5. `generate_link_token()` matched migration 5. The unmodified baseline reproduced B1 and B2 (7/7 checks). Migration 6 then passed 13/13 final checks, including 20/20 synchronized two-connection races, successor booking, rejection of old-row approval, and shop-scope denial.
+- Under the actual non-superuser `operator` runner, `SET ROLE bk01_migrator` successfully dropped/re-added the GiST constraint while `bk01_migrator` and PUBLIC both had no `extensions` USAGE. An attempted recreation omitting `queue_released_at` failed with SQLSTATE `23P01` against the successor row.
+- The rollback restored columns, trigger catalog, GiST predicate, and both function definitions after line-ending normalization; the migration was reapplied through the runner. Plan reports 6 applied / 0 pending. No LAB or production target was used.
+
+Implementation commit: `0885148368607c2d382444f0981362afdd701bc3`; formatting follow-up: `6d6643fd7c9bd65403b5aeea4184a9ab31567641` (branch pushed, not merged).
+
+Acceptance remains `NEEDS_DECISION` for the existing scheduled-Worker authority path, and the two application builds remain blocked by worktree dependency symlinks/type errors in existing API route exports. Repository verify, policy, and all 313 tests pass; lint reports 0 errors and 6 warnings.
