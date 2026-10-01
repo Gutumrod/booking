@@ -43,7 +43,12 @@ test('service-role client modules are removed and route integration uses only th
   for (const route of routes) {
     const source = fs.readFileSync(route, 'utf8');
     assert.match(source, /getBk01RuntimeClient/);
-    assert.doesNotMatch(source, /\.rpc\s*\(\s*['"](?!authorize_booking_recovery_attempt|claim_due_line_notifications|claim_stripe_webhook_event|complete_line_notification|sync_subscription_state_bk_a|authorize_deposit_slip_upload|bk01_finish_line_webhook_delivery|bk01_line_bind_booking|bk01_line_bind_booking_trial|finish_stripe_webhook_event|get_line_notification_delivery_context)/);
+    // `get_shop_notification_recipient` is the one addition made by
+    // HOUSE-BK01-NOTIFY (brief 23 part B3). It is a SECURITY DEFINER read of the
+    // shop owner's own address, granted to bk01_runtime only, and it returns no
+    // customer column. Adding a name here widens what a route may call, so the
+    // reviewer must confirm the grant list matches the migration before merge.
+    assert.doesNotMatch(source, /\.rpc\s*\(\s*['"](?!authorize_booking_recovery_attempt|claim_due_line_notifications|claim_stripe_webhook_event|complete_line_notification|sync_subscription_state_bk_a|authorize_deposit_slip_upload|bk01_finish_line_webhook_delivery|bk01_line_bind_booking|bk01_line_bind_booking_trial|finish_stripe_webhook_event|get_line_notification_delivery_context|get_shop_notification_recipient)/);
   }
   const uploadRoute = fs.readFileSync(routes[2], 'utf8');
   assert.match(uploadRoute, /const BK01_DEPOSIT_SLIP_BUCKET = ['"]deposit-slips['"]/);

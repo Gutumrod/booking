@@ -41,6 +41,15 @@ import { TimeField } from '@/components/time-field';
 import { mergeServerSchedules } from '@/lib/schedule-merge';
 import { BASIC_PLAN_PRICE_THB } from '@/lib/commercial-contract';
 import {
+  countAwaitingSlipReview,
+  playSlipAlertTone,
+  readSlipAlertSoundPreference,
+  resolveOverdueBadge,
+  shouldPlaySlipAlert,
+  SLIP_ALERT_SOUND_STORAGE_KEY,
+  SLIP_POLL_INTERVAL_MS,
+} from '@/lib/merchant-alert';
+import {
   resolveEntitlementStatusLabel,
   type EntitlementStatusLabels,
   type EntitlementStatusRow,
@@ -50,7 +59,7 @@ import {
   Settings, AlertCircle, Plus, ShieldCheck,
   QrCode, ExternalLink, CalendarOff, Coffee, Save,
   Copy, MessageCircle, Check, Trash2, Edit3,
-  Scissors, Store, Globe, Phone, X
+  Scissors, Store, Globe, Phone, X, BellRing,
 } from 'lucide-react';
 
 type Booking = DashboardBooking;
@@ -199,6 +208,19 @@ export default function AdminDashboard() {
   // Filter Bookings by Date View
   const [bookingFilter, setBookingFilter] = useState<'today' | 'upcoming' | 'all'>('all');
 
+  // Brief part B3(a): the slip badge. `awaitingSlipCount` is derived from the rows the
+  // dashboard already loads; `overdueUndecided` stays null until the queue-lock
+  // unit ships the overdue counter, and the screen renders "not available" rather
+  // than a zero it cannot vouch for. The sound is a local preference (default on)
+  // and the previous count is a ref so a poll can tell an increase from a reload.
+  const awaitingSlipCount = countAwaitingSlipReview(bookings);
+  const [overdueUndecided] = useState<number | null>(null);
+  const overdueBadge = resolveOverdueBadge({ awaitingSlip: awaitingSlipCount, overdueUndecided });
+  const [slipAlertSoundEnabled, setSlipAlertSoundEnabled] = useState(true);
+  const previousAwaitingSlipRef = useRef<number | null>(null);
+  const slipAlertAudioRef = useRef<AudioContext | null>(null);
+  const slipAlertSoundEnabledRef = useRef(true);
+
   // Shop Settings State
   const [promptpayNumber, setPromptpayNumber] = useState('');
   const [promptpayName, setPromptpayName] = useState('');
@@ -219,7 +241,6 @@ export default function AdminDashboard() {
   const todayStr = getBangkokDateString();
   const totalToday = bookings.filter(b => b.date === todayStr).length;
   const totalUpcoming = bookings.filter(b => b.date > todayStr).length;
-  const pendingDeposit = bookings.filter(b => b.status === 'pending_review').length;
   const depositCollected = bookings.reduce((sum, b) => sum + (b.status === 'confirmed' ? b.depositPrice : 0), 0);
 
   const filteredBookings = bookings.filter(b => {
@@ -374,6 +395,90 @@ export default function AdminDashboard() {
     window.addEventListener('beforeunload', handler);
     return () => window.removeEventListener('beforeunload', handler);
   }, [dirtyStaffIds]);
+
+  // Brief part B3(a) sound preference, restored once on mount and kept in a ref so the
+  // polling effect sees the current value without re-subscribing every toggle.
+  useEffect(() => {
+    const stored = readSlipAlertSoundPreference(window.localStorage.getItem(SLIP_ALERT_SOUND_STORAGE_KEY));
+    slipAlertSoundEnabledRef.current = stored;
+    // Microtask so the stored preference is applied outside the effect body,
+    // matching the dashboard's existing initial-load pattern.
+    let isCurrent = true;
+    queueMicrotask(() => {
+      if (isCurrent) setSlipAlertSoundEnabled(stored);
+    });
+    return () => {
+      isCurrent = false;
+    };
+  }, []);
+
+  function toggleSlipAlertSound() {
+    const next = !slipAlertSoundEnabledRef.current;
+    slipAlertSoundEnabledRef.current = next;
+    setSlipAlertSoundEnabled(next);
+    try {
+      window.localStorage.setItem(SLIP_ALERT_SOUND_STORAGE_KEY, next ? 'on' : 'off');
+    } catch {
+      // A blocked storage write only costs the preference; never the badge.
+    }
+  }
+
+  // Brief part B3(a) light polling: 60s, bookings tab only, visible tab only. It reuses the
+  // dashboard's own loader, so the tenant gate and latest-request-wins boundary
+  // are exactly the ones the manual refresh already goes through.
+  useEffect(() => {
+    if (activeTab !== 'bookings') return;
+
+    let disposed = false;
+    const tick = () => {
+      if (disposed || typeof document === 'undefined') return;
+      if (document.visibilityState !== 'visible') return;
+      void loadDashboardBookings(false);
+    };
+
+    const interval = window.setInterval(tick, SLIP_POLL_INTERVAL_MS);
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') tick();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+
+    return () => {
+      disposed = true;
+      window.clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [activeTab, loadDashboardBookings]);
+
+  // Brief part B3(a) alert tone: fires only when the awaiting count RISES while the page is
+  // open. The first snapshot after load is the baseline and never beeps, so
+  // opening the screen does not announce work that was already waiting.
+  useEffect(() => {
+    if (isBookingsLoading) return;
+    const previous = previousAwaitingSlipRef.current;
+    previousAwaitingSlipRef.current = awaitingSlipCount;
+
+    const visible = typeof document === 'undefined' || document.visibilityState === 'visible';
+    if (!shouldPlaySlipAlert({
+      previousCount: previous,
+      nextCount: awaitingSlipCount,
+      soundEnabled: slipAlertSoundEnabledRef.current,
+      pageVisible: visible,
+    })) return;
+
+    try {
+      slipAlertAudioRef.current = slipAlertAudioRef.current ?? new AudioContext();
+      void slipAlertAudioRef.current.resume?.();
+      playSlipAlertTone(slipAlertAudioRef.current);
+    } catch {
+      // The browser may refuse an AudioContext before a user gesture. The badge
+      // is the primary signal; the sound is an extra and must never break it.
+    }
+  }, [awaitingSlipCount, isBookingsLoading]);
+
+  useEffect(() => () => {
+    void slipAlertAudioRef.current?.close?.();
+    slipAlertAudioRef.current = null;
+  }, []);
 
   const handleApproveSlip = async (bookingId: string) => {
     if (!tenantSnapshotReady) return;
@@ -864,7 +969,7 @@ export default function AdminDashboard() {
         ) : (
           <>
         {/* KPI Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-8">
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4">
             <div className="flex items-center justify-between text-slate-400 mb-2">
               <span className="text-xs font-medium">{t('statToday', { date: todayStr })}</span>
@@ -886,7 +991,24 @@ export default function AdminDashboard() {
               <span className="text-xs font-medium">{t('statPendingSlip')}</span>
               <AlertCircle className="w-4 h-4" />
             </div>
-            <p className="text-2xl font-bold text-amber-400">{t('countItems', { count: pendingDeposit })}</p>
+            <p className="text-2xl font-bold text-amber-400">{t('countItems', { count: awaitingSlipCount })}</p>
+          </div>
+
+          <div className="bg-slate-900 border border-rose-500/30 rounded-2xl p-4">
+            <div className="flex items-center justify-between text-rose-400 mb-2">
+              <span className="text-xs font-medium">{t('statOverdueUndecided')}</span>
+              <Clock className="w-4 h-4" />
+            </div>
+            {overdueBadge.kind === 'count' ? (
+              <p className="text-2xl font-bold text-rose-400">{t('countItems', { count: overdueBadge.count })}</p>
+            ) : (
+              // Fail closed: the overdue counter is owned by the queue-lock unit
+              // (brief 23 section 2, item 2). Rendering 0 here would tell the shop
+              // there is nothing to decide, which is a different claim.
+              <p data-testid="overdue-unavailable" className="text-xs font-semibold text-slate-400 py-2">
+                {t('statOverdueUnavailable')}
+              </p>
+            )}
           </div>
 
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4">
@@ -896,6 +1018,26 @@ export default function AdminDashboard() {
             </div>
             <p className="text-2xl font-bold text-white font-mono">฿{depositCollected}.00</p>
           </div>
+        </div>
+
+        {/* Brief part B3(a): the slip-alert sound is a local preference and can be turned off. */}
+        <div className="mb-6 flex items-center justify-end gap-3">
+          <span className="text-xs text-slate-400">{t('alertSoundLabel')}</span>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={slipAlertSoundEnabled}
+            data-testid="slip-alert-sound-toggle"
+            onClick={toggleSlipAlertSound}
+            className={`flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-semibold transition-all ${
+              slipAlertSoundEnabled
+                ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
+                : 'border-slate-700 bg-slate-800 text-slate-400'
+            }`}
+          >
+            <BellRing className="w-3.5 h-3.5" />
+            {slipAlertSoundEnabled ? t('alertSoundOn') : t('alertSoundOff')}
+          </button>
         </div>
 
         {/* Readiness checklist (KMO-03) — derived, non-blocking */}
