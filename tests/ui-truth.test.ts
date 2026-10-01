@@ -117,7 +117,10 @@ test('every admin plan or limit string states that enforcement is pending', () =
 test('the admin catalogue still carries the locked commercial facts unchanged', () => {
   assert.equal(FREE_PLAN_BOOKINGS_PER_MONTH, 50);
   assert.equal(FREE_PLAN_SHOPS, 1);
-  assert.equal(FREE_PLAN_SERVICES, 3);
+  // A-21 (2026-10-01) raised the Free service allowance from 3 to 5. The mirror of
+  // the database value (`SIGNUP_PLAN_SERVICES_LIMIT.free_trial`) deliberately stays
+  // 3 until the unit-7 migration raises the seeded row — both are pinned below.
+  assert.equal(FREE_PLAN_SERVICES, 5);
   assert.equal(BASIC_PLAN_PRICE_THB, 390);
   assert.equal(BASIC_PLAN_PRICE_USD, 11);
 
@@ -129,11 +132,27 @@ test('the admin catalogue still carries the locked commercial facts unchanged', 
     assert.match(planCopy, /50/);
     // No invented numbers: the retired walls and the unanswered Pro price stay out.
     assert.doesNotMatch(planCopy, /490|990|฿790|\$23|100 bookings|500 bookings|100 คิว|500 คิว/);
+    // The retired 3-service allowance must not survive anywhere in the plan copy.
+    assert.doesNotMatch(planCopy, /3\s*บริการ|3\s*services/);
   }
   assert.match(JSON.stringify(th.auth), /1 ร้าน/);
-  assert.match(JSON.stringify(th.auth), /3 บริการ/);
+  assert.match(JSON.stringify(th.auth), /5 บริการ/);
   assert.match(JSON.stringify(en.auth), /1 shop/);
-  assert.match(JSON.stringify(en.auth), /3 services/);
+  assert.match(JSON.stringify(en.auth), /5 services/);
+});
+
+test('the Free service allowance is 5 in the contract and still 3 in the migration', () => {
+  // The two must move together: A-21 changes the contract now, and the unit-7
+  // migration is what makes the database agree. Pinning both here means neither can
+  // drift without the other being noticed.
+  assert.equal(FREE_PLAN_SERVICES, 5);
+  const migration = read('supabase/bk01-migrations/20260926120000_bk01_entitlement_packs.sql');
+  const freeRow = migration.match(/'free',\s*[^;]*?'Owner-locked[^']*'/);
+  assert.ok(freeRow, 'the free plan seed row must be present');
+  assert.match(freeRow![0], /3 services/, 'the seeded services_limit note still records 3 until the unit-7 migration');
+  const mirror = read('apps/booking-admin/src/lib/business-type-starter-services.ts');
+  assert.match(mirror, /free_trial:\s*3/, 'the signup mirror predicts what provision_owner_shop creates, which is still 3 in the database');
+  assert.match(mirror, /A-21/, 'the mirror must record why it differs from the contract for now');
 });
 
 test('the WUC-UI-TRUTH note records the blocked database work and the untouched database', () => {

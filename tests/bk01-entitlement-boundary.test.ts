@@ -344,10 +344,14 @@ test('the migration declares its target database and its predecessor', () => {
 // 2. Owner-locked plan data
 // ---------------------------------------------------------------------------
 
-test('free plan row is 50 bookings per calendar month, 1 shop, 3 services, no deposit', () => {
+test('free plan row is 50 bookings per calendar month, 1 shop, 3 services in the database, no deposit', () => {
   const free = planRow('free');
   assert.equal(free.bookings_per_month, '50');
   assert.equal(free.shops_limit, '1');
+  // This reads the MIGRATION, not the contract: the seeded row still says 3. A-21
+  // (2026-10-01) raised the Owner's Free allowance to 5, and the unit-7 migration is
+  // what changes this value. Until then the database really is 3 — see
+  // tests/ui-truth.test.ts, which pins both numbers together.
   assert.equal(free.services_limit, '3');
   assert.equal(free.promptpay_deposit_allowed, 'false');
   assert.equal(free.price_thb, '0');
@@ -1874,9 +1878,10 @@ test('F-13 the starter-services projection is an allowlist of fields that exist 
 });
 
 test('F-13 the projected service list agrees row for row with what provision_owner_shop creates, capped by services_limit', () => {
-  // Free is capped at 3 and every seeded type carries exactly 3 services, so the
-  // cap is exercised by the 'other' type (1 service) versus the rest, and by
-  // running the same comparison under a smaller cap.
+  // Free is capped at 3 IN THE MIGRATION and every seeded type carries exactly 3
+  // services, so the cap is exercised by the 'other' type (1 service) versus the
+  // rest, and by running the same comparison under a smaller cap. A-21 raised the
+  // Owner's allowance to 5; the unit-7 migration is what moves this value.
   assert.equal(freeServicesLimit(), 3);
   assert.equal(Number(planRow('basic_490').services_limit), 50);
 

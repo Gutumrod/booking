@@ -120,7 +120,8 @@ export const SIGNUP_PLAN_DB_CODE: Readonly<Record<SignupPlanId, string>> = {
  * The service allowance `provision_owner_shop` caps the starter set at, per plan.
  *
  * These three numbers are MIRRORS of `local_service.entitlement_plans.services_limit`
- * as seeded by the migration lane — `free` 3, `basic_490` 50, `pro_990` 100 (Pro is not
+ * as seeded by the migration lane — `free` reads **3 in the database today**,
+ * `basic_490` 50, `pro_990` 100 (Pro is not
  * sold; its 100 is the unapproved C2 proposal marked *). The mirror exists only because
  * the signup reads the preview as `anon` and the database exposes NO anon-readable
  * plan-limit surface: `entitlement_plans` is restricted to the privileged database role, `get_tier_limits` is
@@ -129,6 +130,13 @@ export const SIGNUP_PLAN_DB_CODE: Readonly<Record<SignupPlanId, string>> = {
  * database/Owner decision; until it exists, a change to `services_limit` must be
  * mirrored here, and that coupling is recorded in
  * `docs/house-swarm-1/WUD-UI-TYPES.md`.
+ *
+ * The `free_trial` entry stays 3 on purpose, and it is NOT the Owner's current Free
+ * allowance — A-21 (2026-10-01) raised that to 5. This mirror predicts what
+ * `provision_owner_shop` will actually CREATE, and that function reads `services_limit`
+ * from the database, which still holds 3 until the unit-7 migration lands. Raising the
+ * mirror to 5 first would make the signup preview promise a starter set the database then
+ * refuses to create. The two move together. `tests/ui-truth.test.ts` pins both numbers.
  */
 export const SIGNUP_PLAN_SERVICES_LIMIT: Readonly<Record<SignupPlanId, number>> = {
   free_trial: 3,

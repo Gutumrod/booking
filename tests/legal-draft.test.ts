@@ -279,7 +279,7 @@ test('only Owner-approved contact values appear, without inventing identity or c
       /free forever/i, // Free is free forever
       /50 bookings per calendar month/i, // 50 bookings per calendar month
       /\b1 shop\b/i, // 1 shop
-      /\b3 services\b/i, // 3 services
+      /\b5 services\b/i, // 5 services (A-21: raised from 3 on 2026-10-01)
       /no PromptPay deposit/i, // a Free shop takes no PromptPay deposit
       /฿390/, // Basic price, THB
       /\$11/, // Basic price, USD
@@ -295,7 +295,7 @@ test('only Owner-approved contact values appear, without inventing identity or c
       /ฟรีตลอดไป/, // Free is free forever
       /50\s*คิวต่อเดือน/, // 50 bookings per calendar month
       /1\s*ร้าน/, // 1 shop
-      /3\s*บริการ/, // 3 services
+      /5\s*บริการ/, // 5 services (A-21: raised from 3 on 2026-10-01)
       /ไม่มีมัดจำ PromptPay/, // a Free shop takes no PromptPay deposit
       /฿390/, // Basic price, THB
       /\$11/, // Basic price, USD

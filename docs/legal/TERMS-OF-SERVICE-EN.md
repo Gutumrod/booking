@@ -60,8 +60,8 @@ If automatic slip verification is used, it can confirm a deposit only on a posit
 ## 7. Shop subscription and billing
 
 Shop subscriptions are billed monthly through Stripe. Annual billing is not open: no annual price has been approved.
-The shop plan is Free. Free is free forever at ฿0 / $0, with 50 bookings per calendar month, 1 shop and 3 services; a Free shop takes no PromptPay deposit.
-The 14-day offer is a Basic trial promotion and is separate from Free. The trial starts when a shop is provisioned, and it does not convert into a paid plan unless a Stripe checkout or subscription event completes. If it ends without payment, the shop falls back to Free entitlements and is not closed; anything above the Free entitlement, such as more than 3 services, is temporarily disabled instead of deleted. The number of active providers on each plan is not locked yet: [[OWNER INPUT: approved number of active providers on the Free plan]], [[OWNER INPUT: approved number of active providers on the Basic plan]].
+The shop plan is Free. Free is free forever at ฿0 / $0, with 50 bookings per calendar month, 1 shop and 5 services; a Free shop takes no PromptPay deposit.
+The 14-day offer is a Basic trial promotion and is separate from Free. The trial starts when a shop is provisioned, and it does not convert into a paid plan unless a Stripe checkout or subscription event completes. If it ends without payment, the shop falls back to Free entitlements and is not closed; anything above the Free entitlement, such as more than 5 services, is temporarily disabled instead of deleted. The number of active providers on each plan is not locked yet: [[OWNER INPUT: approved number of active providers on the Free plan]], [[OWNER INPUT: approved number of active providers on the Basic plan]].
 Basic is ฿390 or $11 per month and has no booking ceiling for a normal shop; a fair-use guard may still be applied for abuse or platform protection. Pro is not on sale: it is offered only once automatic slip verification is actually available, and no Pro price has been approved: [[OWNER INPUT: approved Pro monthly price]].
 Basic uses manual deposit verification. Pro automatic slip verification is a precondition for selling Pro publicly, and its monthly allowance and any top-up price are not set yet: [[OWNER INPUT: approved Pro automatic slip-verification monthly allowance and top-up price]].
 The WSTERA central LINE account is the standard notification path for the Basic trial and for Basic. A shop-owned LINE account is an optional managed add-on; the shop remains responsible for its own LINE account and message costs, and the add-on price is not set yet: [[OWNER INPUT: approved shop-owned LINE OA managed add-on price]].
@@ -101,5 +101,3 @@ This draft intends these Terms to be governed by the law of Thailand and to be e
 
 Questions about these Terms are handled through e-mail at titazmth@gmail.com and LINE at https://lin.ee/WqDbJcl. Published support hours remain to be supplied: [[OWNER INPUT: published support hours]].
 Support is provided through written channels only. This draft makes no response-time promise.
-
-* This e-mail address is temporary and may be changed as approved by the Owner.

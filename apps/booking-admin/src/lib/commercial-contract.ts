@@ -3,9 +3,11 @@
  *
  * Single source of truth for plan identity, approved prices and approved
  * limits. The numbers below are the Owner's decision of 2026-09-26 recorded in
- * `docs/04_PRICING_ENTITLEMENTS.md` (source brief: Addendum A, item 1 — "A-2"):
+ * `docs/04_PRICING_ENTITLEMENTS.md` (source brief: Addendum A, item 1 — "A-2"),
+ * with the Free service allowance raised to 5 by the Owner's later decision of
+ * 2026-10-01 (STATUS-HOUSE A-21: "Free เพิ่มบริการเป็น 5 (เดิม 3)"):
  *
- *   Free  = forever, 50 bookings per month, 1 shop, 3 services
+ *   Free  = forever, 50 bookings per month, 1 shop, 5 services
  *   Basic = 390 THB / month or 11 USD / month (purchasable)
  *   Pro   = exists in the product, NOT purchasable and never presented as
  *           saleable until the Owner approves a price and the auto-slip
@@ -33,6 +35,12 @@
  * A migration that makes the database match this file has been written
  * separately and has NOT been applied. Until it is applied every limit here is
  * a statement of intent, evaluated (if at all) only inside TypeScript.
+ *
+ * The Free service allowance is the one value that has moved since that
+ * migration was written: A-21 (2026-10-01) raised it to 5, and the seeded
+ * `local_service.entitlement_plans.services_limit` still reads 3 until the
+ * unit-7 migration lands. `tests/ui-truth.test.ts` pins both facts so neither
+ * side can drift quietly.
  */
 
 /**
@@ -99,7 +107,15 @@ export interface PlanDefinition {
  */
 export const FREE_PLAN_BOOKINGS_PER_MONTH = 50;
 export const FREE_PLAN_SHOPS = 1;
-export const FREE_PLAN_SERVICES = 3;
+/**
+ * Owner decision A-21 (2026-10-01) raised the Free allowance from 3 to 5. The
+ * database value is not changed by this unit: the seeded
+ * `local_service.entitlement_plans.services_limit` for `free` still reads 3, and
+ * the unit-7 migration (spec, not written here) is what makes the two agree.
+ * `tests/ui-truth.test.ts` pins the 5 here and the 3 in the migration, so a
+ * future edit cannot quietly move one without the other.
+ */
+export const FREE_PLAN_SERVICES = 5;
 export const BASIC_PLAN_PRICE_THB = 390;
 export const BASIC_PLAN_PRICE_USD = 11;
 
@@ -230,8 +246,8 @@ const LIMIT_KEYS: Record<PlanLimitMetric, keyof PlanLimits> = {
 /**
  * The intended entitlement boundary, computed without a database: `usage` is the
  * count already in use, so an addition is allowed only while `usage < limit`. A
- * free shop at 50 bookings is blocked on the 51st; at 3 services it is blocked
- * on the 4th. A `null` limit is never a wall.
+ * free shop at 50 bookings is blocked on the 51st; at 5 services it is blocked
+ * on the 6th. A `null` limit is never a wall.
  *
  * THIS IS NOT ENFORCEMENT AND NOTHING CALLS IT TO ENFORCE ANYTHING. The only
  * caller is `app/register/page.tsx`, which passes a hard-coded usage of 0, so

@@ -100,8 +100,8 @@ A migration that makes the database match this document has been written separat
 surface may state or imply that these limits are enforced by the server or the database.
 
 ## Free plan semantics
-- Free is **not a trial**: it is a permanent plan with the 50 bookings / 1 shop / 3 services
-  limits *(A-2)*. A separate 14-day Basic trial is kept: the Owner answered **O-2** on
+- Free is **not a trial**: it is a permanent plan with the 50 bookings / 1 shop / 5 services
+  limits *(A-2; the service allowance was raised from 3 to 5 by A-21, 2026-10-01)*. A separate 14-day Basic trial is kept: the Owner answered **O-2** on
   2026-09-26 — keep the 14-day Basic trial as a promotional entry to Basic, separate from Free
   forever, and when it ends without payment the shop drops to Free automatically and is not
   closed (`STATUS-HOUSE.md` Addendum A-3). What the trial grants in detail is **B1, still
@@ -132,8 +132,8 @@ credits, with authoritative ledger, idempotent purchase/application and visible 
 
 ## Price-lock gate
 The Free and Basic price points are **approved** (Owner decision 2026-09-26, A-2): Free forever
-at 50 bookings/month, 1 shop, 3 services; Basic at ฿390 or $11 per month. Basic is the only
-purchasable BK01 plan today.
+at 50 bookings/month, 1 shop, 5 services; Basic at ฿390 or $11 per month. Basic is the only
+purchasable BK01 plan today. (A-21, 2026-10-01, raised the Free service allowance from 3 to 5.)
 
 Still required before any further paid packaging opens:
 - a Pro public price (currently none — Pro must not be marketed as purchasable),

@@ -108,19 +108,31 @@ export async function handleLineWebhook(
       if (!binding.booking_context || !binding.booking_id || !binding.lease_token) throw new Error('LINE booking binding returned incomplete context');
       if (!config.accessToken || !event.replyToken) throw new Error('LINE reply is not configured');
 
-      const card = createBookingLinkBoundFlexCard({
-        bookingCode: binding.booking_context.booking_code ?? bookingCode,
-        shopName: binding.booking_context.shop_name ?? 'ร้านค้าบริการ',
-        bookingDate: binding.booking_context.booking_date ?? '',
-        startTime: binding.booking_context.start_time ?? '',
-      });
-      const lineResponse = await send('https://api.line.me/v2/bot/message/reply', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${config.accessToken}` },
-        body: JSON.stringify({ replyToken: event.replyToken, messages: [card] }),
-      });
-      if (!lineResponse.ok) throw new Error(`LINE reply failed with HTTP ${lineResponse.status}`);
-      deliverySucceeded = true;
+      // The reply is informational: its only job is to tell the customer the queue
+      // is bound and when the reminder will arrive. A reply failure therefore must
+      // NOT fail the binding — and it must not leave the webhook event leased.
+      // LINE reply tokens are short-lived and the customer's own message can be
+      // replayed, so a late duplicate hits an expired token; that is a normal
+      // outcome, not an error to surface as EVENT_PROCESSING_FAILED.
+      try {
+        const card = createBookingLinkBoundFlexCard({
+          bookingCode: binding.booking_context.booking_code ?? bookingCode,
+          shopName: binding.booking_context.shop_name ?? 'ร้านค้าบริการ',
+          bookingDate: binding.booking_context.booking_date ?? '',
+          startTime: binding.booking_context.start_time ?? '',
+        });
+        const lineResponse = await send('https://api.line.me/v2/bot/message/reply', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${config.accessToken}` },
+          body: JSON.stringify({ replyToken: event.replyToken, messages: [card] }),
+        });
+        if (!lineResponse.ok) throw new Error(`LINE reply failed with HTTP ${lineResponse.status}`);
+        deliverySucceeded = true;
+      } catch (replyError) {
+        // The binding itself is done and the DB lease is about to be released as
+        // processed; only the courtesy reply was lost.
+        console.error('LINE binding reply could not be delivered', { eventIndex, code: 'REPLY_NOT_DELIVERED', reason: messageOf(replyError) });
+      }
 
       const { data: finished, error: finishError } = await runtime.rpc('bk01_finish_line_webhook_delivery', {
         p_webhook_event_id: event.webhookEventId,

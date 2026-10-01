@@ -54,10 +54,10 @@ const withoutLegacyPlanIds = (source: string) => source.replace(/basic_490|pro_9
 // Owner-approved plan facts (Addendum A item 1, "A-2", recorded 2026-09-26)
 // ---------------------------------------------------------------------------
 
-test('Free plan holds the approved 50 bookings / 1 shop / 3 services limits', () => {
+test('Free plan holds the approved 50 bookings / 1 shop / 5 services limits', () => {
   assert.equal(FREE_PLAN_BOOKINGS_PER_MONTH, 50);
   assert.equal(FREE_PLAN_SHOPS, 1);
-  assert.equal(FREE_PLAN_SERVICES, 3);
+  assert.equal(FREE_PLAN_SERVICES, 5);
   assert.deepEqual(getPlanPresentation('free_trial'), {
     planId: 'free_trial',
     priceThb: 0,
@@ -66,7 +66,7 @@ test('Free plan holds the approved 50 bookings / 1 shop / 3 services limits', ()
     isPurchasable: false,
     bookingsPerMonth: 50,
     shops: 1,
-    services: 3,
+    services: 5,
   });
 });
 
@@ -136,27 +136,27 @@ test('booking-limit boundary: Basic has no customer-facing booking wall', () => 
 });
 
 // ---------------------------------------------------------------------------
-// Boundary 2 — services (the 4th service is the wall)
+// Boundary 2 — services (the 6th service is the wall; A-21 raised it from 3 to 5)
 // ---------------------------------------------------------------------------
 
-test('service-limit boundary: a Free shop adds a 3rd service but not a 4th', () => {
+test('service-limit boundary: a Free shop adds a 5th service but not a 6th', () => {
   const secondService = evaluatePlanLimit('free_trial', 'services', 1);
-  assert.equal(secondService.limit, 3);
+  assert.equal(secondService.limit, 5);
   assert.equal(secondService.allowed, true);
 
-  const thirdService = evaluatePlanLimit('free_trial', 'services', 2);
-  assert.equal(thirdService.allowed, true);
-  assert.equal(thirdService.code, null);
-
-  const fourthService = evaluatePlanLimit('free_trial', 'services', 3);
-  assert.equal(fourthService.limit, 3);
-  assert.equal(fourthService.usage, 3);
-  assert.equal(fourthService.allowed, false);
-  assert.equal(fourthService.code, 'SERVICE_LIMIT_EXCEEDED');
-
   const fifthService = evaluatePlanLimit('free_trial', 'services', 4);
-  assert.equal(fifthService.allowed, false);
-  assert.equal(fifthService.code, 'SERVICE_LIMIT_EXCEEDED');
+  assert.equal(fifthService.allowed, true);
+  assert.equal(fifthService.code, null);
+
+  const sixthService = evaluatePlanLimit('free_trial', 'services', 5);
+  assert.equal(sixthService.limit, 5);
+  assert.equal(sixthService.usage, 5);
+  assert.equal(sixthService.allowed, false);
+  assert.equal(sixthService.code, 'SERVICE_LIMIT_EXCEEDED');
+
+  const seventhService = evaluatePlanLimit('free_trial', 'services', 6);
+  assert.equal(seventhService.allowed, false);
+  assert.equal(seventhService.code, 'SERVICE_LIMIT_EXCEEDED');
 });
 
 test('service-limit boundary: Basic has no service wall', () => {

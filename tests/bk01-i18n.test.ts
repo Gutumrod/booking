@@ -35,7 +35,9 @@ test('BK01 registration copy matches the locked Free and Basic terms without adv
     const auth = messages.auth;
     assert.match(auth.planFreeQ1, /50/);
     assert.match(auth.planFreeQ2, /1/);
-    assert.match(auth.planFreeQ3, /3/);
+    // A-21 (2026-10-01): the Free allowance is 5 services, not the retired 3.
+    assert.match(auth.planFreeQ3, /5/);
+    assert.doesNotMatch(auth.planFreeQ3, /\b3\b/);
     assert.match(auth.planBasicQ1, /fair use|fair-use/i);
     assert.match(auth.planBasicQ2, /\*/);
     assert.doesNotMatch(JSON.stringify(auth), /500 bookings|500 คิว|10 staff|10 คน|Custom LINE Token/i);

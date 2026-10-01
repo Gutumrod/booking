@@ -18,7 +18,7 @@ Source: `BRIEF-HOUSE-SWARM-1-ADDENDUM-A-FREE-SIGNUP-2026-09-26.md` §คำต�
 
 | Plan | Approved value |
 |---|---|
-| Free | forever, **50 bookings / month**, **1 shop**, **3 services** |
+| Free | forever, **50 bookings / month**, **1 shop**, **5 services** (service allowance raised from 3 by A-21, 2026-10-01) |
 | Basic | **฿390 / month** or **$11 / month** |
 | Pro | exists in the product but **must not be presented anywhere as purchasable** |
 
@@ -59,15 +59,17 @@ and is therefore left untouched and reported as an open item.
   limits and the `฿390` price.
 - **Billing client** (`apps/booking-admin/src/lib/admin-service.ts`):
   `startBillingCheckout(plan: 'basic_490')` — the `| 'pro_990'` arm was removed.
-- **Message catalogues** (`apps/booking-admin/messages/th.json`, `en.json`): every
+- Message catalogues (`apps/booking-admin/messages/th.json`, `en.json`): every
   `490`/`990` reference is gone (verified by test); Free is described as forever with
-  50/1/3, Basic as `฿390`/`$11`, Pro as "not on sale" with no price.
+  50/1/5 (5 from A-21, 2026-10-01; this note's own revision of 2026-09-26 recorded 3),
+  Basic as `฿390`/`$11`, Pro as "not on sale" with no price.
 
 ### 2.3 Documentation
-- `docs/04_PRICING_ENTITLEMENTS.md` now states Free forever at 50 bookings/month, 1 shop,
-  3 services and Basic at ฿390 / $11, with the Owner decision of 2026-09-26 (A-2) recorded
-  as the source. Everything A-2 did not approve is explicitly marked **PENDING** rather
-  than silently re-asserted.
+- `docs/04_PRICING_ENTITLEMENTS.md` states Free forever at 50 bookings/month, 1 shop,
+  5 services and Basic at ฿390 / $11, with the Owner decision of 2026-09-26 (A-2) recorded
+  as the source and A-21 (2026-10-01) recorded for the 3 → 5 service change. Everything
+  A-2 and A-21 did not approve is explicitly marked **PENDING** rather than silently
+  re-asserted.
 
 ### 2.4 Tests
 - The two required boundaries are covered by named tests in
