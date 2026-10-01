@@ -110,6 +110,7 @@ const routeMigrations = [
   read('supabase/bk01-migrations/20260927130000_bk01_trial_line_bind.sql'),
   read('supabase/bk01-migrations/20261001140000_bk01_pack_notify_group67.sql'),
   read('supabase/bk01-migrations/20261002120000_bk01_council_p0.sql'),
+  read('supabase/bk01-migrations/20261002130000_bk01_p0_alert_context.sql'),
 ].join('\n');
 for (const identity of BK01_RUNTIME_ROUTE_FUNCTIONS) {
   if (!routeMigrations.includes(`GRANT EXECUTE ON FUNCTION ${identity} TO bk01_runtime;`)) {
@@ -133,7 +134,7 @@ if (!bootstrap.includes('has_function_privilege(\'bk01_runtime\',p.oid,\'EXECUTE
   fail('Generated bootstrap is missing the fail-closed exact pre/post route-migration EXECUTE guard.');
 }
 for (const identity of BK01_RUNTIME_EFFECTIVE_FUNCTIONS) {
-  if (!bootstrap.includes(`'${identity}'`) && !identity.startsWith('local_service.create_booking_hold(')) fail(`Generated effective EXECUTE guard omits ${identity}`);
+  if (!bootstrap.includes(`'${identity.startsWith('local_service.claim_due_shop_email_notifications(') ? 'local_service.claim_due_shop_email_notifications(integer)' : identity}'`) && !identity.startsWith('local_service.create_booking_hold(')) fail(`Generated effective EXECUTE guard omits ${identity}`);
 }
 if (BK01_RUNTIME_BOOTSTRAP_FUNCTIONS.length !== 5 || BK01_RUNTIME_ROUTE_FUNCTIONS.length !== 8
     || BK01_RUNTIME_FUNCTIONS.length !== 13 || BK01_PUBLIC_LEGACY_EXECUTE_EXCEPTIONS.length !== 8

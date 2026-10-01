@@ -34,8 +34,8 @@ import {
 
 // Keep the pinned bootstrap generation at the pre-P0 phase. R1 adds its executor
 // in the new product migration and validates final surfaces independently.
-const BK01_RUNTIME_ROUTE_FUNCTIONS = CURRENT_RUNTIME_ROUTE_FUNCTIONS.filter(x => !x.startsWith('local_service.create_booking_hold('));
-const BK01_RUNTIME_EFFECTIVE_FUNCTIONS = CURRENT_RUNTIME_EFFECTIVE_FUNCTIONS.filter(x => !x.startsWith('local_service.create_booking_hold('));
+const BK01_RUNTIME_ROUTE_FUNCTIONS = CURRENT_RUNTIME_ROUTE_FUNCTIONS.filter(x => !x.startsWith('local_service.create_booking_hold(')).map(x => x.startsWith('local_service.claim_due_shop_email_notifications(') ? 'local_service.claim_due_shop_email_notifications(integer)' : x);
+const BK01_RUNTIME_EFFECTIVE_FUNCTIONS = CURRENT_RUNTIME_EFFECTIVE_FUNCTIONS.filter(x => !x.startsWith('local_service.create_booking_hold(')).map(x => x.startsWith('local_service.claim_due_shop_email_notifications(') ? 'local_service.claim_due_shop_email_notifications(integer)' : x);
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const legacyDir = path.join(root, 'supabase', 'migrations');

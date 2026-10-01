@@ -26,7 +26,7 @@ test('BK01 runtime allowlist is the exact 13 identities plus 8 legacy PUBLIC exc
     'local_service.sync_subscription_state_bk_a(text,bigint,uuid,text,text,text,text,bigint,boolean)',
     ...routeFunctions,
     trialRouteFunction,
-    'local_service.claim_due_shop_email_notifications(integer)',
+    'local_service.claim_due_shop_email_notifications(integer,local_service.bk01_ops_alert_kind,text,boolean)',
     'local_service.create_booking_hold(uuid,uuid,uuid,character varying,character varying,character varying,date,time without time zone,text)',
   ].sort());
   assert.equal(BK01_RUNTIME_EFFECTIVE_FUNCTIONS.length, 21);

@@ -30,7 +30,7 @@ SHA256: `1775be6f1bb54adb4e301aff63051e00366fd5b4cca7522d681478bfaf6747df`.
 | S2 | Public customer insert policy removed; authenticated writes revoked. Cross-shop insert tested both with and without RETURNING. |
 | S3 | Inspected direct insert/update/delete/upsert in both apps: only authenticated DELETE tickets needed; explicitly granted under existing RLS. All other app SQL writes are RPC. Excess table/column DML, TRUNCATE, REFERENCES, TRIGGER revoked. History SELECT-only; exact gate passes. |
 | S4 | Unrelated authenticated users cannot read private shops. Public view excludes line_oa_id. Public projection and member admin paths pass. |
-| S5 | LINE claim filters customer recipients; context returns NULL LINE identity for noncustomer. Existing claim JOIN retained. |
+| S5 | LINE claim filters customer recipients; context returns NULL LINE identity for noncustomer. Existing claim JOIN retained. Controller follow-up appends deposit_status for verified/rejected slip decisions. |
 | S6 | Email claim ambiguity fixed; unique shop/Thai-date/09-or-17 slot catch-up. Controlled 09:00:30, 09:07, 17:00, 22:00, 07:59 tests; missed cron catches up. Outputs exclude customer/booking data. |
 | S7 | Contact requires top-level email and is_anonymous=false, owner/admin. No email_verified/user_metadata/auth.users access. Confirm email ON remains Window 2 prerequisite. |
 | S8 | One nine-input catalog identity, trailing defaults NULL preserve current settings under row lock. Seven and nine named arguments tested. |
@@ -40,14 +40,14 @@ SHA256: `1775be6f1bb54adb4e301aff63051e00366fd5b4cca7522d681478bfaf6747df`.
 | S12 | Immutable received/refund_recorded money events, FORCE RLS, no direct app grants. Submitted/verified/rejected refunds require textual transfer evidence and existing time/role guards; event and booking state atomic. Rejected refund/history pass; owner UPDATE/DELETE/TRUNCATE ledger denied. File evidence HOLD: current customer-slip scope cannot safely authorize merchant evidence. |
 | S13 | Cancel owner/admin only; staff denied and owner succeeds. |
 | S14 | Existing nine-input hold RPC runtime only, exact runtime allowlist 20→21. Shop+trimmed-phone cap 3 live holds/pending; concurrent fourth admission denied. Pending review remains until appointment. |
-| S15 | Legacy hash/count checked before DB client/socket; temporary copy mutation rejected using unreachable local DB. Full raw rollback equality, app named RPC arity and role surface gates pass. |
+| S15 | Legacy hash/count checked before DB client/socket; temporary copy mutation rejected using unreachable local DB. Full raw rollback equality, app named RPC arity and role surface gates pass. Controller follow-up also snapshots type owner/ACL/enum labels. |
 
 Frozen legacy/product migrations and platform bootstrap are unchanged. New function owners are bk01_migrator; three pre-existing postgres-owned exceptions remain unchanged. Existing function owner/ACL changes are only intended create_booking_hold executor transfer; new wrappers/ledger helpers have explicit ACLs. Token PUBLIC ACL is preserved as required by existing allowlist.
 
 ## Verification — fresh W-1
 
 Evidence root (machine local, not copied into Vault):
-`D:\AI-Workspace\runtime\relay\house-20261001\codex-par\HOUSE-BK01-P0-SQL\fresh-replay3`.
+`D:\AI-Workspace\runtime\relay\house-20261001\codex-par\HOUSE-BK01-P0-SQL\fresh-replay6`.
 
 Fresh PG17.11, UTC, localhost:55463; operator non-superuser. Managed fixture/legacy installation occurs before postgres is demoted; reviewed platform scripts subsequently create runtime/migrator roles (neither pre-created). Product migration runner SET LOCAL ROLE bk01_migrator. Extensions PUBLIC and migrator USAGE remain denied. Anon/authenticated/runtime calls use real roles. Scaffolding and controlled clock/catalog mutation setup use fixture authority only in the guarded disposable cluster; production RPC calls use actual application roles.
 
@@ -59,7 +59,7 @@ Fresh PG17.11, UTC, localhost:55463; operator non-superuser. Managed fixture/leg
 - Apply → rollback → raw diff = base (0 differences) → reapply PASS. Compared function definitions/owners/ACLs, relation definitions/owners/ACLs/RLS, column definitions, policies, constraints, triggers and table ACLs. Not just a combined hash.
 - Frozen source mutation rejection before connection PASS; originals untouched.
 - npm test: 340/340 PASS.
-- db:bk01:policy: 9 migrations, 47/47 policy mutations, 5/5 authority checks, 3/3 effective execute-set checks PASS.
+- db:bk01:policy: 10 migrations, 47/47 policy mutations, 5/5 authority checks, 3/3 effective execute-set checks PASS.
 - db:bk01:verify PASS (30 frozen legacy files, pinned hash unchanged).
 - lint: exit 0, six existing warnings.
 - next typegen then standalone TypeScript checks: initially PASS in both apps. Full webpack builds generate stronger route constraints and FAIL: consumer handleUploadIntent, handleLineWebhook, handleNotificationDispatch; admin handleStripeWebhook are unsupported named exports. These four route source files are unchanged against base. Do not treat initial standalone TypeScript PASS as full app build acceptance.
@@ -93,3 +93,15 @@ Driver rejects existing data directory and wrong PG version; creates a new loopb
 6. Rollback is a local reviewed recovery artifact: it restores base grants/schema exactly and drops the new money ledger. After activation, preserve/export any new financial events before rollback approval. Restoring the old exclusion can fail with legacy NULL data; fail closed, do not rewrite legacy data automatically.
 
 No LAB/production operations, merge or GO. SQL readiness is not release readiness. No request to change pricing, public sellability, P1 scope or extension privileges.
+
+## Controller follow-up closure — room 2026-10-01T15:35Z
+
+The original e0800ee handoff was superseded by the controller additions; CONTRACT update published separately at b804030 before follow-up implementation.
+
+- New migration: supabase/bk01-migrations/20261002130000_bk01_p0_alert_context.sql (SHA256 5a7aaa653d339ee05e7d13648d2d53212ab37a9909bd63c50f449c85e03d75b9). New rollback: supabase/rollback/20261002130000_bk01_p0_alert_context.rollback.sql (SHA256 c4c2df09dc002eeb68500d19eb425c6b5cf150bdbb0c572cd4b987901cc413a1). e0800ee migration/rollback remain unchanged.
+- Same email RPC name, replaces one-input identity with four defaulted inputs. Runtime cardinality remains21; no old overload remains. SQL enum cap_unverified/quota_unreadable/breaker_open; canonical current Thai-day keys only. FORCE RLS OPS delivery ledger has no direct app/runtime grants.
+- Normal one-input shop email calls remain supported. Alert mode does not touch shop claims and returns NULL shop/email/customer payload plus claim/delivery flags only. false claims a five-minute lease; true acknowledges provider acceptance and never authorizes sending. Once acknowledged, cannot reclaim that Thai day. No prior claim => acknowledgement rejected. Undelivered lease retry allowed. Hermes must adapt its old pre-send delivered flag and use stable provider idempotency keys; SQL cannot guarantee exactly-once external mail after a crash.
+- Context appends deposit_status while preserving signature/owner/EXECUTE ACL. Tested actual runtime verified/rejected rows; all surviving function owner/ACL values unchanged on follow-up.
+- Fresh replay6: controller fail-before 3/3; after33/33; controller rollback2/2 (raw equality to e0800ee); whole-chain rollback3/3 (raw equality to37a0535); after38/38 and advanced28/28 rerun; anon14/auth54/runtime21, arity49 and frozen hash gate PASS; npm340/340 PASS. An additional delivered-guard mutation makes dedupe expectation fail as intended.
+- Snapshot includes raw functions, relations, columns, policies, constraints, triggers, table ACL plus type owner/ACL/enum labels. Driver runs new rollback with the same Node PostgreSQL SQL transport and LF normalization as migration runner: Windows psql rewrites LF inside function bodies and previously produced a real raw-definition diff. Historical base rollback retains its original psql transport; no comparison strips/normalizes catalog evidence.
+- Every disposable replay4/5/6 cluster stopped in finally. No LAB/production/merge. Real OPS email still UNMEASURED until Hermes wires transport + claim/ack into R2 and reviewers run the integrated candidate.

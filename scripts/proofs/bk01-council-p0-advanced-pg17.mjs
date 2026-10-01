@@ -18,7 +18,7 @@ try{
  const ctx=await runtime(tx=>tx`select * from local_service.get_line_notification_delivery_context(p_id=>${email},p_attempt_count=>0)`);record('noncustomer context LINE recipient NULL',ctx.length===1&&ctx[0].line_user_id===null);
  const pending=await makeBooking({status:'pending_review',deposit:'submitted',hours:96});
  const summary='2030-01-02';for(const clock of ['09:00:30','09:07:00','17:00:00','22:00:00','07:59:00']){
-  await patch('local_service.claim_due_shop_email_notifications(integer)',def=>def.replace(/now\(\)/g,`timestamptz '${summary} ${clock}+07'`),async()=>{
+  await patch('local_service.claim_due_shop_email_notifications(integer,local_service.bk01_ops_alert_kind,text,boolean)',def=>def.replace(/now\(\)/g,`timestamptz '${summary} ${clock}+07'`),async()=>{
    const rows=await runtime(tx=>tx`select * from local_service.claim_due_shop_email_notifications(p_limit=>100)`);
    if(['22:00:00','07:59:00'].includes(clock)){record('quiet window '+clock,rows.length===0);return;}
    const slots=await mig(tx=>tx`select idempotency_key from local_service.line_notification_logs where shop_id=${shop} and event_type='shop_email_slip_summary' and idempotency_key like ${'%:'+summary+':%'}`);
@@ -26,7 +26,7 @@ try{
   });
  }
  // Cron missed exact minute on another date, creates 09 slot at 09:07 and both at 17:00.
- await patch('local_service.claim_due_shop_email_notifications(integer)',def=>def.replace(/now\(\)/g,"timestamptz '2030-01-03 09:07:00+07'"),async()=>{await runtime(tx=>tx`select * from local_service.claim_due_shop_email_notifications(100)`);const [r]=await mig(tx=>tx`select count(*)::int n from local_service.line_notification_logs where shop_id=${shop} and idempotency_key=${'shop-slip-summary:'+shop+':2030-01-03:09'}`);record('missed cron catches up 09 slot',r.n===1);});
+ await patch('local_service.claim_due_shop_email_notifications(integer,local_service.bk01_ops_alert_kind,text,boolean)',def=>def.replace(/now\(\)/g,"timestamptz '2030-01-03 09:07:00+07'"),async()=>{await runtime(tx=>tx`select * from local_service.claim_due_shop_email_notifications(100)`);const [r]=await mig(tx=>tx`select count(*)::int n from local_service.line_notification_logs where shop_id=${shop} and idempotency_key=${'shop-slip-summary:'+shop+':2030-01-03:09'}`);record('missed cron catches up 09 slot',r.n===1);});
  // Real two-session phone-cap race, two existing holds + two contenders -> one.
  const phone='0833333333';await runtime(tx=>hold(tx,thaiDay(3),'09:00',phone));await runtime(tx=>hold(tx,thaiDay(3),'10:00',phone));
  const race=await Promise.allSettled([runtime(tx=>hold(tx,thaiDay(3),'11:00',phone)),runtime(tx=>hold(tx,thaiDay(3),'12:00',phone))]);record('phone-cap concurrent race one winner',race.filter(x=>x.status==='fulfilled').length===1&&race.some(x=>x.status==='rejected'&&/BOOKING_PENDING_LIMIT/.test(x.reason.message)));

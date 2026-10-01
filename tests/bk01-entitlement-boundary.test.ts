@@ -307,7 +307,7 @@ const freeShopsLimit = () => Number(planRow('free').shops_limit);
 
 test('forward migrations exist in timestamp order and the repository policy accepts each', () => {
   const files = readdirSync(MIGRATION_DIR).filter((name) => name.endsWith('.sql')).sort();
-  assert.deepEqual(files, [MIGRATION_FILE, '20260927120000_bk01_runtime_route_rpcs.sql', '20260927130000_bk01_trial_line_bind.sql', '20260928120000_bk01_house_upload_grants.sql', '20260930120000_bk01_link_token_no_extensions.sql', '20261001023000_bk01_queue_release.sql', '20261001130000_bk01_sql_consolidate.sql', '20261001140000_bk01_pack_notify_group67.sql', '20261002120000_bk01_council_p0.sql']);
+  assert.deepEqual(files, [MIGRATION_FILE, '20260927120000_bk01_runtime_route_rpcs.sql', '20260927130000_bk01_trial_line_bind.sql', '20260928120000_bk01_house_upload_grants.sql', '20260930120000_bk01_link_token_no_extensions.sql', '20261001023000_bk01_queue_release.sql', '20261001130000_bk01_sql_consolidate.sql', '20261001140000_bk01_pack_notify_group67.sql', '20261002120000_bk01_council_p0.sql', '20261002130000_bk01_p0_alert_context.sql']);
   assert.match(MIGRATION_FILE, /^\d{14}_[a-z0-9_]+\.sql$/);
   assert.equal(validateBk01MigrationSql(rawSql, MIGRATION_FILE), true);
   assert.equal(validateBk01MigrationSql(readFileSync(`${MIGRATION_DIR}/20260927120000_bk01_runtime_route_rpcs.sql`, 'utf8'), '20260927120000_bk01_runtime_route_rpcs.sql'), true);

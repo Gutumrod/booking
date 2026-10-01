@@ -17,7 +17,7 @@ Status: implemented R1 contract; fresh W-1 SQL proof PASS, independent review pe
 - record_deposit_refund(p_booking_id uuid,p_refund_reference text,p_note text DEFAULT NULL) keeps JSON return and inputs. Reference is mandatory attached textual transfer evidence; supports submitted/verified/rejected after existing appointment/release time guard. No new storage scope or upload route is authorized. File attachments are held pending a separate storage contract; never reuse customer slip upload to upload merchant evidence.
 - get_deposit_refund_history(p_booking_id uuid) keeps existing return fields and reads immutable refund_recorded events. The new deposit_money_events ledger is append-only, FORCE RLS, RPC access only. received and refund_recorded facts are recorded without rewriting history.
 - cancel_booking keeps existing signature; owner/admin only. set_booking_outcome completed rejects missing or future start. New tokens are 32 hex characters (128 random bits); legacy 10-character tokens remain accepted until expiry. Confirmation, approval and future slip rejection extend expiry to appointment end +7 days.
-- LINE claim only claims customer rows; context returns line_user_id only for customer recipients. Context output columns and event CHECK set are unchanged. App must handle every permitted event explicitly.
+- LINE claim only claims customer rows; context returns line_user_id only for customer recipients. Event CHECK set is unchanged; controller follow-up appends deposit_status. App must handle every permitted event explicitly.
 - claim_due_shop_email_notifications(p_limit integer DEFAULT 25) keeps output notification_id,shop_id,event_type,email,attempt_count,idempotency_key,pending_slip_count. Digests catch up due 09/17 Bangkok slots once per shop/date/slot, silent during 22–08. No LINE JOIN changes.
 - Reschedule checks destination-month quota atomically; reminder reschedule semantics stay 3h. Basic/trial has no booking ceiling. apply_topup is platform-admin only; existing balances preserved.
 
@@ -33,7 +33,7 @@ Implementation note: existing link_token column is varchar(64), unchanged; 32 he
 
 ## Controller follow-up — room 2026-10-01T15:35Z
 
-Implementation/proof pending on top of e0800ee; this replaces the former email signature/output contract. Runtime cardinality remains 21; old one-input catalog identity is removed, not retained as an overload.
+Implemented/proven on fresh W-1 replay6 on top of e0800ee; this replaces the former email signature/output contract. Runtime cardinality remains 21; old one-input catalog identity is removed, not retained as an overload.
 
 - `claim_due_shop_email_notifications(p_limit integer DEFAULT 25, p_alert_kind local_service.bk01_ops_alert_kind DEFAULT NULL, p_alert_key text DEFAULT NULL, p_delivered boolean DEFAULT NULL)`.
 - SQL enum exactly `cap_unverified`, `quota_unreadable`, `breaker_open`. All alert inputs NULL => normal existing shop-email claims. All three alert inputs must be non-NULL for alert mode. Partial args or arbitrary/stale day keys fail.

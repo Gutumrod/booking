@@ -321,7 +321,7 @@ export function validateBk01MigrationSql(sql, sourceName = 'migration') {
 
   const grants = body.match(GRANT_STATEMENT) ?? [];
   for (const statement of grants) {
-    const target = statement.match(/\bon\s+(?:table|sequence|function|routine|schema)?\s*([^\s(;]+)/i);
+    const target = statement.match(/\bon\s+(?:table|sequence|function|routine|schema|type)?\s*([^\s(;]+)/i);
     if (!target) throw new Error(`${sourceName}: unable to validate GRANT/REVOKE target`);
     assertOwnedQualifiedTarget(target[1], `${sourceName}: GRANT/REVOKE`);
     assertAllowedGrantees(statement, sourceName);

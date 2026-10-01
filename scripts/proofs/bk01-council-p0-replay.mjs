@@ -1,6 +1,6 @@
 // Reproducible W-1: fresh PG17.11 fixture, pinned legacy, reviewed platform role/bootstrap,
 // actual non-superuser product runner, fail-before, rollback raw diff, reapply and real-role proofs.
-import fs from 'node:fs';import path from 'node:path';import {execFileSync} from 'node:child_process';
+import fs from 'node:fs';import path from 'node:path';import {execFileSync} from 'node:child_process';import postgres from 'postgres';
 const root=process.cwd(),bin=process.env.BK01_P0_PGBIN,dir=process.env.BK01_P0_EVIDENCE_DIR,roleSql=process.env.BK01_P0_RUNTIME_ROLE_SQL;
 const port=Number(process.env.BK01_P0_LOCAL_PORT);if(!bin||!dir||!roleSql||!Number.isInteger(port)||port<1024||port>65535)throw Error('PGBIN, fresh evidence dir, reviewed runtime role SQL and local port required');
 const data=path.join(dir,'data');if(fs.existsSync(data))throw Error('fresh data directory required; never reset existing cluster');fs.mkdirSync(dir,{recursive:true});
@@ -34,12 +34,19 @@ try{
  const url=`postgresql://operator@127.0.0.1:${port}/postgres`,env={...process.env,BK01_PLATFORM_DATABASE_URL:url,BK01_OPERATOR_LOGINS:'operator',BK01_SHARED_RUNTIME_ENV:'local',BK01_RELEASE_ID:'HOUSE-BK01-P0-SQL',BK01_P0_LOCAL_URL:url,BK01_P0_DATA_DIR:data,BK01_P0_EVIDENCE_DIR:dir};
  step('base-apply',['scripts/bk01-migrate.mjs','apply','--through','20261001140000_bk01_pack_notify_group67.sql'],env);
  step('baseline',['scripts/proofs/bk01-council-p0-pg17.mjs','baseline'],env);
+ step('p0-apply',['scripts/bk01-migrate.mjs','apply','--through','20261002120000_bk01_council_p0.sql'],env);
+ step('followup-baseline',['scripts/proofs/bk01-p0-alert-context-pg17.mjs','baseline'],env);
  step('apply',['scripts/bk01-migrate.mjs','apply'],env);
+ // Windows psql rewrites LF inside function bodies. Use the same normalized SQL transport as product runner for this runner-origin snapshot.
+ const rollbackDb=postgres(url,{max:1,prepare:false,onnotice:()=>{}});
+ try{await rollbackDb.begin(async tx=>{await tx.unsafe('SET LOCAL ROLE bk01_migrator');await tx.unsafe(fs.readFileSync('supabase/rollback/20261002130000_bk01_p0_alert_context.rollback.sql','utf8').replace(/\r\n/g,'\n'));await tx.unsafe("DELETE FROM local_service_internal.schema_migrations WHERE migration_id='20261002130000_bk01_p0_alert_context'");});}finally{await rollbackDb.end();}
+ step('followup-rollback',['scripts/proofs/bk01-p0-alert-context-pg17.mjs','rollback'],env);
  psql('operator',['-1','-c','SET LOCAL ROLE bk01_migrator;','-f',path.resolve('supabase/rollback/20261002120000_bk01_council_p0.rollback.sql'),'-c',"DELETE FROM local_service_internal.schema_migrations WHERE migration_id='20261002120000_bk01_council_p0';"]);
  step('rollback',['scripts/proofs/bk01-council-p0-pg17.mjs','rollback'],env);
  step('reapply',['scripts/bk01-migrate.mjs','apply'],env);
  step('after',['scripts/proofs/bk01-council-p0-pg17.mjs','after'],env);
  step('advanced',['scripts/proofs/bk01-council-p0-advanced-pg17.mjs'],env);
+ step('followup',['scripts/proofs/bk01-p0-alert-context-pg17.mjs'],env);
  step('surface',['scripts/proofs/bk01-p0-surface-gate.mjs'],env);
  step('rpc-arity',['scripts/proofs/bk01-app-rpc-catalog-gate.mjs'],env);
  step('runner-mutation',['scripts/proofs/bk01-p0-runner-hash-mutation.mjs'],env);

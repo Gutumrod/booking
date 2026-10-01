@@ -19,7 +19,7 @@ export const BK01_RUNTIME_ROUTE_FUNCTIONS = Object.freeze([
   'local_service.bk01_line_bind_booking_trial(text,text,text,text)',
   'local_service.finish_stripe_webhook_event(text,text,text)',
   'local_service.get_line_notification_delivery_context(uuid,integer)',
-  'local_service.claim_due_shop_email_notifications(integer)',
+  'local_service.claim_due_shop_email_notifications(integer,local_service.bk01_ops_alert_kind,text,boolean)',
   'local_service.create_booking_hold(uuid,uuid,uuid,character varying,character varying,character varying,date,time without time zone,text)',
 ]);
 
@@ -103,7 +103,7 @@ export function validateBk01RuntimeAuthority(sql, sourceName = 'SQL') {
   }
 
   for (const statement of body.match(/\bgrant\b[^;]*;/gi) ?? []) {
-    const match = statement.match(/\bgrant\s+([\s\S]*?)\s+on\s+(schema|function|routine|table|all\s+tables|all\s+functions)\s+([\s\S]*?)\s+to\s+([^;]+);/i);
+    const match = statement.match(/\bgrant\s+([\s\S]*?)\s+on\s+(schema|function|routine|type|table|all\s+tables|all\s+functions)\s+([\s\S]*?)\s+to\s+([^;]+);/i);
     if (!match) continue;
     const [, privileges, kindRaw, targetsRaw, granteesRaw] = match;
     const kind = norm(kindRaw);
@@ -120,6 +120,10 @@ export function validateBk01RuntimeAuthority(sql, sourceName = 'SQL') {
       continue;
     }
 
+    if (kind === 'type') {
+      if (norm(targetsRaw) !== 'local_service.bk01_ops_alert_kind' || !/^usage$/i.test(privileges.trim())) throw new Error(`${sourceName} grants bk01_runtime unapproved type authority`);
+      continue;
+    }
     if (kind !== 'function' && kind !== 'routine') {
       throw new Error(`${sourceName} grants bk01_runtime table or broad object authority`);
     }
@@ -128,7 +132,9 @@ export function validateBk01RuntimeAuthority(sql, sourceName = 'SQL') {
     }
     const targets = splitTargets(targetsRaw).map(norm);
     for (const target of targets) {
-      if (!functionAllowlist.has(target)) {
+      const historicalEmail = target === 'local_service.claim_due_shop_email_notifications(integer)'
+        && ['20261001140000_bk01_pack_notify_group67.sql','20261002120000_bk01_council_p0.sql'].includes(sourceName);
+      if (!functionAllowlist.has(target) && !historicalEmail) {
         throw new Error(`${sourceName} grants bk01_runtime non-allowlisted function: ${target}`);
       }
     }
