@@ -60,6 +60,8 @@ export interface DashboardShop {
   // The dashboard shows DEFAULT_CUSTOMER_CANCEL_BEFORE_HOURS while it is null,
   // and only the owner may write it (update_shop_settings refuses anyone else).
   customerCancelBeforeHours: number | null;
+  // B6b: the customer reschedule window, same shape and same NULL-is-unset rule.
+  customerRescheduleBeforeHours: number | null;
 }
 
 export interface DashboardService {
@@ -189,6 +191,7 @@ interface RawShop {
   require_deposit: boolean | null;
   default_deposit_amount: number | string | null;
   customer_cancel_before_hours: number | null;
+  customer_reschedule_before_hours: number | null;
 }
 
 interface RawStaff {
@@ -240,6 +243,26 @@ interface RawSubscription {
   cancel_at_period_end: boolean;
 }
 
+/**
+ * Columns the dashboard's shop read needs: the profile and payment fields the
+ * settings tab edits, plus the two customer policy windows (B6/B6b). Kept in one
+ * place so the read stays scoped to a single named list.
+ */
+const SHOP_DASHBOARD_COLUMNS = [
+  'id',
+  'name',
+  'slug',
+  'phone',
+  'address',
+  'promptpay_number',
+  'promptpay_name',
+  'line_oa_id',
+  'require_deposit',
+  'default_deposit_amount',
+  'customer_cancel_before_hours',
+  'customer_reschedule_before_hours',
+].join(', ');
+
 function firstRelation<T>(value: T | T[] | null): T | null {
   return Array.isArray(value) ? value[0] ?? null : value;
 }
@@ -265,7 +288,7 @@ export async function fetchAdminDashboardData(): Promise<AdminDashboardData> {
   const [shopResult, bookingsResult, servicesResult, staffResult, entitlementResult, schedulesResult, holidaysResult, subscriptionResult] = await Promise.all([
     supabase
       .from('shops')
-      .select('id, name, slug, phone, address, promptpay_number, promptpay_name, line_oa_id, require_deposit, default_deposit_amount, customer_cancel_before_hours')
+      .select(SHOP_DASHBOARD_COLUMNS)
       .eq('id', membership.shop_id)
       .single(),
     supabase
@@ -431,6 +454,9 @@ export async function fetchAdminDashboardData(): Promise<AdminDashboardData> {
       customerCancelBeforeHours: rawShop.customer_cancel_before_hours == null
         ? null
         : Number(rawShop.customer_cancel_before_hours),
+      customerRescheduleBeforeHours: rawShop.customer_reschedule_before_hours == null
+        ? null
+        : Number(rawShop.customer_reschedule_before_hours),
     },
     bookings,
     services: ((servicesResult.data ?? []) as unknown as RawService[]).map((service) => ({
@@ -489,12 +515,13 @@ export interface ShopSettingsInput {
   promptpayName: string;
   lineOaId: string;
   /**
-   * B6: customer cancel/reschedule window, whole hours >= 0. Required on this
-   * path, because the RPC writes it in the same owner-only statement as the
-   * profile fields -- there is no second way in, and dropping it would silently
-   * leave the policy unset (which is exactly the B6 defect).
+   * B6/B6b: customer cancel/reschedule windows, whole hours >= 0. Required on
+   * this path, because the RPC writes them in the same owner-only statement as
+   * the profile fields -- there is no second way in, and dropping either would
+   * silently leave that policy unset (which is exactly the B6/B6b defect).
    */
   customerCancelBeforeHours: number;
+  customerRescheduleBeforeHours: number;
 }
 
 export async function updateShopSettings(shopId: string, input: ShopSettingsInput): Promise<void> {
@@ -507,6 +534,7 @@ export async function updateShopSettings(shopId: string, input: ShopSettingsInpu
     p_promptpay_name: input.promptpayName,
     p_line_oa_id: input.lineOaId,
     p_customer_cancel_before_hours: input.customerCancelBeforeHours,
+    p_customer_reschedule_before_hours: input.customerRescheduleBeforeHours,
   });
 
   if (error) throw new Error(error.message);

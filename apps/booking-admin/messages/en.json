@@ -379,7 +379,13 @@
     "cancelPolicyLeadTimeLabel": "Cancel ahead of time (hours) *",
     "cancelPolicyLeadTimeHint": "Whole hours, 0 or more (0 = cancellable right up to the appointment) · The customer can cancel or reschedule until this many hours before the appointment.",
     "cancelPolicyDefaultNote": "The system default is 24 hours and the shop may change it. This value only takes effect after the migration is applied (the controller assigns its number).",
-    "cancelPolicyRequired": "Enter whole hours of 0 or more for the cancel-ahead window."
+    "cancelPolicyRequired": "Enter whole hours of 0 or more for the cancel-ahead window.",
+    "reschedulePolicyLeadTimeLabel": "Reschedule ahead of time (hours) *",
+    "reschedulePolicyLeadTimeHint": "Whole hours, 0 or more (0 = reschedulable right up to the appointment) · The customer can reschedule until this many hours before the appointment.",
+    "reschedulePolicyDefaultNote": "The system default is 12 hours and the shop may change it. This value only takes effect after the migration is applied (the controller assigns its number).",
+    "reschedulePolicyRequired": "Enter whole hours of 0 or more for the reschedule-ahead window.",
+    "noShowNotYetAllowed": "The appointment time has not arrived yet - a no-show can only be recorded after it has passed.",
+    "noShowAfterAppointment": "after the appointment"
   },
   "tickets": {
     "backToDashboard": "Back to main dashboard",

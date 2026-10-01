@@ -7,6 +7,7 @@ import { useTranslations } from 'next-intl';
 
 import { LanguageToggle } from '@/components/language-toggle';
 import { supabase } from '@/lib/supabase';
+import { manageBookingErrorMessage, type ManageBookingErrorMessages } from '@/lib/manage-booking-error';
 
 function ManageBookingForm() {
   const t = useTranslations('manageBooking');
@@ -20,11 +21,30 @@ function ManageBookingForm() {
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
 
+  // B6b: the customer never sees raw database text. Every failure is mapped to
+  // one of these plain-language strings, and anything unrecognised falls back to
+  // outcomeFailed instead of echoing the server message.
+  const errorMessages: ManageBookingErrorMessages = {
+    slotTaken: t('slotTaken'),
+    outsideAvailability: t('outsideAvailability'),
+    dateClosed: t('dateClosed'),
+    staffInactive: t('staffInactive'),
+    policyClosed: t('policyClosed'),
+    invalidLink: t('invalidLink'),
+    outcomeFailed: t('outcomeFailed'),
+  };
+
   async function cancel() {
     setBusy(true); setMessage('');
     const { data, error } = await supabase.rpc('customer_cancel_booking', { p_booking_id: bookingId, p_recovery_token: token, p_reason: reason });
     const result = data as { ok?: boolean; error?: string } | null;
-    setMessage(error?.message || (result?.ok === false ? result.error || t('invalidLink') : t('cancelled')));
+    if (error) {
+      setMessage(manageBookingErrorMessage({ code: error.code, message: error.message }, errorMessages));
+    } else if (result?.ok === false) {
+      setMessage(manageBookingErrorMessage({ message: result.error }, errorMessages));
+    } else {
+      setMessage(t('cancelled'));
+    }
     setBusy(false);
   }
 
@@ -32,7 +52,13 @@ function ManageBookingForm() {
     setBusy(true); setMessage('');
     const { data, error } = await supabase.rpc('customer_reschedule_booking', { p_booking_id: bookingId, p_recovery_token: token, p_booking_date: date, p_start_time: time, p_reason: reason });
     const result = data as { ok?: boolean; error?: string } | null;
-    setMessage(error?.message || (result?.ok === false ? result.error || t('invalidLink') : t('rescheduled')));
+    if (error) {
+      setMessage(manageBookingErrorMessage({ code: error.code, message: error.message }, errorMessages));
+    } else if (result?.ok === false) {
+      setMessage(manageBookingErrorMessage({ message: result.error }, errorMessages));
+    } else {
+      setMessage(t('rescheduled'));
+    }
     setBusy(false);
   }
 

@@ -151,7 +151,13 @@
     "reschedule": "Reschedule",
     "cancelled": "Booking cancelled",
     "rescheduled": "Booking rescheduled",
-    "invalidLink": "This booking-management link is invalid or incomplete"
+    "invalidLink": "This booking-management link is invalid or incomplete",
+    "slotTaken": "That time slot has just been taken. Please choose another time.",
+    "outsideAvailability": "That time is outside this staff member's working hours. Please choose another time.",
+    "dateClosed": "The shop is closed on the date you picked. Please choose another date.",
+    "staffInactive": "This staff member is no longer taking bookings. Please contact the shop.",
+    "policyClosed": "The shop's window for changing this booking has closed. Please contact the shop directly.",
+    "outcomeFailed": "That action failed. Please try again or contact the shop."
   },
   "support": {
     "title": "Support & contact",

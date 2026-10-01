@@ -40,7 +40,9 @@ import {
   CANCEL_POLICY_HOURS_INPUT_PROPS,
   CANCEL_POLICY_HOURS_RULES,
   DEFAULT_CUSTOMER_CANCEL_BEFORE_HOURS,
+  DEFAULT_CUSTOMER_RESCHEDULE_BEFORE_HOURS,
 } from '@/lib/cancel-policy';
+import { hasAppointmentStarted } from '@/lib/booking-outcome-gate';
 import { computeReadiness, isShopReady, needsMerchantAttention, type ReadinessKey } from '@/lib/readiness';
 import { TimeField } from '@/components/time-field';
 import { mergeServerSchedules } from '@/lib/schedule-merge';
@@ -212,11 +214,22 @@ export default function AdminDashboard() {
   const [defaultDepositAmount, setDefaultDepositAmount] = useState<number | null>(null);
   // B6: raw string while editing (KMO-08), parsed and validated at submit.
   const [cancelPolicyHours, setCancelPolicyHours] = useState('');
+  // B6b: same shape for the reschedule window.
+  const [reschedulePolicyHours, setReschedulePolicyHours] = useState('');
 
   // Special Holidays
   const [specialHolidayDate, setSpecialHolidayDate] = useState('');
   const [specialHolidayReason, setSpecialHolidayReason] = useState('');
   const [holidaysList, setHolidaysList] = useState<DashboardHoliday[]>([]);
+
+  // B10: the no-show action is allowed only once the appointment has started.
+  // Ticks once a minute so a button opens on its own when the time passes while
+  // the shop keeps the page open; nothing here changes any booking by itself.
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNowMs(Date.now()), 60_000);
+    return () => clearInterval(timer);
+  }, []);
 
   // Modals & Notices
   const [newStaffName, setNewStaffName] = useState('');
@@ -327,6 +340,7 @@ export default function AdminDashboard() {
       // the shop always has a usable value on screen. The stored value is left
       // untouched until the shop actually saves it.
       setCancelPolicyHours(String(data.shop.customerCancelBeforeHours ?? DEFAULT_CUSTOMER_CANCEL_BEFORE_HOURS));
+      setReschedulePolicyHours(String(data.shop.customerRescheduleBeforeHours ?? DEFAULT_CUSTOMER_RESCHEDULE_BEFORE_HOURS));
       setServices(data.services);
       setStaffList(data.staff);
       setSchedules((prev) => mergeServerSchedules(prev, data.schedules, dirtyStaffIdsRef.current));
@@ -435,6 +449,16 @@ export default function AdminDashboard() {
 
   const handleBookingOutcome = async (bookingId: string, outcome: 'completed' | 'no_show') => {
     if (!tenantSnapshotReady || shopRole === 'staff') return;
+    // B10: the no-show decision waits for the appointment to have started. The
+    // guard is repeated here (not only on the button) so no other caller can
+    // reach the RPC early, and it refuses before the mutation flag is set.
+    if (outcome === 'no_show') {
+      const booking = bookings.find((b) => b.id === bookingId);
+      if (!booking || !hasAppointmentStarted({ date: booking.date, time: booking.time }, Date.now())) {
+        setBookingError(t('noShowNotYetAllowed'));
+        return;
+      }
+    }
     setMutatingBookingId(bookingId);
     setBookingError('');
     try {
@@ -525,12 +549,17 @@ export default function AdminDashboard() {
     e.preventDefault();
     if (!tenantSnapshotReady || !shopId || shopRole !== 'owner') return;
 
-    // B6: the window is a whole number of hours >= 0; an empty or fractional
-    // field is refused here rather than silently coerced. Validated before the
-    // mutation flag is set, so a bad value cannot leave the form stuck busy.
+    // B6/B6b: both windows are whole hours >= 0; an empty or fractional field is
+    // refused here rather than silently coerced. Validated before the mutation
+    // flag is set, so a bad value cannot leave the form stuck busy.
     const cancelHours = commitNumericField(cancelPolicyHours, CANCEL_POLICY_HOURS_RULES);
     if (cancelHours.error !== null || cancelHours.value === null) {
       setManagementError(t('cancelPolicyRequired'));
+      return;
+    }
+    const rescheduleHours = commitNumericField(reschedulePolicyHours, CANCEL_POLICY_HOURS_RULES);
+    if (rescheduleHours.error !== null || rescheduleHours.value === null) {
+      setManagementError(t('reschedulePolicyRequired'));
       return;
     }
 
@@ -545,6 +574,7 @@ export default function AdminDashboard() {
         promptpayName,
         lineOaId,
         customerCancelBeforeHours: cancelHours.value,
+        customerRescheduleBeforeHours: rescheduleHours.value,
       });
       await loadDashboardBookings(false);
       setShopSettingsSaved(true);
@@ -1148,11 +1178,21 @@ export default function AdminDashboard() {
                                 className="bg-blue-500/10 hover:bg-blue-500/20 text-blue-300 border border-blue-500/30 px-3 py-1.5 rounded-lg font-semibold text-xs">
                                 {t('markCompleted')}
                               </button>
-                              <button type="button" onClick={() => handleBookingOutcome(b.id, 'no_show')}
-                                disabled={mutatingBookingId === b.id}
-                                className="bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 border border-purple-500/30 px-3 py-1.5 rounded-lg font-semibold text-xs">
-                                {t('markNoShow')}
-                              </button>
+                              {/* B10: only once the appointment time has passed. */}
+                              {hasAppointmentStarted({ date: b.date, time: b.time }, nowMs) ? (
+                                <button type="button" onClick={() => handleBookingOutcome(b.id, 'no_show')}
+                                  disabled={mutatingBookingId === b.id}
+                                  className="bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 border border-purple-500/30 px-3 py-1.5 rounded-lg font-semibold text-xs">
+                                  {t('markNoShow')}
+                                </button>
+                              ) : (
+                                <span
+                                  className="bg-slate-800/60 text-slate-500 border border-slate-700/60 px-3 py-1.5 rounded-lg font-semibold text-xs cursor-not-allowed"
+                                  title={t('noShowNotYetAllowed')}
+                                >
+                                  {t('markNoShow')} · {t('noShowAfterAppointment')}
+                                </span>
+                              )}
                             </>
                           )}
                           {b.status === 'cancelled' && (
@@ -1863,6 +1903,20 @@ export default function AdminDashboard() {
                   />
                   <p className="text-[10px] text-slate-400 mt-1">{t('cancelPolicyLeadTimeHint')}</p>
                   <p className="text-[10px] text-slate-500 mt-1">{t('cancelPolicyDefaultNote')}</p>
+                </div>
+
+                <div>
+                  <label className="text-xs text-slate-300 block mb-1 font-semibold">{t('reschedulePolicyLeadTimeLabel')}</label>
+                  <input
+                    {...CANCEL_POLICY_HOURS_INPUT_PROPS}
+                    required
+                    disabled={shopRole !== 'owner'}
+                    value={reschedulePolicyHours}
+                    onChange={(e) => setReschedulePolicyHours(e.target.value)}
+                    className="w-full max-w-[12rem] bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs font-mono text-amber-300 font-bold focus:outline-none focus:border-amber-500 disabled:opacity-60"
+                  />
+                  <p className="text-[10px] text-slate-400 mt-1">{t('reschedulePolicyLeadTimeHint')}</p>
+                  <p className="text-[10px] text-slate-500 mt-1">{t('reschedulePolicyDefaultNote')}</p>
                 </div>
               </div>
             </div>
