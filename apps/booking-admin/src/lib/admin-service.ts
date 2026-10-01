@@ -6,6 +6,13 @@ import {
   type EntitlementState,
   type EntitlementStatusRow,
 } from './entitlement-status';
+import {
+  DEPOSIT_REFUND_HISTORY_RPC,
+  DEPOSIT_REFUND_RPC,
+  type DepositRefundAuditEntry,
+} from './refund-eligibility';
+
+export type { DepositRefundAuditEntry } from './refund-eligibility';
 
 export type BookingStatus =
   | 'hold'
@@ -613,6 +620,47 @@ export async function rejectBookingDeposit(bookingId: string, reason: string): P
   });
 
   if (error) throw new Error(error.message);
+}
+
+/**
+ * B8 — record that the shop refunded a deposit off-system.
+ *
+ * The platform never moves the money: the deposit went to the shop's own
+ * PromptPay account, so the shop transfers the refund back itself and this call
+ * only writes the record (who, when, reference, optional note) plus the audit
+ * row. The RPC refuses any booking that is not eligible, so the rule is not
+ * enforced only in the browser.
+ */
+export async function recordBookingDepositRefund(
+  bookingId: string,
+  reference: string,
+  note?: string,
+): Promise<void> {
+  const { error } = await supabase.rpc(DEPOSIT_REFUND_RPC, {
+    p_booking_id: bookingId,
+    p_refund_reference: reference,
+    p_note: note && note.trim() ? note.trim() : null,
+  });
+  if (error) throw new Error(error.message);
+}
+
+/**
+ * B8 — the audit trail behind a refunded deposit. The RPC returns the rows the
+ * trigger recorded in local_service.booking_status_history; an empty array means
+ * this booking has no recorded refund history to show.
+ */
+export async function fetchDepositRefundHistory(bookingId: string): Promise<DepositRefundAuditEntry[]> {
+  const { data, error } = await supabase.rpc(DEPOSIT_REFUND_HISTORY_RPC, {
+    p_booking_id: bookingId,
+  });
+  if (error) throw new Error(error.message);
+
+  return ((data ?? []) as Array<Record<string, unknown>>).map((row) => ({
+    at: String(row.at ?? row.created_at ?? ''),
+    by: row.by === null || row.by === undefined ? null : String(row.by),
+    reference: String(row.reference ?? ''),
+    note: String(row.note ?? ''),
+  }));
 }
 
 export async function createSignedDepositSlipUrl(objectPath: string): Promise<string> {
