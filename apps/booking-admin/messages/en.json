@@ -138,7 +138,7 @@
     "statToday": "Bookings today ({date})",
     "statUpcoming": "All upcoming bookings",
     "statPendingSlip": "Deposit slips awaiting review",
-    "statDepositCollected": "Total deposit collected",
+    "statDepositCollected": "Deposit total on confirmed bookings",
     "countItems": "{count} items",
     "bookingsTitle": "Booking schedule & slip review",
     "bookingsSubtitle": "View upcoming bookings, filter by date, and approve customer deposit slips.",
@@ -208,7 +208,7 @@
     "slipTitle": "Review deposit slip (#{code})",
     "slipCloseTitle": "Close",
     "slipNoUrl": "No slip URL for this booking",
-    "slipAmountMatches": "🛡️ Transfer amount ฿{amount}.00 matches the shop PromptPay",
+    "slipAmountMatches": "Deposit configured for this booking: ฿{amount}.00",
     "slipCustomer": "Customer: ",
     "slipService": "Service: ",
     "slipAmountInSlip": "Slip amount: ",
@@ -372,7 +372,14 @@
     "numericFieldInvalid": "Please enter valid numbers for duration, price and deposit",
     "depositMustBeSet": "Enter the deposit amount for this service (use 0 for no deposit). A blank deposit cannot be saved yet.",
     "depositNotSet": "not set",
-    "perMonth": "/month"
+    "perMonth": "/month",
+    "slipVerifyReminder": "Please check the amount and the account name in the shop's own banking app before approving (the system does not verify the amount for you).",
+    "slipAmountMatchesNote": "The amount shown above is this booking's configured deposit, not a value read from the slip. Verify the real amount in the shop's banking app.",
+    "cancelPolicyTitle": "Customer cancel / reschedule policy",
+    "cancelPolicyLeadTimeLabel": "Cancel ahead of time (hours) *",
+    "cancelPolicyLeadTimeHint": "Whole hours, 0 or more (0 = cancellable right up to the appointment) · The customer can cancel or reschedule until this many hours before the appointment.",
+    "cancelPolicyDefaultNote": "The system default is 24 hours and the shop may change it. This value only takes effect after the migration is applied (the controller assigns its number).",
+    "cancelPolicyRequired": "Enter whole hours of 0 or more for the cancel-ahead window."
   },
   "tickets": {
     "backToDashboard": "Back to main dashboard",

@@ -54,6 +54,12 @@ export interface DashboardShop {
   requireDeposit: boolean;
   // null = not configured; never coerced to 0 (Amendment B1).
   defaultDepositAmount: number | null;
+  // B6: the customer cancel/reschedule window held on the shop row. null = the
+  // shop was never configured, which is the state every existing shop is in
+  // (local_service.customer_cancel_booking raises "policy is not configured").
+  // The dashboard shows DEFAULT_CUSTOMER_CANCEL_BEFORE_HOURS while it is null,
+  // and only the owner may write it (update_shop_settings refuses anyone else).
+  customerCancelBeforeHours: number | null;
 }
 
 export interface DashboardService {
@@ -182,6 +188,7 @@ interface RawShop {
   line_oa_id: string | null;
   require_deposit: boolean | null;
   default_deposit_amount: number | string | null;
+  customer_cancel_before_hours: number | null;
 }
 
 interface RawStaff {
@@ -258,7 +265,7 @@ export async function fetchAdminDashboardData(): Promise<AdminDashboardData> {
   const [shopResult, bookingsResult, servicesResult, staffResult, entitlementResult, schedulesResult, holidaysResult, subscriptionResult] = await Promise.all([
     supabase
       .from('shops')
-      .select('id, name, slug, phone, address, promptpay_number, promptpay_name, line_oa_id, require_deposit, default_deposit_amount')
+      .select('id, name, slug, phone, address, promptpay_number, promptpay_name, line_oa_id, require_deposit, default_deposit_amount, customer_cancel_before_hours')
       .eq('id', membership.shop_id)
       .single(),
     supabase
@@ -418,6 +425,12 @@ export async function fetchAdminDashboardData(): Promise<AdminDashboardData> {
       role: membership.role as DashboardShop['role'],
       requireDeposit: rawShop.require_deposit ?? true,
       defaultDepositAmount: rawShop.default_deposit_amount == null ? null : Number(rawShop.default_deposit_amount),
+      // B6: NULL stays NULL -- the dashboard substitutes the Owner-approved
+      // default only for display, and never writes that substitution back as if
+      // it were the shop's own choice.
+      customerCancelBeforeHours: rawShop.customer_cancel_before_hours == null
+        ? null
+        : Number(rawShop.customer_cancel_before_hours),
     },
     bookings,
     services: ((servicesResult.data ?? []) as unknown as RawService[]).map((service) => ({
@@ -475,6 +488,13 @@ export interface ShopSettingsInput {
   promptpayNumber: string;
   promptpayName: string;
   lineOaId: string;
+  /**
+   * B6: customer cancel/reschedule window, whole hours >= 0. Required on this
+   * path, because the RPC writes it in the same owner-only statement as the
+   * profile fields -- there is no second way in, and dropping it would silently
+   * leave the policy unset (which is exactly the B6 defect).
+   */
+  customerCancelBeforeHours: number;
 }
 
 export async function updateShopSettings(shopId: string, input: ShopSettingsInput): Promise<void> {
@@ -486,6 +506,7 @@ export async function updateShopSettings(shopId: string, input: ShopSettingsInpu
     p_promptpay_number: input.promptpayNumber,
     p_promptpay_name: input.promptpayName,
     p_line_oa_id: input.lineOaId,
+    p_customer_cancel_before_hours: input.customerCancelBeforeHours,
   });
 
   if (error) throw new Error(error.message);

@@ -36,6 +36,11 @@ import { PreviewCustomerPageLink, useSelectedShopIdentity } from '@/components/p
 import { customerPageUrl, isExactShopIdentityMatch } from '@/lib/customer-page-url';
 import { createLatestRequestGate } from '@/lib/latest-request-gate';
 import { commitNumericField, DURATION_INPUT_PROPS, DURATION_RULES } from '@/lib/numeric-field';
+import {
+  CANCEL_POLICY_HOURS_INPUT_PROPS,
+  CANCEL_POLICY_HOURS_RULES,
+  DEFAULT_CUSTOMER_CANCEL_BEFORE_HOURS,
+} from '@/lib/cancel-policy';
 import { computeReadiness, isShopReady, needsMerchantAttention, type ReadinessKey } from '@/lib/readiness';
 import { TimeField } from '@/components/time-field';
 import { mergeServerSchedules } from '@/lib/schedule-merge';
@@ -205,6 +210,8 @@ export default function AdminDashboard() {
   const [lineOaId, setLineOaId] = useState('');
   const [requireDeposit, setRequireDeposit] = useState(true);
   const [defaultDepositAmount, setDefaultDepositAmount] = useState<number | null>(null);
+  // B6: raw string while editing (KMO-08), parsed and validated at submit.
+  const [cancelPolicyHours, setCancelPolicyHours] = useState('');
 
   // Special Holidays
   const [specialHolidayDate, setSpecialHolidayDate] = useState('');
@@ -316,6 +323,10 @@ export default function AdminDashboard() {
       setRequireDeposit(data.shop.requireDeposit);
       setDefaultDepositAmount(data.shop.defaultDepositAmount);
       setLineOaId(data.shop.lineOaId);
+      // B6: NULL in the database is displayed as the Owner-approved default, so
+      // the shop always has a usable value on screen. The stored value is left
+      // untouched until the shop actually saves it.
+      setCancelPolicyHours(String(data.shop.customerCancelBeforeHours ?? DEFAULT_CUSTOMER_CANCEL_BEFORE_HOURS));
       setServices(data.services);
       setStaffList(data.staff);
       setSchedules((prev) => mergeServerSchedules(prev, data.schedules, dirtyStaffIdsRef.current));
@@ -514,6 +525,15 @@ export default function AdminDashboard() {
     e.preventDefault();
     if (!tenantSnapshotReady || !shopId || shopRole !== 'owner') return;
 
+    // B6: the window is a whole number of hours >= 0; an empty or fractional
+    // field is refused here rather than silently coerced. Validated before the
+    // mutation flag is set, so a bad value cannot leave the form stuck busy.
+    const cancelHours = commitNumericField(cancelPolicyHours, CANCEL_POLICY_HOURS_RULES);
+    if (cancelHours.error !== null || cancelHours.value === null) {
+      setManagementError(t('cancelPolicyRequired'));
+      return;
+    }
+
     setMutatingResourceId('shop-settings');
     setManagementError('');
     try {
@@ -524,6 +544,7 @@ export default function AdminDashboard() {
         promptpayNumber,
         promptpayName,
         lineOaId,
+        customerCancelBeforeHours: cancelHours.value,
       });
       await loadDashboardBookings(false);
       setShopSettingsSaved(true);
@@ -1823,6 +1844,27 @@ export default function AdminDashboard() {
                   </p>
                 </div>
               </div>
+
+              <div className="bg-slate-950 border border-amber-500/30 rounded-xl p-5 space-y-4 md:col-span-2">
+                <div className="flex items-center gap-2 border-b border-slate-800 pb-3">
+                  <Clock className="w-5 h-5 text-amber-400" />
+                  <h3 className="font-bold text-sm text-white">{t('cancelPolicyTitle')}</h3>
+                </div>
+
+                <div>
+                  <label className="text-xs text-slate-300 block mb-1 font-semibold">{t('cancelPolicyLeadTimeLabel')}</label>
+                  <input
+                    {...CANCEL_POLICY_HOURS_INPUT_PROPS}
+                    required
+                    disabled={shopRole !== 'owner'}
+                    value={cancelPolicyHours}
+                    onChange={(e) => setCancelPolicyHours(e.target.value)}
+                    className="w-full max-w-[12rem] bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs font-mono text-amber-300 font-bold focus:outline-none focus:border-amber-500 disabled:opacity-60"
+                  />
+                  <p className="text-[10px] text-slate-400 mt-1">{t('cancelPolicyLeadTimeHint')}</p>
+                  <p className="text-[10px] text-slate-500 mt-1">{t('cancelPolicyDefaultNote')}</p>
+                </div>
+              </div>
             </div>
             {shopRole === 'owner' && (
               <section className="border-t border-slate-800 pt-5 space-y-3">
@@ -2040,15 +2082,18 @@ export default function AdminDashboard() {
               ) : (
                 <p className="py-10 text-xs text-rose-300">{t('slipNoUrl')}</p>
               )}
-              <div className="mt-2 bg-emerald-500/10 border border-emerald-500/30 p-2 rounded text-[10px] text-emerald-400 font-medium">
-                {t('slipAmountMatches', { amount: selectedSlipBooking.depositPrice })}
+              <div className="mt-2 bg-slate-800/80 border border-slate-600/60 p-2 rounded text-[10px] text-amber-200 font-medium">
+                {t('slipVerifyReminder')}
               </div>
+              <p className="mt-2 text-[10px] text-slate-400">
+                {t('slipAmountMatchesNote')}
+              </p>
             </div>
 
             <div className="text-xs space-y-1 text-slate-300">
               <p>{t('slipCustomer')}<span className="font-semibold text-white">{selectedSlipBooking.customerName}</span> ({selectedSlipBooking.phone})</p>
               <p>{t('slipService')}<span className="text-white">{selectedSlipBooking.serviceName}</span></p>
-              <p>{t('slipAmountInSlip')}<span className="font-mono font-bold text-emerald-400">฿{selectedSlipBooking.depositPrice}.00</span></p>
+              <p>{t('slipAmountMatches', { amount: selectedSlipBooking.depositPrice })}</p>
             </div>
 
             <div className="space-y-2 pt-2">
