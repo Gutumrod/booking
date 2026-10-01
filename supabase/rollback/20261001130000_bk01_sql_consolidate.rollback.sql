@@ -23,6 +23,77 @@ DROP TRIGGER IF EXISTS trg_enqueue_shop_deposit_notification ON local_service.bo
 DROP FUNCTION IF EXISTS local_service.enqueue_shop_deposit_notification();
 ALTER TABLE local_service.bookings DROP COLUMN refunded_at, DROP COLUMN refunded_by, DROP COLUMN refund_reference, DROP COLUMN refund_note;
 
+-- Restore the original deposit rejection role and behavior.
+CREATE OR REPLACE FUNCTION local_service.reject_deposit_slip(
+    p_booking_id uuid,
+    p_reason text DEFAULT NULL::text
+) RETURNS json
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, local_service
+AS $function$
+DECLARE
+    v_booking local_service.bookings%ROWTYPE;
+    v_terminal boolean;
+    v_reason text := COALESCE(NULLIF(btrim(p_reason), ''), 'Slip Rejected by Shop');
+BEGIN
+    SELECT * INTO v_booking
+      FROM local_service.bookings
+     WHERE id = p_booking_id
+     FOR UPDATE;
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'Booking not found';
+    END IF;
+    IF local_service_internal.request_user_id() IS NULL
+       OR NOT local_service.is_shop_member(v_booking.shop_id) THEN
+        RAISE EXCEPTION USING ERRCODE='42501', MESSAGE='Not authorized for this shop';
+    END IF;
+    IF v_booking.status <> 'pending_review' OR v_booking.deposit_status <> 'submitted' THEN
+        RAISE EXCEPTION 'Only submitted deposit slips can be rejected';
+    END IF;
+
+    v_terminal := v_booking.queue_released_at IS NOT NULL OR v_booking.end_timestamptz <= now();
+
+    IF v_terminal THEN
+        UPDATE local_service.bookings
+           SET status = 'cancelled',
+               deposit_status = 'rejected',
+               updated_at = now()
+         WHERE id = p_booking_id;
+    ELSE
+        UPDATE local_service.bookings
+           SET status = 'hold',
+               deposit_status = 'rejected',
+               expires_at = now() + interval '15 minutes',
+               updated_at = now()
+         WHERE id = p_booking_id;
+    END IF;
+
+    INSERT INTO local_service.booking_status_history (
+        booking_id, old_status, new_status, old_deposit_status, new_deposit_status, changed_by, reason
+    ) VALUES (
+        p_booking_id, v_booking.status,
+        CASE WHEN v_terminal THEN 'cancelled' ELSE 'hold' END,
+        v_booking.deposit_status, 'rejected', local_service_internal.request_user_id(),
+        CASE WHEN v_terminal THEN v_reason || ' (past appointment; closed terminally)'
+             ELSE v_reason END
+    );
+
+    RETURN json_build_object(
+        'success', true,
+        'status', CASE WHEN v_terminal THEN 'cancelled' ELSE 'hold' END,
+        'deposit_status', 'rejected',
+        'message', CASE WHEN v_terminal
+            THEN 'Slip rejected; appointment has passed and booking was closed. Please book again.'
+            ELSE 'Slip rejected, hold reset to 15 minutes' END
+    );
+END;
+$function$;
+
+REVOKE ALL ON FUNCTION local_service.reject_deposit_slip(uuid,text) FROM PUBLIC, anon, service_role, bk01_runtime;
+GRANT EXECUTE ON FUNCTION local_service.reject_deposit_slip(uuid,text) TO authenticated;
+
 -- Normalize the notification CHECK to its pre-task shape if rolling back an
 -- earlier draft that had added email event values.
 ALTER TABLE local_service.line_notification_logs DROP CONSTRAINT IF EXISTS line_notification_logs_event_type_check;
@@ -45,6 +116,8 @@ BEGIN
     FROM due WHERE l.id=due.id RETURNING l.*;
 END;
 $$;
+REVOKE ALL ON FUNCTION local_service.claim_due_line_notifications(integer) FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION local_service.claim_due_line_notifications(integer) TO service_role,bk01_runtime;
 
 CREATE OR REPLACE FUNCTION local_service.customer_reschedule_booking(
   p_booking_id uuid,p_recovery_token text,p_booking_date date,p_start_time time,p_reason text
@@ -72,6 +145,18 @@ BEGIN
 END; $$;
 REVOKE ALL ON FUNCTION local_service.customer_reschedule_booking(uuid,text,date,time,text) FROM PUBLIC,authenticated,service_role,bk01_runtime;
 GRANT EXECUTE ON FUNCTION local_service.customer_reschedule_booking(uuid,text,date,time,text) TO anon;
+
+-- Restore the pre-consolidation live badge predicate from migration 20261001023000.
+CREATE OR REPLACE FUNCTION local_service.bk01_pending_past_appointment_count(p_shop_id uuid)
+RETURNS integer LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,local_service AS $$
+BEGIN
+  IF local_service_internal.request_user_id() IS NULL
+     OR NOT local_service.is_shop_member(p_shop_id) THEN
+    RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='Not authorized for this shop';
+  END IF;
+  RETURN (SELECT count(*)::integer FROM local_service.bookings
+          WHERE shop_id=p_shop_id AND status='pending_review' AND end_timestamptz<now());
+END; $$;
 
 CREATE OR REPLACE FUNCTION local_service.set_booking_outcome(p_booking_id uuid,p_outcome text,p_reason text DEFAULT NULL)
 RETURNS json LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,local_service AS $$

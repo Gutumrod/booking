@@ -1,15 +1,25 @@
 import crypto from 'node:crypto';
-import { readFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 import postgres from 'postgres';
+import { BK01_RUNTIME_EFFECTIVE_FUNCTIONS, validateBk01RuntimeEffectiveExecuteSet } from '../lib/bk01-runtime-allowlist.mjs';
 
 const mode = process.argv[2];
-if (!['baseline', 'final'].includes(mode)) throw new Error('Usage: node scripts/proofs/bk01-sql-consolidate-pg17.mjs baseline|final');
+if (!['baseline', 'fail-before', 'final'].includes(mode)) throw new Error('Usage: node scripts/proofs/bk01-sql-consolidate-pg17.mjs baseline|fail-before|final');
 if (process.env.BK01_SHARED_RUNTIME_ENV !== 'local') throw new Error('Refusing non-local environment');
 const url = process.env.BK01_SQL_CONSOLIDATE_DATABASE_URL;
 if (!url) throw new Error('BK01_SQL_CONSOLIDATE_DATABASE_URL is required');
+const runtimeUrl = process.env.BK01_SQL_CONSOLIDATE_RUNTIME_DATABASE_URL;
+if (!runtimeUrl) throw new Error('BK01_SQL_CONSOLIDATE_RUNTIME_DATABASE_URL is required');
+const aclBaselineFile = process.env.BK01_SQL_CONSOLIDATE_ACL_BASELINE_FILE;
+if (!aclBaselineFile) throw new Error('BK01_SQL_CONSOLIDATE_ACL_BASELINE_FILE is required');
 const parsed = new URL(url);
-if (!['127.0.0.1', 'localhost'].includes(parsed.hostname) || !parsed.pathname.slice(1).startsWith('booking')) throw new Error('Refusing database outside local booking* scaffold');
+const parsedRuntime = new URL(runtimeUrl);
+if (!['127.0.0.1', 'localhost'].includes(parsed.hostname) || !parsed.pathname.slice(1).startsWith('booking')
+    || !['127.0.0.1', 'localhost'].includes(parsedRuntime.hostname) || parsedRuntime.pathname !== parsed.pathname) {
+  throw new Error('Refusing database outside the same local booking* scaffold');
+}
 const db = postgres(url, { max: 4, prepare: false, connect_timeout: 5, application_name: `bk01-sql-consolidate-${mode}` });
+const runtimeDb = postgres(runtimeUrl, { max: 2, prepare: false, connect_timeout: 5, application_name: `bk01-runtime-proof-${mode}` });
 const checks = [];
 const record = (name, ok, detail = '') => {
   checks.push({ name, ok, detail });
@@ -21,13 +31,17 @@ const reject = async (name, fn, pattern) => {
   try { await fn(); } catch (error) { message = error.message; }
   record(name, Boolean(message) && (!pattern || pattern.test(message)), message || 'unexpectedly succeeded');
 };
-const asRole = (role, fn, userId) => db.begin(async (tx) => {
-  await tx.unsafe(`SET LOCAL ROLE ${role}`);
+const asRole = (role, fn, userId) => (role === 'bk01_runtime' ? runtimeDb : db).begin(async (tx) => {
+  if (role === 'bk01_runtime') {
+    await tx.unsafe('SET LOCAL ROLE bk01_runtime');
+  } else {
+    await tx.unsafe(`SET LOCAL ROLE ${role}`);
+  }
   if (userId) await tx`select set_config('request.jwt.claim.sub',${userId},true)`;
   return fn(tx);
 });
 const id = () => crypto.randomUUID();
-const shopId = id(); const ownerId = 'b1010000-0000-4000-8000-000000000001'; const serviceId = id(); const staffId = id();
+const shopId = id(); const ownerId = 'b1010000-0000-4000-8000-000000000001'; const adminId = 'b1010000-0000-4000-8000-000000000002'; const staffUserId = 'b1010000-0000-4000-8000-000000000003'; const serviceId = id(); const staffId = id();
 const startBase = new Date(Date.now() + 36 * 60 * 60 * 1000);
 const fmtDate = (date) => date.toISOString().slice(0, 10);
 const fmtTime = (date) => date.toISOString().slice(11, 19);
@@ -35,6 +49,17 @@ const asBangkokTimestamp = (date) => new Date(Date.UTC(date.getUTCFullYear(), da
 const later = (hours) => new Date(Date.now() + hours * 3600000);
 const earlier = (minutes) => new Date(Date.now() - minutes * 60000);
 const toJson = (value) => typeof value === 'string' ? JSON.parse(value) : value;
+const runtimeExecuteSet = async () => asRole('bk01_migrator', (tx) => tx`
+  select p.oid::regprocedure::text as identity
+    from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+   where n.nspname='local_service' and has_function_privilege('bk01_runtime',p.oid,'EXECUTE')
+   order by 1`);
+const productFunctionAclSnapshot = async () => asRole('bk01_migrator', (tx) => tx`
+  select p.oid::regprocedure::text as identity, pg_get_userbyid(p.proowner) as owner,
+         coalesce(p.proacl::text,'<default>') as execute_acl
+    from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+   where n.nspname in ('local_service','local_service_internal')
+   order by 1`);
 
 async function createBooking({ status, depositStatus = 'awaiting', start, end, token = 'AB12CD34EF', queueReleasedAt = null, unknownRange = false }) {
   const customerId = id(); const bookingId = id();
@@ -67,6 +92,55 @@ try {
       && preflight[0].rolsuper === false && preflight[0].rolcreaterole === true && preflight[0].rolbypassrls === true
       && preflight[0].migrator_extensions_usage === false && preflight[0].public_extensions_usage === false,
     JSON.stringify(preflight[0]));
+  if (mode === 'final') {
+    const runtimeIdentity = await asRole('bk01_runtime', (tx) => tx`select current_user,session_user,r.rolsuper runtime_is_super,
+      (select rolsuper from pg_roles where rolname=session_user) session_is_super from pg_roles r where r.rolname=current_user`);
+    record('runtime function calls execute as real non-superuser bk01_runtime',
+      runtimeIdentity[0]?.current_user === 'bk01_runtime' && runtimeIdentity[0]?.session_user === 'bk01_runtime_probe'
+        && runtimeIdentity[0]?.runtime_is_super === false && runtimeIdentity[0]?.session_is_super === false,
+      JSON.stringify(runtimeIdentity[0]));
+  }
+
+  const runtimeSet = await runtimeExecuteSet();
+  if (mode === 'baseline') {
+    record('baseline bk01_runtime effective EXECUTE is the exact approved set',
+      validateBk01RuntimeEffectiveExecuteSet(runtimeSet.map((row) => row.identity), 'pre-migration catalog')
+        && runtimeSet.length === BK01_RUNTIME_EFFECTIVE_FUNCTIONS.length,
+      `count=${runtimeSet.length}`);
+    await writeFile(aclBaselineFile, JSON.stringify(await productFunctionAclSnapshot(), null, 2));
+  } else if (mode === 'fail-before') {
+    await reject('fail-before: b50bb38 withdraws claim EXECUTE from bk01_runtime',
+      () => asRole('bk01_runtime', (tx) => tx`select * from local_service.claim_due_line_notifications(1)`),
+      /permission denied/i);
+    record('fail-before: b50bb38 runtime EXECUTE count is 18 instead of baseline 19',
+      runtimeSet.length === BK01_RUNTIME_EFFECTIVE_FUNCTIONS.length - 1,
+      `count=${runtimeSet.length}`);
+  } else {
+    record('pass-after: bk01_runtime effective EXECUTE matches the exact approved 19-function baseline',
+      validateBk01RuntimeEffectiveExecuteSet(runtimeSet.map((row) => row.identity), 'post-migration catalog')
+        && runtimeSet.length === BK01_RUNTIME_EFFECTIVE_FUNCTIONS.length,
+      `count=${runtimeSet.length}`);
+    const baselineAcl = JSON.parse(await readFile(aclBaselineFile, 'utf8'));
+    const finalAcl = await productFunctionAclSnapshot();
+    const baselineMap = new Map(baselineAcl.map((row) => [row.identity, `${row.owner}|${row.execute_acl}`]));
+    const finalMap = new Map(finalAcl.map((row) => [row.identity, `${row.owner}|${row.execute_acl}`]));
+    const allowedAclChanges = new Set([
+      'local_service.update_shop_settings(uuid,text,text,text,text,text,text,integer,integer)',
+    ]);
+    const changed = [...baselineMap.keys()].filter((identity) => finalMap.has(identity)
+      && baselineMap.get(identity) !== finalMap.get(identity) && !allowedAclChanges.has(identity));
+    const unexpectedAdded = [...finalMap.keys()].filter((identity) => !baselineMap.has(identity)
+      && !['local_service.update_shop_settings(uuid,text,text,text,text,text,text,integer,integer)',
+        'local_service.set_booking_outcome(uuid,text,text)',
+        'local_service.record_deposit_refund(uuid,text,text)',
+        'local_service.get_deposit_refund_history(uuid)',
+        'local_service.get_booking_status(uuid,text)'].includes(identity));
+    const unexpectedRemoved = [...baselineMap.keys()].filter((identity) => !finalMap.has(identity)
+      && identity !== 'local_service.update_shop_settings(uuid,text,text,text,text,text,text)');
+    record('pass-after: EXECUTE ACL of every retained product function matches pre-migration catalog',
+      changed.length === 0 && unexpectedAdded.length === 0 && unexpectedRemoved.length === 0,
+      JSON.stringify({ changed, unexpectedAdded, unexpectedRemoved }));
+  }
 
   await asRole('bk01_migrator', async (tx) => {
     if (mode === 'baseline') {
@@ -77,6 +151,7 @@ try {
         values (${shopId},'SQL consolidation proof',${`sql-proof-${shopId}`},'0800000000','0800000000','Proof Owner',true,100,true)`;
     }
     await tx`insert into local_service.shop_users(shop_id,user_id,role) values (${shopId},${ownerId},'owner')`;
+    await tx`insert into local_service.shop_users(shop_id,user_id,role) values (${shopId},${adminId},'admin'),(${shopId},${staffUserId},'staff')`;
     await tx`insert into local_service.services(id,shop_id,name,duration_minutes,price,deposit_amount,is_active)
       values (${serviceId},${shopId},'Proof service',60,500,100,true)`;
     await tx`insert into local_service.staff(id,shop_id,name,is_active) values (${staffId},${shopId},'Proof staff',true)`;
@@ -89,6 +164,17 @@ try {
   }));
   record('btree_gist remains installed in extensions and the overlap invariant remains', invariant.ext.length === 1 && invariant.ext[0].nspname === 'extensions' && invariant.constraint[0]?.def.includes('gist'));
   if (mode === 'final') {
+    const staffApproveId = await createBooking({ status: 'pending_review', depositStatus: 'submitted', start: later(144), end: later(145) });
+    await reject('staff cannot approve submitted deposits',
+      () => asRole('authenticated', (tx) => tx`select local_service.approve_booking_deposit(${staffApproveId})`, staffUserId),
+      /owner or admin/i);
+    await reject('staff cannot reject submitted deposits',
+      () => asRole('authenticated', (tx) => tx`select local_service.reject_deposit_slip(${staffApproveId},'proof')`, staffUserId),
+      /owner or admin/i);
+    const adminApproveId = await createBooking({ status: 'pending_review', depositStatus: 'submitted', start: later(150), end: later(151) });
+    const adminApproval = await asRole('authenticated', (tx) => tx`select local_service.approve_booking_deposit(${adminApproveId}) as result`, adminId);
+    record('admin can approve a future submitted deposit', toJson(adminApproval[0].result).status === 'confirmed');
+
     const defaults = await asRole('bk01_migrator', (tx) => tx`select customer_cancel_before_hours c,customer_reschedule_before_hours r from local_service.shops where id=${shopId}`);
     record('new shops receive 24/12 policy defaults', defaults[0].c === 24 && defaults[0].r === 12);
   }
@@ -153,6 +239,15 @@ try {
     await reject('refund refuses a deposit before appointment end', () => asRole('authenticated', (tx) => tx`select local_service.record_deposit_refund(${futureRefundId},'ref-early','proof')`, ownerId), /released queue|past its appointment/i);
     const refunded = await asRole('authenticated', (tx) => tx`select local_service.record_deposit_refund(${refundId},'refund-proof','shop returned funds') as result`, ownerId);
     record('refund records submitted deposit only after appointment end', toJson(refunded[0].result).deposit_status === 'refunded');
+    const refundPendingId = await createBooking({ status: 'pending_review', depositStatus: 'submitted', start: pastStart, end: pastEnd });
+    const pendingCountBefore = await asRole('authenticated', (tx) => tx`select local_service.bk01_pending_past_appointment_count(${shopId}) as count`, ownerId);
+    await reject('staff cannot record a deposit refund',
+      () => asRole('authenticated', (tx) => tx`select local_service.record_deposit_refund(${refundPendingId},'staff-ref','proof')`, staffUserId),
+      /owner or admin/i);
+    await asRole('authenticated', (tx) => tx`select local_service.record_deposit_refund(${refundPendingId},'pending-ref','shop returned funds')`, ownerId);
+    const pendingCountAfter = await asRole('authenticated', (tx) => tx`select local_service.bk01_pending_past_appointment_count(${shopId}) as count`, ownerId);
+    record('refund removes the item from the unresolved past-appointment counter',
+      Number(pendingCountBefore[0].count) === Number(pendingCountAfter[0].count) + 1);
     const history = await asRole('authenticated', (tx) => tx`select reference,note from local_service.get_deposit_refund_history(${refundId})`, ownerId);
     record('refund audit history is sourced from audit_events', history.length === 1 && history[0].reference === 'refund-proof' && history[0].note === 'shop returned funds');
 
@@ -162,7 +257,7 @@ try {
       values (${reminderId},${shopId},${reminderBooking},'reminder_24h','customer','pending',${`proof-reminder-${reminderId}`},${later(5).toISOString()}::timestamptz)`);
     await asRole('bk01_migrator', (tx) => tx`update local_service.line_notification_logs set scheduled_for=${earlier(5).toISOString()}::timestamptz where id=${reminderId}`);
     const queued = await asRole('bk01_migrator', (tx) => tx`select status,scheduled_for from local_service.line_notification_logs where id=${reminderId}`);
-    const claim = await asRole('service_role', (tx) => tx`select id from local_service.claim_due_line_notifications(25) where id=${reminderId}`);
+    const claim = await asRole('bk01_runtime', (tx) => tx`select id from local_service.claim_due_line_notifications(25) where id=${reminderId}`);
     const retired = await asRole('bk01_migrator', (tx) => tx`select status,next_retry_at from local_service.line_notification_logs where id=${reminderId}`);
     record('B9(b) proof fixture is due and pending', queued.length === 1 && queued[0].status === 'pending' && new Date(queued[0].scheduled_for) <= new Date());
     record('B9(b): past-appointment reminder is not claimed and stale row is retired', claim.length === 0 && retired.length === 1 && retired[0].status === 'failed' && retired[0].next_retry_at === null, JSON.stringify({ claim: claim.length, retired }));
@@ -174,7 +269,7 @@ try {
         values (${unknownReminderId},${shopId},${unknownStartBooking},'reminder_1h','customer','pending',${`proof-reminder-${unknownReminderId}`},${later(5).toISOString()}::timestamptz)`;
       await tx`update local_service.line_notification_logs set scheduled_for=${earlier(5).toISOString()}::timestamptz where id=${unknownReminderId}`;
     });
-    const unknownClaim = await asRole('service_role', (tx) => tx`select id from local_service.claim_due_line_notifications(25) where id=${unknownReminderId}`);
+    const unknownClaim = await asRole('bk01_runtime', (tx) => tx`select id from local_service.claim_due_line_notifications(25) where id=${unknownReminderId}`);
     const unknownRetired = await asRole('bk01_migrator', (tx) => tx`select status,next_retry_at from local_service.line_notification_logs where id=${unknownReminderId}`);
     record('B9(b): missing appointment start fails closed and retires reminder', unknownClaim.length === 0 && unknownRetired[0]?.status === 'failed' && unknownRetired[0].next_retry_at === null);
 
@@ -197,6 +292,6 @@ try {
       await tx`delete from local_service.service_entitlement_periods where shop_id=${shopId}`;
       await tx`delete from local_service.shops where id=${shopId}`;
     });
-  } finally { await db.end({ timeout: 5 }); }
+  } finally { await Promise.all([db.end({ timeout: 5 }), runtimeDb.end({ timeout: 5 })]); }
 }
 console.log(`RESULT ${checks.filter((check) => check.ok).length}/${checks.length} PASS mode=${mode}`);

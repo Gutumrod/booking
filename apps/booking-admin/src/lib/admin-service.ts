@@ -6,6 +6,13 @@ import {
   type EntitlementState,
   type EntitlementStatusRow,
 } from './entitlement-status';
+import {
+  DEPOSIT_REFUND_HISTORY_RPC,
+  DEPOSIT_REFUND_RPC,
+  type DepositRefundAuditEntry,
+} from './refund-eligibility';
+
+export type { DepositRefundAuditEntry } from './refund-eligibility';
 
 export type BookingStatus =
   | 'hold'
@@ -33,6 +40,13 @@ export interface DashboardBooking {
   staffName: string;
   date: string;
   time: string;
+  /** Service duration in minutes — the fallback source for the appointment end. */
+  durationMinutes: number | null;
+  /**
+   * Appointment end, from `bookings.end_timestamptz` (read-only). Null when the
+   * column is unset; the refund rule then derives the end from date+time+duration.
+   */
+  endTime: string | null;
   totalPrice: number;
   depositPrice: number;
   status: BookingStatus;
@@ -138,6 +152,11 @@ interface RelationName {
   name: string;
 }
 
+/** A service relation as the booking select returns it (duration included). */
+interface RelationService extends RelationName {
+  duration_minutes: number;
+}
+
 interface RelationCustomer extends RelationName {
   phone: string;
 }
@@ -156,8 +175,10 @@ interface RawBooking {
   deposit_amount: number | string | null;
   total_price: number | string;
   slip_url: string | null;
+  /** Read-only timeline the database already stores; used by the refund rule. */
+  end_timestamptz: string | null;
+  services: RelationName | RelationService | RelationService[] | null;
   customers: RelationCustomer | RelationCustomer[] | null;
-  services: RelationName | RelationName[] | null;
   staff: RelationStaff | RelationStaff[] | null;
 }
 
@@ -273,8 +294,9 @@ export async function fetchAdminDashboardData(): Promise<AdminDashboardData> {
         deposit_amount,
         total_price,
         slip_url,
+        end_timestamptz,
         customers ( name, phone ),
-        services ( name ),
+        services ( name, duration_minutes ),
         staff ( name, nickname )
       `)
       .eq('shop_id', membership.shop_id)
@@ -395,6 +417,8 @@ export async function fetchAdminDashboardData(): Promise<AdminDashboardData> {
       staffName: staff?.nickname || staff?.name || 'ยังไม่ระบุพนักงาน',
       date: booking.booking_date,
       time: booking.start_time.slice(0, 5),
+      durationMinutes: (service as RelationService | null)?.duration_minutes ?? null,
+      endTime: booking.end_timestamptz,
       totalPrice: toAmount(booking.total_price),
       depositPrice: toAmount(booking.deposit_amount),
       status: booking.status,
@@ -613,6 +637,47 @@ export async function rejectBookingDeposit(bookingId: string, reason: string): P
   });
 
   if (error) throw new Error(error.message);
+}
+
+/**
+ * B8 — record that the shop refunded a deposit off-system.
+ *
+ * The platform never moves the money: the deposit went to the shop's own
+ * PromptPay account, so the shop transfers the refund back itself and this call
+ * only writes the record (who, when, reference, optional note) plus the audit
+ * row. The RPC refuses any booking that is not eligible, so the rule is not
+ * enforced only in the browser.
+ */
+export async function recordBookingDepositRefund(
+  bookingId: string,
+  reference: string,
+  note?: string,
+): Promise<void> {
+  const { error } = await supabase.rpc(DEPOSIT_REFUND_RPC, {
+    p_booking_id: bookingId,
+    p_refund_reference: reference,
+    p_note: note && note.trim() ? note.trim() : null,
+  });
+  if (error) throw new Error(error.message);
+}
+
+/**
+ * B8 — the audit trail behind a refunded deposit. The RPC returns the rows the
+ * trigger recorded in local_service.booking_status_history; an empty array means
+ * this booking has no recorded refund history to show.
+ */
+export async function fetchDepositRefundHistory(bookingId: string): Promise<DepositRefundAuditEntry[]> {
+  const { data, error } = await supabase.rpc(DEPOSIT_REFUND_HISTORY_RPC, {
+    p_booking_id: bookingId,
+  });
+  if (error) throw new Error(error.message);
+
+  return ((data ?? []) as Array<Record<string, unknown>>).map((row) => ({
+    at: String(row.at ?? row.created_at ?? ''),
+    by: row.by === null || row.by === undefined ? null : String(row.by),
+    reference: String(row.reference ?? ''),
+    note: String(row.note ?? ''),
+  }));
 }
 
 export async function createSignedDepositSlipUrl(objectPath: string): Promise<string> {

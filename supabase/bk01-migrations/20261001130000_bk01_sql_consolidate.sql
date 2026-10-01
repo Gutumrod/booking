@@ -1,9 +1,9 @@
 -- HOUSE-BK01-SQL-CONSOLIDATE
 -- Product-local SQL from ADMIN-TRUTH v2, TRIAL-REFUND v2 and NOTIFY.
--- Recipient lookup and daily email summary are held: both require auth.users,
--- which is outside the BK01 product-local migration ownership boundary. Shop
--- enqueue and event-type changes are also held until the email consumer contract
--- is wired; the current dispatcher would route shop_owner to shop.line_oa_id.
+-- Owner-email / email-summary SQL remains held pending a reviewed owner=postgres
+-- migration path. The product runner sets LOCAL ROLE bk01_migrator, which cannot
+-- create postgres-owned functions or read auth.users. Shop email enqueue also
+-- remains held: the current LINE consumer routes shop_owner to shop.line_oa_id.
 
 -- Default customer policy for existing shops; preserve explicit owner choices.
 UPDATE local_service.shops
@@ -75,11 +75,11 @@ BEGIN
     END IF;
     SELECT * INTO v_booking FROM local_service.bookings WHERE id=p_booking_id FOR UPDATE;
     IF NOT FOUND THEN RAISE EXCEPTION 'Booking not found'; END IF;
-    IF NOT local_service.is_shop_member(v_booking.shop_id) THEN
-        RAISE EXCEPTION USING ERRCODE='42501', MESSAGE='Not authorized for this shop';
+    IF NOT local_service.has_shop_role(v_booking.shop_id,ARRAY['owner','admin']::text[]) THEN
+        RAISE EXCEPTION USING ERRCODE='42501', MESSAGE='Owner or admin role required';
     END IF;
     IF v_booking.queue_released_at IS NOT NULL OR v_booking.end_timestamptz IS NULL OR v_booking.end_timestamptz <= now() THEN
-        RAISE EXCEPTION USING ERRCODE='P0001', MESSAGE='Appointment has passed; confirmation is unavailable';
+        RAISE EXCEPTION USING ERRCODE='P0001', MESSAGE='นัดผ่านแล้วและปล่อยคิวไปแล้ว / Appointment has passed; confirmation is unavailable';
     END IF;
     IF v_booking.status <> 'pending_review' OR v_booking.deposit_status <> 'submitted' THEN
         RAISE EXCEPTION 'Only submitted deposit slips pending review can be approved';
@@ -90,6 +90,45 @@ END;
 $function$;
 REVOKE ALL ON FUNCTION local_service.approve_booking_deposit(uuid) FROM PUBLIC,anon,service_role,bk01_runtime;
 GRANT EXECUTE ON FUNCTION local_service.approve_booking_deposit(uuid) TO authenticated;
+
+-- Rejecting a slip changes deposit and booking state, so it is owner/admin only.
+CREATE OR REPLACE FUNCTION local_service.reject_deposit_slip(
+    p_booking_id uuid,
+    p_reason text DEFAULT NULL::text
+) RETURNS json
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, local_service
+AS $function$
+DECLARE
+    v_booking local_service.bookings%ROWTYPE;
+    v_terminal boolean;
+    v_reason text := COALESCE(NULLIF(btrim(p_reason), ''), 'Slip Rejected by Shop');
+BEGIN
+    SELECT * INTO v_booking FROM local_service.bookings WHERE id=p_booking_id FOR UPDATE;
+    IF NOT FOUND THEN RAISE EXCEPTION 'Booking not found'; END IF;
+    IF local_service_internal.request_user_id() IS NULL
+       OR NOT local_service.has_shop_role(v_booking.shop_id,ARRAY['owner','admin']::text[]) THEN
+        RAISE EXCEPTION USING ERRCODE='42501', MESSAGE='Owner or admin role required';
+    END IF;
+    IF v_booking.status <> 'pending_review' OR v_booking.deposit_status <> 'submitted' THEN
+        RAISE EXCEPTION 'Only submitted deposit slips can be rejected';
+    END IF;
+    v_terminal := v_booking.queue_released_at IS NOT NULL OR v_booking.end_timestamptz <= now();
+    IF v_terminal THEN
+        UPDATE local_service.bookings SET status='cancelled',deposit_status='rejected',updated_at=now() WHERE id=p_booking_id;
+    ELSE
+        UPDATE local_service.bookings SET status='hold',deposit_status='rejected',expires_at=now()+interval '15 minutes',updated_at=now() WHERE id=p_booking_id;
+    END IF;
+    INSERT INTO local_service.booking_status_history(booking_id,old_status,new_status,old_deposit_status,new_deposit_status,changed_by,reason)
+    VALUES(p_booking_id,v_booking.status,CASE WHEN v_terminal THEN 'cancelled' ELSE 'hold' END,v_booking.deposit_status,'rejected',local_service_internal.request_user_id(),
+           CASE WHEN v_terminal THEN v_reason||' (past appointment; closed terminally)' ELSE v_reason END);
+    RETURN json_build_object('success',true,'status',CASE WHEN v_terminal THEN 'cancelled' ELSE 'hold' END,'deposit_status','rejected',
+      'message',CASE WHEN v_terminal THEN 'Slip rejected; appointment has passed and booking was closed. Please book again.' ELSE 'Slip rejected, hold reset to 15 minutes' END);
+END;
+$function$;
+REVOKE ALL ON FUNCTION local_service.reject_deposit_slip(uuid,text) FROM PUBLIC,anon,service_role,bk01_runtime;
+GRANT EXECUTE ON FUNCTION local_service.reject_deposit_slip(uuid,text) TO authenticated;
 
 -- Appointment-targeted lazy sweep only; no scheduled/global expiration job.
 CREATE OR REPLACE FUNCTION local_service.customer_reschedule_booking(
@@ -177,6 +216,27 @@ END;
 $function$;
 REVOKE ALL ON FUNCTION local_service.set_booking_outcome(uuid,text,text) FROM PUBLIC,anon,service_role,bk01_runtime;
 GRANT EXECUTE ON FUNCTION local_service.set_booking_outcome(uuid,text,text) TO authenticated;
+
+-- Count only unresolved submitted slips whose appointment has ended. Refunded
+-- deposits and closed rows are excluded from the live badge.
+CREATE OR REPLACE FUNCTION local_service.bk01_pending_past_appointment_count(p_shop_id uuid)
+RETURNS integer
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, local_service
+AS $function$
+BEGIN
+    IF local_service_internal.request_user_id() IS NULL
+       OR NOT local_service.is_shop_member(p_shop_id) THEN
+        RAISE EXCEPTION USING ERRCODE='42501', MESSAGE='Not authorized for this shop';
+    END IF;
+    RETURN (SELECT count(*)::integer FROM local_service.bookings
+             WHERE shop_id=p_shop_id AND status='pending_review'
+               AND deposit_status='submitted' AND end_timestamptz<now());
+END;
+$function$;
+REVOKE ALL ON FUNCTION local_service.bk01_pending_past_appointment_count(uuid) FROM PUBLIC,anon,service_role,bk01_runtime;
+GRANT EXECUTE ON FUNCTION local_service.bk01_pending_past_appointment_count(uuid) TO authenticated;
 
 -- B8 v2: refund marking records the shop's action; it does not transfer funds
 -- and leaves enforce_booking_status_transition unchanged. Financial actions are
@@ -286,5 +346,5 @@ BEGIN
       FROM due WHERE l.id=due.id RETURNING l.*;
 END;
 $function$;
-REVOKE ALL ON FUNCTION local_service.claim_due_line_notifications(integer) FROM PUBLIC,anon,authenticated,bk01_runtime;
-GRANT EXECUTE ON FUNCTION local_service.claim_due_line_notifications(integer) TO service_role;
+REVOKE ALL ON FUNCTION local_service.claim_due_line_notifications(integer) FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION local_service.claim_due_line_notifications(integer) TO service_role,bk01_runtime;
