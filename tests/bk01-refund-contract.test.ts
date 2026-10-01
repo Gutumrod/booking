@@ -7,7 +7,7 @@ import {
   canRecordRefund,
   DEPOSIT_REFUND_RPC,
   DEPOSIT_REFUND_HISTORY_RPC,
-  RELEASED_QUEUE_STATUSES,
+  SETTLED_QUEUE_STATUSES,
   REFUND_HELD_DEPOSIT_STATES,
   type RefundCandidate,
 } from '../apps/booking-admin/src/lib/refund-eligibility.ts';
@@ -83,23 +83,33 @@ test('§5c-4 case 3: confirmed booking in the future -> never offered', () => {
   assert.equal(canRecordRefund(candidate('confirmed', 'submitted', END_FUTURE), NOW), false);
 });
 
-test('every released queue status that holds money is offered', () => {
-  for (const status of RELEASED_QUEUE_STATUSES) {
+test('round 2: the time rule is NOT gated by booking status', () => {
+  // Codex round 2 found the app hiding these while the SQL spec allowed them.
+  assert.equal(canRecordRefund(candidate('confirmed', 'verified', END_PASSED), NOW), true);
+  assert.equal(canRecordRefund(candidate('hold', 'submitted', END_PASSED), NOW), true);
+  // ... and the reverse: an `expired` name is not a queue release by itself.
+  assert.equal(canRecordRefund(candidate('expired', 'verified', END_FUTURE), NOW), false);
+  assert.equal(canRecordRefund(candidate('expired', 'verified', END_PASSED), NOW), true);
+});
+
+test('every settled status that holds money is offered', () => {
+  for (const status of SETTLED_QUEUE_STATUSES) {
     assert.equal(
       canRecordRefund(candidate(status, 'verified'), NOW),
       true,
       `${status} with a held deposit must be offered`,
     );
   }
-  for (const status of ['cancelled', 'expired', 'no_show', 'completed', 'rejected']) {
-    assert.equal(canRecordRefund(candidate(status, 'verified'), NOW), true, status);
-  }
+  assert.deepEqual([...SETTLED_QUEUE_STATUSES].sort(), ['cancelled', 'completed', 'no_show']);
+  // The two statuses that must NOT be queue releases in their own right.
+  assert.equal(SETTLED_QUEUE_STATUSES.includes('expired'), false);
+  assert.equal(SETTLED_QUEUE_STATUSES.includes('rejected'), false);
 });
 
 test('a queue that is still live is never offered', () => {
-  assert.equal(canRecordRefund(candidate('hold', 'submitted'), NOW), false);
-  assert.equal(canRecordRefund(candidate('holding', 'verified'), NOW), false);
-  assert.equal(canRecordRefund(candidate('anything', 'verified'), NOW), false);
+  assert.equal(canRecordRefund(candidate('hold', 'submitted', END_FUTURE), NOW), false);
+  assert.equal(canRecordRefund(candidate('holding', 'verified', END_FUTURE), NOW), false);
+  assert.equal(canRecordRefund(candidate('anything', 'verified', END_FUTURE), NOW), false);
 });
 
 test('pending_review whose appointment has NOT ended is never offered', () => {
@@ -116,6 +126,14 @@ test('§5c-3: only submitted / verified count as money the shop holds', () => {
     assert.equal(canRecordRefund(candidate(status, 'awaiting'), NOW), false, `${status} + awaiting`);
     assert.equal(canRecordRefund(candidate(status, 'not_required'), NOW), false, `${status} + not_required`);
   }
+});
+
+test('round 2: the persisted refusal shape (cancelled/hold + deposit rejected) never opens', () => {
+  // Codex round 2: the round-1 fixture used a booking status of `rejected`, which
+  // the bookings CHECK forbids (product_rules_v1.sql:43). This is the shape a
+  // refused slip actually persists as, and the money rule already excludes it.
+  assert.equal(canRecordRefund(candidate('cancelled', 'rejected', END_PASSED), NOW), false);
+  assert.equal(canRecordRefund(candidate('hold', 'rejected', END_PASSED), NOW), false);
 });
 
 test('an unreadable appointment end fails closed (action stays hidden)', () => {

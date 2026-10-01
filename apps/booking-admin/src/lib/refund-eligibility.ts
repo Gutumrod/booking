@@ -49,18 +49,27 @@ export function holdsDepositMoney(depositStatus: string): boolean {
 }
 
 /**
- * Booking statuses whose queue is no longer active, so the shop may settle the
- * deposit. `rejected` is included for completeness even though the current
- * bookings CHECK constraint cannot produce it (product_rules_v1.sql:43) — a
- * rejected slip today lands on `hold` + deposit_status `rejected`, which the
- * money rule already excludes.
+ * Booking statuses that settle the deposit on their own, without consulting the
+ * clock: the appointment is already over for a reason we trust.
+ *
+ * `expired` and `rejected` are deliberately ABSENT — caretaker decision after
+ * Codex review round 2 (brief 23 §5c verdict item (1)):
+ *  - `expired` is NOT a released-queue status in its own right. A hold that expired
+ *    while its appointment is still ahead must stay closed; one whose appointment
+ *    has already ended qualifies through the time rule, not through its name.
+ *  - `rejected` is not a booking status at all — the `bookings` CHECK forbids it
+ *    (`product_rules_v1.sql:43`). A refused slip lives on a `hold` row as
+ *    `deposit_status='rejected'`, which the money rule already excludes.
+ *
+ * Keeping a status here that the contract does not have is exactly the drift Codex
+ * flagged: an "expired" queue the shop cannot legally settle, and an unreachable
+ * "rejected" branch. The single predicate is enforced in `canRecordRefund()` and
+ * mirrored in the SQL spec (evidence/b8-spec-v2-addendum-for-group5.sql).
  */
-export const RELEASED_QUEUE_STATUSES: ReadonlyArray<string> = Object.freeze([
+export const SETTLED_QUEUE_STATUSES: ReadonlyArray<string> = Object.freeze([
   'cancelled',
-  'expired',
   'no_show',
   'completed',
-  'rejected',
 ]);
 
 /** The RPC names B8 proposes to the caretaker — both are NEW functions (ก้อน 1 owns none of them). */
@@ -109,16 +118,25 @@ function parseClock(value: string): { hour: number; minute: number } | null {
 /**
  * Whether the shop may mark this booking's deposit as refunded.
  *
- * Caretaker decision, brief 23 §5c-3/§5c-4:
- *  - money must be held: deposit_status `submitted` or `verified`;
- *  - the queue must be over: `cancelled` / `rejected` / `no_show` / `completed`,
- *    or a `pending_review` whose appointment has already ENDED;
- *  - a `confirmed` booking in the future is never offered (the customer has not
- *    arrived);
- *  - "appointment is over" is **end-of-appointment < now**, never a calendar-date
- *    comparison: a same-day booking that finished at 16:00 qualifies at 17:00.
+ * Caretaker decision (brief 23 §5c verdict item (1) after Codex review round 2) —
+ * ONE predicate, in this exact shape, mirrored character-for-character by the SQL
+ * spec:
  *
- * Fail-closed: an unparseable end time means "not over" and the action stays hidden.
+ *   deposit_status IN ('submitted','verified')
+ *   AND ( status IN ('cancelled','no_show','completed') OR end_timestamptz < now() )
+ *
+ *  - money must be held: `submitted` / `verified` only;
+ *  - the queue must be settled: `cancelled` / `no_show` / `completed`, OR the
+ *    appointment has ENDED — the time test is NOT gated by booking status, so
+ *    `confirmed`, `hold`, `pending_review` and `expired` all qualify once their end
+ *    is in the past;
+ *  - `expired` with a future end stays closed (its name is not a queue release);
+ *  - `deposit_status='rejected'` (a refused slip on a `hold` row) never opens;
+ *  - "appointment is over" is **end-of-appointment < now**, never a calendar-date
+ *    comparison, and a `confirmed` booking in the future is never offered.
+ *
+ * Fail-closed: an unparseable or missing end time means "not over" and the action
+ * stays hidden. An unreadable `now` is likewise not "over".
  */
 export function canRecordRefund(
   booking: RefundCandidate,
@@ -126,18 +144,13 @@ export function canRecordRefund(
   timeZone = 'Asia/Bangkok',
 ): boolean {
   if (!holdsDepositMoney(booking.depositStatus)) return false;
-  if (RELEASED_QUEUE_STATUSES.includes(booking.status)) return true;
+  if (SETTLED_QUEUE_STATUSES.includes(booking.status)) return true;
 
-  if (booking.status === 'pending_review') {
-    const endsAt = appointmentEndsAt(booking, timeZone);
-    if (endsAt === null) return false;
-    const nowMs = Date.parse(now);
-    if (Number.isNaN(nowMs)) return false;
-    return Date.parse(endsAt) < nowMs;
-  }
-
-  // hold / confirmed / an unknown status keeps the queue active.
-  return false;
+  const endsAt = appointmentEndsAt(booking, timeZone);
+  if (endsAt === null) return false;
+  const nowMs = Date.parse(now);
+  if (Number.isNaN(nowMs)) return false;
+  return Date.parse(endsAt) < nowMs;
 }
 
 /**

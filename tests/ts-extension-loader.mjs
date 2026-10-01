@@ -9,7 +9,15 @@ export async function resolve(specifier, context, nextResolve) {
   try {
     return await nextResolve(specifier, context);
   } catch (error) {
-    if (error?.code !== 'ERR_MODULE_NOT_FOUND' || !specifier.startsWith('.') || path.extname(specifier)) throw error;
+    if (error?.code !== 'ERR_MODULE_NOT_FOUND' || !specifier.startsWith('.')) throw error;
+    // A relative import written with the TypeScript extension resolves to the
+    // compiled-sibling .mjs when no .ts file exists at that path (e.g. a test
+    // importing '../evidence/thing.ts' where the artefact ships as .mjs). Try
+    // that before the extensionless `.ts` fallback.
+    if (specifier.endsWith('.ts')) {
+      return nextResolve(`${specifier.slice(0, -3)}.mjs`, context);
+    }
+    if (path.extname(specifier)) throw error;
     return nextResolve(`${specifier}.ts`, context);
   }
 }
