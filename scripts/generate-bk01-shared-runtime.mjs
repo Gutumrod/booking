@@ -4,9 +4,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   BK01_RUNTIME_BOOTSTRAP_FUNCTIONS,
-  BK01_RUNTIME_ROUTE_FUNCTIONS,
+  BK01_RUNTIME_ROUTE_FUNCTIONS as CURRENT_RUNTIME_ROUTE_FUNCTIONS,
   BK01_PUBLIC_LEGACY_EXECUTE_EXCEPTIONS,
-  BK01_RUNTIME_EFFECTIVE_FUNCTIONS,
+  BK01_RUNTIME_EFFECTIVE_FUNCTIONS as CURRENT_RUNTIME_EFFECTIVE_FUNCTIONS,
 } from './lib/bk01-runtime-allowlist.mjs';
 
 // ---------------------------------------------------------------------------
@@ -31,6 +31,11 @@ import {
 // identity, substitutes the one expression, and re-emits it with its original security
 // mode and an explicit search_path pin.
 // ---------------------------------------------------------------------------
+
+// Keep the pinned bootstrap generation at the pre-P0 phase. R1 adds its executor
+// in the new product migration and validates final surfaces independently.
+const BK01_RUNTIME_ROUTE_FUNCTIONS = CURRENT_RUNTIME_ROUTE_FUNCTIONS.filter(x => !x.startsWith('local_service.create_booking_hold('));
+const BK01_RUNTIME_EFFECTIVE_FUNCTIONS = CURRENT_RUNTIME_EFFECTIVE_FUNCTIONS.filter(x => !x.startsWith('local_service.create_booking_hold('));
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const legacyDir = path.join(root, 'supabase', 'migrations');

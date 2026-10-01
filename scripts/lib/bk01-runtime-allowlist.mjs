@@ -20,6 +20,7 @@ export const BK01_RUNTIME_ROUTE_FUNCTIONS = Object.freeze([
   'local_service.finish_stripe_webhook_event(text,text,text)',
   'local_service.get_line_notification_delivery_context(uuid,integer)',
   'local_service.claim_due_shop_email_notifications(integer)',
+  'local_service.create_booking_hold(uuid,uuid,uuid,character varying,character varying,character varying,date,time without time zone,text)',
 ]);
 
 export const BK01_RUNTIME_FUNCTIONS = Object.freeze([

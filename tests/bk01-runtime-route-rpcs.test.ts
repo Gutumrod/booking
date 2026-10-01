@@ -17,7 +17,7 @@ const routeFunctions = [
 ];
 const trialRouteFunction = 'local_service.bk01_line_bind_booking_trial(text,text,text,text)';
 
-test('BK01 runtime allowlist is the exact 12 identities plus 8 legacy PUBLIC exceptions', () => {
+test('BK01 runtime allowlist is the exact 13 identities plus 8 legacy PUBLIC exceptions', () => {
   assert.deepEqual(BK01_RUNTIME_FUNCTIONS, [
     'local_service.authorize_booking_recovery_attempt(uuid,text)',
     'local_service.claim_due_line_notifications(integer)',
@@ -27,8 +27,9 @@ test('BK01 runtime allowlist is the exact 12 identities plus 8 legacy PUBLIC exc
     ...routeFunctions,
     trialRouteFunction,
     'local_service.claim_due_shop_email_notifications(integer)',
+    'local_service.create_booking_hold(uuid,uuid,uuid,character varying,character varying,character varying,date,time without time zone,text)',
   ].sort());
-  assert.equal(BK01_RUNTIME_EFFECTIVE_FUNCTIONS.length, 20);
+  assert.equal(BK01_RUNTIME_EFFECTIVE_FUNCTIONS.length, 21);
   assert.throws(() => validateBk01RuntimeEffectiveExecuteSet([
     ...BK01_RUNTIME_EFFECTIVE_FUNCTIONS,
     'local_service.eleventh_probe()'

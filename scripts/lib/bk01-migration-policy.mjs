@@ -96,9 +96,9 @@ const TARGET_PATTERNS = [
   { label: 'INSERT', re: /\binsert\s+into\s+([^\s(;]+)/gi },
   // Avoid parsing the event words in CREATE TRIGGER ... BEFORE/AFTER UPDATE ON ...
   // as an UPDATE statement; the dedicated TRIGGER pattern validates its ON target.
-  { label: 'UPDATE', re: /\bupdate\s+(?!of\b|on\b)([^\s(;]+)/gi },
+  { label: 'UPDATE', re: /\bupdate\s+(?!of\b|on\b|or\b)([^\s(;]+)/gi },
   { label: 'DELETE', re: /\bdelete\s+from\s+([^\s(;]+)/gi },
-  { label: 'TRUNCATE', re: /\btruncate(?:\s+table)?\s+([^\s(;]+)/gi },
+  { label: 'TRUNCATE', re: /\btruncate(?:\s+table)?\s+(?!on\b)([^\s(;]+)/gi },
   { label: 'INDEX', re: /\b(?:alter\s+index|drop\s+index(?:\s+if\s+exists)?)\s+([^\s(;]+)/gi },
 ];
 
@@ -140,7 +140,7 @@ function parseArgumentTypes(rawArguments) {
     // does not (`timestamptz`). Both forms must resolve to the same type list.
     .map((part) => {
       const tokens = part.split(' ').filter((token) => token.length > 0);
-      return (tokens.length > 1 ? tokens.slice(1) : tokens).join(' ').toUpperCase();
+      return (tokens.length > 1 && !/^(?:uuid|text|varchar|character|integer|int|bigint|boolean|numeric|jsonb?|date|time|timestamp|timestamptz|record|double|real)$/i.test(tokens[0]) ? tokens.slice(1) : tokens).join(' ').toUpperCase();
     });
 }
 
@@ -183,6 +183,7 @@ function assertFunctionsRevokePublic(body, sourceName) {
   if (preserved.size > 2) throw new Error(`${sourceName.name}: too many PUBLIC ACL preservation declarations`);
   const allowedPreservationFiles = new Set([
     '20260930120000_bk01_link_token_no_extensions.sql',
+    '20261002120000_bk01_council_p0.sql',
     '20261001140000_bk01_pack_notify_group67.sql',
   ]);
   if (preserved.size > 0 && !allowedPreservationFiles.has(sourceName.name)) {
@@ -194,6 +195,9 @@ function assertFunctionsRevokePublic(body, sourceName) {
         'local_service.suppress_new_overdue_line_reminder()',
       ].includes(signature))) {
     throw new Error(`${sourceName.name}: unapproved PUBLIC ACL preservation identity`);
+  }
+  if (sourceName.name === '20261002120000_bk01_council_p0.sql' && [...preserved].some(signature => signature !== 'local_service.generate_link_token()')) {
+    throw new Error(`${sourceName.name}: P0 may preserve only the existing token function PUBLIC ACL`);
   }
   for (const signature of preserved) {
     const matching = creations.filter(creation => creation.signature === signature && creation.replaced);

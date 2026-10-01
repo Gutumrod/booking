@@ -65,6 +65,15 @@ if (mode === 'apply' && !releaseId) {
 }
 
 const baseline = JSON.parse(fs.readFileSync(baselinePath, 'utf8'));
+// Reject source drift before constructing a PostgreSQL client or opening a socket.
+const legacyDir = path.join(root, 'supabase', 'migrations');
+const legacyFiles = fs.readdirSync(legacyDir).filter(name => name.endsWith('.sql')).sort();
+const legacyHash = crypto.createHash('sha256').update(legacyFiles.map(name =>
+  `${name}\n${fs.readFileSync(path.join(legacyDir, name), 'utf8').replace(/\r\n/g, '\n')}`
+).join('\n')).digest('hex');
+if (legacyFiles.length !== baseline.frozenMigrationCount || legacyHash !== baseline.sourceSha256) {
+  fail('Frozen legacy source hash/count mismatch; refusing before database connection.');
+}
 
 const migrationFiles = fs.readdirSync(migrationDir)
   .filter((name) => name.endsWith('.sql'))
