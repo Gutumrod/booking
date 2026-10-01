@@ -19,6 +19,7 @@ function contextRow(overrides: Record<string, unknown>) {
     id: 'notification-1', shop_id: 'shop-1', event_type: 'deposit_approved', recipient_type: 'shop_owner',
     attempt_count: 1, line_user_id: null, line_oa_id: 'oa-1', shop_name: 'ร้านทดสอบ', subscription_plan: 'basic_490',
     booking_date: '2026-10-02', start_time: '09:00:00', booking_code: 'BK-7K2M9Q', can_resubmit: null,
+    start_timestamptz: '2099-01-01T02:00:00Z',
     ...overrides,
   };
 }
@@ -83,7 +84,7 @@ test('a merchant row is delivered by e-mail and never touches LINE', async () =>
     );
 
     assert.equal(response.status, 200);
-    assert.deepEqual(await response.json(), { claimed: 1, sent: 1, failed: 0 });
+    assert.deepEqual(await response.json(), { claimed: 1, sent: 1, failed: 0, skippedStaleAppointment: 0 });
     assert.deepEqual(outbound, ['https://api.resend.com/emails'], 'the only outbound call is Resend');
     assert.ok(!outbound.some((url) => url.includes('api.line.me')), 'no LINE request may be made for a shop_owner row');
     assert.deepEqual(calls, ['claim_due_line_notifications', 'get_line_notification_delivery_context', 'complete_line_notification']);
@@ -119,7 +120,7 @@ test('with no e-mail key the merchant row fails closed and still sends nothing a
     );
 
     assert.equal(response.status, 200);
-    assert.deepEqual(await response.json(), { claimed: 1, sent: 0, failed: 1 });
+    assert.deepEqual(await response.json(), { claimed: 1, sent: 0, failed: 1, skippedStaleAppointment: 0 });
     assert.deepEqual(outbound, [], 'an unconfigured e-mail transport makes no call at all -- there is no fallback channel');
     assert.equal(recorded.length, 1);
     assert.equal(recorded[0].p_sent_at, null);
@@ -152,7 +153,7 @@ test('a shop owner with no resolvable address fails closed, not by falling back 
     );
 
     assert.equal(response.status, 200);
-    assert.deepEqual(await response.json(), { claimed: 1, sent: 0, failed: 1 });
+    assert.deepEqual(await response.json(), { claimed: 1, sent: 0, failed: 1, skippedStaleAppointment: 0 });
     assert.deepEqual(outbound, [], 'no recipient means no call, and never a LINE call');
   });
 });
@@ -171,6 +172,7 @@ test('a customer row still goes over LINE with the message it always had', async
 
     const { runtime } = runtimeFor({
       recipient_type: 'customer', event_type: 'reminder_24h', line_user_id: 'U-customer', subscription_plan: 'free',
+      start_timestamptz: '2099-01-01T02:00:00Z',
     });
 
     const response = await dispatchRoute.handleNotificationDispatch(
@@ -183,7 +185,7 @@ test('a customer row still goes over LINE with the message it always had', async
     );
 
     assert.equal(response.status, 200);
-    assert.deepEqual(await response.json(), { claimed: 1, sent: 1, failed: 0 });
+    assert.deepEqual(await response.json(), { claimed: 1, sent: 1, failed: 0, skippedStaleAppointment: 0 });
     assert.equal(sent.length, 1);
     assert.equal(sent[0].url, 'https://api.line.me/v2/bot/message/push');
     assert.deepEqual(sent[0].body, {

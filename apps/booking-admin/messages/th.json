@@ -140,6 +140,7 @@
     "statPendingSlip": "รอตรวจสลิปมัดจำ",
     "statOverdueUndecided": "ค้างรอตัดสินหลังวันนัด",
     "statOverdueUnavailable": "ยังไม่เปิดใช้ (รอตัวนับจากก้อน 1)",
+    "statOverdueFailed": "อ่านตัวนับไม่สำเร็จ – กรุณาแจ้งทีม",
     "alertSoundLabel": "เสียงเตือนเมื่อมีสลิปใหม่",
     "alertSoundOn": "เปิดเสียงเตือน",
     "alertSoundOff": "ปิดเสียงเตือน",

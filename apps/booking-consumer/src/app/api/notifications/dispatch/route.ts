@@ -3,18 +3,23 @@ import { nextNotificationAttempt } from '../../../../lib/notification-policy';
 import { resolveNotificationChannel } from '../../../../lib/notification-channel';
 import { buildCustomerNotificationText } from '../../../../lib/customer-notify-text';
 import { buildMerchantEmail } from '../../../../lib/notification-email';
+import { probeMerchantChannelState, resolveCustomerNotificationChannel } from '../../../../lib/notification-line-channel';
+import {
+  resolveReminderClaim,
+  skippedReminderOutcome,
+} from '../../../../lib/notification-appointment-guard';
 import {
   createResendTransport,
   readMerchantEmailConfig,
   type MerchantEmailTransport,
 } from '../../../../lib/notification-email-transport';
 
-type ClaimedNotification = { id: string; shop_id: string; event_type: 'booking_created' | 'booking_rescheduled' | 'booking_cancelled' | 'reminder_24h' | 'deposit_approved'; attempt_count: number };
+type ClaimedNotification = { id: string; shop_id: string; event_type: string; attempt_count: number };
 type DeliveryContext = {
   id: string; shop_id: string; event_type: string; recipient_type: string;
   attempt_count: number; line_user_id: string | null; line_oa_id: string | null; shop_name: string | null;
   subscription_plan: string | null; booking_date: string; start_time: string;
-  booking_code: string | null; can_resubmit: boolean | null;
+  booking_code: string | null; can_resubmit: boolean | null; start_timestamptz: string | null;
 };
 type RuntimeClient = Awaited<ReturnType<typeof import('../../../../lib/bk01-runtime').getBk01RuntimeClient>>;
 type RuntimeProvider = () => Promise<RuntimeClient>;
@@ -69,9 +74,16 @@ export async function handleNotificationDispatch(
     const claimRows = claims as ClaimedNotification[];
 
     const adminOrigin = (process.env.NEXT_PUBLIC_ADMIN_SITE_URL || 'https://admin.bk01.wstera.com').replace(/\/$/, '');
+    const centralChannel = () => resolveLineChannelConfig({
+      mode: 'trial',
+      centralSecret: process.env.LINE_CHANNEL_SECRET,
+      centralAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN,
+    });
 
     let sent = 0;
     let failed = 0;
+    let skippedStaleAppointment = 0;
+
     for (const claim of claimRows) {
       const { data: rows, error: contextError } = await runtime.rpc('get_line_notification_delivery_context', {
         p_id: claim.id,
@@ -80,6 +92,7 @@ export async function handleNotificationDispatch(
       const context = (Array.isArray(rows) ? rows[0] : rows) as DeliveryContext | null;
       let delivered = false;
       let failureMessage = contextError || !context ? 'Notification delivery context unavailable' : 'Notification recipient unavailable';
+      let staleReminder = false;
 
       if (!contextError && context) {
         const channel = resolveNotificationChannel(context.recipient_type);
@@ -111,36 +124,68 @@ export async function handleNotificationDispatch(
             failureMessage = 'Merchant notification recipient lookup is unavailable';
           }
         } else if (channel === 'line' && context.line_user_id) {
-          try {
-            const isMerchantPlan = context.subscription_plan === 'basic_490' || context.subscription_plan === 'pro_990';
-            const config = isMerchantPlan
-              ? await resolveMerchant(context.shop_id)
-              : resolveLineChannelConfig({ mode: 'trial', centralSecret: process.env.LINE_CHANNEL_SECRET, centralAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN });
-            const message = buildCustomerNotificationText({
-              eventType: context.event_type,
-              shopName: context.shop_name,
-              bookingDate: context.booking_date,
-              startTime: context.start_time,
-              canResubmit: context.can_resubmit ?? undefined,
-            });
-            const response = await send('https://api.line.me/v2/bot/message/push', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${config.accessToken}`, 'X-Line-Retry-Key': claim.id },
-              body: JSON.stringify({ to: context.line_user_id, messages: [{ type: 'text', text: message }] }),
-            });
-            delivered = response.ok;
-            if (!response.ok) failureMessage = `LINE push failed with HTTP ${response.status}`;
-          } catch {
-            failureMessage = 'LINE dispatch is unavailable';
+          // B9(b): a reminder whose appointment has already passed must not be
+          // delivered. The check runs before any channel is chosen, so neither
+          // branch can push a mistimed reminder.
+          const reminderClaim = resolveReminderClaim({
+            eventType: context.event_type,
+            appointmentStart: context.start_timestamptz,
+            now: new Date(),
+          });
+
+          if (!reminderClaim.claimable) {
+            staleReminder = true;
+            failureMessage = skippedReminderOutcome(reminderClaim.reason).message;
+          } else {
+            try {
+              // B9(a): the channel follows a CAPABILITY, not a plan name. A
+              // Basic-trial shop carries `basic_490` -- `bk01_effective_plan`
+              // resolves ('basic_490','trialing') to 'basic_490' on purpose --
+              // but it has no merchant OA yet. Reading the plan code as proof of
+              // a channel sent the send to the merchant resolver, which threw,
+              // and the customer received nothing. The probe is the real answer:
+              // a throw means "no channel", not "cannot send". It must be awaited
+              // so a synchronous throw is caught too -- that is the exact shape
+              // of the defect.
+              const merchantChannelState = await probeMerchantChannelState(resolveMerchant, context.shop_id);
+              const decision = resolveCustomerNotificationChannel({
+                subscriptionPlan: context.subscription_plan,
+                merchantChannelState,
+              });
+
+              const config = decision.channel === 'merchant'
+                ? await resolveMerchant(context.shop_id)
+                : centralChannel();
+              const message = buildCustomerNotificationText({
+                eventType: context.event_type,
+                shopName: context.shop_name,
+                bookingDate: context.booking_date,
+                startTime: context.start_time,
+                canResubmit: context.can_resubmit ?? undefined,
+              });
+              const response = await send('https://api.line.me/v2/bot/message/push', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${config.accessToken}`, 'X-Line-Retry-Key': claim.id },
+                body: JSON.stringify({ to: context.line_user_id, messages: [{ type: 'text', text: message }] }),
+              });
+              delivered = response.ok;
+              if (!response.ok) failureMessage = `LINE push failed with HTTP ${response.status}`;
+            } catch {
+              failureMessage = 'LINE dispatch is unavailable';
+            }
           }
         }
       }
 
-      const next = nextNotificationAttempt({
-        attemptCount: claim.attempt_count,
-        bookingStatus: context?.event_type === 'booking_cancelled' ? 'cancelled' : 'active',
-        delivered,
-      });
+      // A skipped stale reminder is retired immediately: retrying it would only
+      // push the same mistimed message again with backoff.
+      const next = staleReminder
+        ? { status: 'failed' as const, nextRetrySeconds: null }
+        : nextNotificationAttempt({
+            attemptCount: claim.attempt_count,
+            bookingStatus: context?.event_type === 'booking_cancelled' ? 'cancelled' : 'active',
+            delivered,
+          });
       const nextRetryAt = next.nextRetrySeconds == null ? null : new Date(Date.now() + next.nextRetrySeconds * 1000).toISOString();
       const { data: completed, error: completionError } = await runtime.rpc('complete_line_notification', {
         p_id: claim.id,
@@ -152,10 +197,16 @@ export async function handleNotificationDispatch(
       });
       if (completionError || completed !== true) return Response.json({ error: 'Notification delivery evidence could not be persisted' }, { status: 500 });
       if (delivered) sent += 1;
+      else if (staleReminder) skippedStaleAppointment += 1;
       else failed += 1;
     }
 
-    return Response.json({ claimed: claimRows.length, sent, failed });
+    return Response.json({
+      claimed: claimRows.length,
+      sent,
+      failed,
+      skippedStaleAppointment,
+    });
   } catch {
     return Response.json({ error: 'Runtime authorization unavailable' }, { status: 503 });
   }

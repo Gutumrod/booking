@@ -140,6 +140,7 @@
     "statPendingSlip": "Deposit slips awaiting review",
     "statOverdueUndecided": "Undecided after appointment date",
     "statOverdueUnavailable": "Not available yet (waiting for the queue-lock counter)",
+    "statOverdueFailed": "Counter could not be read — please tell the team",
     "alertSoundLabel": "Sound when a new slip arrives",
     "alertSoundOn": "Slip alert sound on",
     "alertSoundOff": "Slip alert sound off",

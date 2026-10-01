@@ -50,6 +50,10 @@ import {
   SLIP_POLL_INTERVAL_MS,
 } from '@/lib/merchant-alert';
 import {
+  fetchPendingPastAppointmentCount,
+  type PendingPastAppointmentResult,
+} from '@/lib/queue-lock-counter';
+import {
   resolveEntitlementStatusLabel,
   type EntitlementStatusLabels,
   type EntitlementStatusRow,
@@ -214,8 +218,12 @@ export default function AdminDashboard() {
   // than a zero it cannot vouch for. The sound is a local preference (default on)
   // and the previous count is a ref so a poll can tell an increase from a reload.
   const awaitingSlipCount = countAwaitingSlipReview(bookings);
-  const [overdueUndecided] = useState<number | null>(null);
-  const overdueBadge = resolveOverdueBadge({ awaitingSlip: awaitingSlipCount, overdueUndecided });
+  const [overdueCounter, setOverdueCounter] = useState<PendingPastAppointmentResult>({
+    available: false,
+    count: null,
+    status: 'not_deployed',
+  });
+  const overdueBadge = resolveOverdueBadge({ awaitingSlip: awaitingSlipCount, overdueUndecided: overdueCounter.count });
   const [slipAlertSoundEnabled, setSlipAlertSoundEnabled] = useState(true);
   const previousAwaitingSlipRef = useRef<number | null>(null);
   const slipAlertAudioRef = useRef<AudioContext | null>(null);
@@ -411,6 +419,35 @@ export default function AdminDashboard() {
       isCurrent = false;
     };
   }, []);
+
+  // Brief part B9: the overdue counter through the single queue-lock entry point.
+  // It is fetched on the same cadence as the bookings poll, and a missing function
+  // leaves the badge on "not available" -- never a zero.
+  useEffect(() => {
+    if (activeTab !== 'bookings') return;
+    let disposed = false;
+
+    const loadCounter = async () => {
+      const { supabase: adminSupabase } = await import('@/lib/supabase');
+      const result = await fetchPendingPastAppointmentCount(
+        (name, args) => adminSupabase.rpc(name, args),
+        shopId,
+      );
+      if (!disposed) setOverdueCounter(result);
+    };
+
+    if (shopId) {
+      void loadCounter();
+    }
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === 'visible' && shopId) void loadCounter();
+    }, SLIP_POLL_INTERVAL_MS);
+
+    return () => {
+      disposed = true;
+      window.clearInterval(interval);
+    };
+  }, [activeTab, shopId]);
 
   function toggleSlipAlertSound() {
     const next = !slipAlertSoundEnabledRef.current;
@@ -1002,11 +1039,13 @@ export default function AdminDashboard() {
             {overdueBadge.kind === 'count' ? (
               <p className="text-2xl font-bold text-rose-400">{t('countItems', { count: overdueBadge.count })}</p>
             ) : (
-              // Fail closed: the overdue counter is owned by the queue-lock unit
-              // (brief 23 section 2, item 2). Rendering 0 here would tell the shop
-              // there is nothing to decide, which is a different claim.
-              <p data-testid="overdue-unavailable" className="text-xs font-semibold text-slate-400 py-2">
-                {t('statOverdueUnavailable')}
+              // Fail closed: the counter is owned by the queue-lock unit (brief 23
+              // section 2, item (4)) and is called through the single entry point in
+              // lib/queue-lock-counter.ts. Rendering 0 here would tell the shop there
+              // is nothing to decide, which is a different claim. The status says
+              // which of the two reasons it is.
+              <p data-testid="overdue-unavailable" data-status={overdueCounter.status} className="text-xs font-semibold text-slate-400 py-2">
+                {overdueCounter.status === 'not_deployed' ? t('statOverdueUnavailable') : t('statOverdueFailed')}
               </p>
             )}
           </div>
