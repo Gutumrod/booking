@@ -110,6 +110,14 @@ try {
       end_timestamptz=((booking_date+start_time) at time zone 'Asia/Bangkok')+interval '60 minutes',
       expires_at=((booking_date+start_time) at time zone 'Asia/Bangkok')+interval '60 minutes'
       where id=${slipBooking}`;
+    const overdueBeforeLazySweep = await callAs('authenticated', async (tx) => {
+      await tx`select set_config('request.jwt.claim.sub',${owner},true)`;
+      return tx`select local_service.bk01_pending_past_appointment_count(${shop}) as count`;
+    });
+    const unreleased = await db`select queue_released_at is null as unreleased
+      from local_service.bookings where id=${slipBooking}`;
+    record('shop count calculates overdue pending review live before lazy release',
+      Number(overdueBeforeLazySweep[0].count) === 1 && unreleased[0].unreleased === true);
     const rebook = await callAs('anon', async (tx) => tx`
       select local_service.create_booking_hold(${shop},${service},${staff},'Rebook Customer','0800000103',null,
         ${day[0].today}::date,${day[0].past_time}::time,null)::text as result`);
@@ -123,7 +131,7 @@ try {
       await tx`select set_config('request.jwt.claim.sub',${owner},true)`;
       return tx`select local_service.bk01_pending_past_appointment_count(${shop}) as count`;
     });
-    record('shop owner count function sees own released pending row', Number(count[0].count) === 1);
+    record('shop owner count remains correct after lazy release', Number(count[0].count) === 1);
 
     let crossShopDenied = false;
     try {

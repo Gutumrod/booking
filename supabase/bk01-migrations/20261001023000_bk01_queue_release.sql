@@ -59,56 +59,6 @@ ALTER TABLE local_service.bookings
     AND queue_released_at IS NULL
   );
 
-CREATE OR REPLACE FUNCTION local_service.bk01_release_overdue_queues(
-  p_shop_id uuid DEFAULT NULL,
-  p_batch_size integer DEFAULT 500
-) RETURNS jsonb
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = pg_catalog, local_service
-AS $$
-DECLARE v_expired integer; v_released integer;
-BEGIN
-  IF p_batch_size IS NOT NULL AND p_batch_size < 1 THEN
-    RAISE EXCEPTION 'Batch size must be positive';
-  END IF;
-
-  WITH candidates AS (
-    SELECT id FROM local_service.bookings
-    WHERE status = 'hold'
-      AND expires_at IS NOT NULL AND expires_at <= now()
-      AND (p_shop_id IS NULL OR shop_id = p_shop_id)
-    ORDER BY expires_at, id
-    LIMIT p_batch_size
-  ), changed AS (
-    UPDATE local_service.bookings b
-       SET status = 'expired', updated_at = now()
-      FROM candidates c WHERE b.id = c.id
-    RETURNING b.id
-  ) SELECT count(*) INTO v_expired FROM changed;
-
-  WITH candidates AS (
-    SELECT id FROM local_service.bookings
-    WHERE status = 'pending_review'
-      AND deposit_status = 'submitted'
-      AND queue_released_at IS NULL
-      AND end_timestamptz <= now()
-      AND (p_shop_id IS NULL OR shop_id = p_shop_id)
-    ORDER BY end_timestamptz, id
-    LIMIT p_batch_size
-  ), changed AS (
-    UPDATE local_service.bookings b
-       SET queue_released_at = now(), updated_at = now()
-      FROM candidates c WHERE b.id = c.id
-    RETURNING b.id
-  ) SELECT count(*) INTO v_released FROM changed;
-
-  RETURN jsonb_build_object('expired_holds',v_expired,'released_pending_review',v_released);
-END;
-$$;
-REVOKE ALL ON FUNCTION local_service.bk01_release_overdue_queues(uuid,integer) FROM PUBLIC,anon,authenticated,service_role,bk01_runtime;
-GRANT EXECUTE ON FUNCTION local_service.bk01_release_overdue_queues(uuid,integer) TO service_role;
-
 CREATE OR REPLACE FUNCTION local_service.bk01_pending_past_appointment_count(p_shop_id uuid)
 RETURNS integer
 LANGUAGE plpgsql
@@ -122,7 +72,7 @@ BEGIN
   END IF;
   RETURN (SELECT count(*)::integer FROM local_service.bookings
           WHERE shop_id=p_shop_id AND status='pending_review'
-            AND queue_released_at IS NOT NULL);
+            AND end_timestamptz < now());
 END;
 $$;
 REVOKE ALL ON FUNCTION local_service.bk01_pending_past_appointment_count(uuid) FROM PUBLIC,anon,service_role,bk01_runtime;
@@ -254,7 +204,15 @@ BEGIN
       AND tstzrange(start_timestamptz, end_timestamptz, '[)')
           && tstzrange(v_start_tz, v_end_tz, '[)');
 
-    PERFORM local_service.bk01_release_overdue_queues(p_shop_id, NULL);
+    UPDATE local_service.bookings
+       SET queue_released_at = now(), updated_at = now()
+     WHERE shop_id = p_shop_id
+       AND status = 'pending_review'
+       AND deposit_status = 'submitted'
+       AND queue_released_at IS NULL
+       AND end_timestamptz <= now()
+       AND tstzrange(start_timestamptz, end_timestamptz, '[)')
+           && tstzrange(v_start_tz, v_end_tz, '[)');
 
     v_limits := NULL;
 

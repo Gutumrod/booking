@@ -322,6 +322,9 @@ test('forward migrations exist in timestamp order and the repository policy acce
   assert.equal(validateBk01MigrationSql(queueReleaseMigration, '20261001023000_bk01_queue_release.sql'), true);
   assert.match(queueReleaseMigration, /queue_released_at IS NULL/);
   assert.match(queueReleaseMigration, /local_service\.bk01_pending_past_appointment_count/);
+  assert.match(queueReleaseMigration, /status='pending_review'[\s\S]*?end_timestamptz < now\(\)/);
+  assert.match(queueReleaseMigration, /SET queue_released_at = now\(\)[\s\S]*?tstzrange\(v_start_tz, v_end_tz, '\[\)'\)/);
+  assert.doesNotMatch(queueReleaseMigration, /bk01_release_overdue_queues|GRANT EXECUTE ON FUNCTION local_service\.bk01_[^;]+ TO service_role/i);
   assert.match(queueReleaseMigration, /queue_released_at IS NOT NULL THEN[\s\S]*?confirmation is unavailable/);
   assert.throws(() => validateBk01MigrationSql('CREATE OR REPLACE FUNCTION local_service.other() RETURNS int LANGUAGE sql AS $$ SELECT 1 $$;\n-- BK01-PRESERVE-EXISTING-PUBLIC-EXECUTE: local_service.generate_link_token()', '20260930120000_bk01_link_token_no_extensions.sql'), /must match exactly one/);
   assert.throws(() => validateBk01MigrationSql('CREATE OR REPLACE FUNCTION local_service.generate_link_token() RETURNS text LANGUAGE sql AS $$ SELECT \'x\' $$;\n-- BK01-PRESERVE-EXISTING-PUBLIC-EXECUTE: local_service.generate_link_token()', 'crafted:not-a11.sql'), /limited to the A11 migration/);

@@ -21,7 +21,6 @@ DROP FUNCTION local_service_internal.bk01_assert_no_released_queue_rows();
 DROP TRIGGER trg_bk01_set_pending_review_expiry ON local_service.bookings;
 DROP FUNCTION local_service.trg_bk01_set_pending_review_expiry();
 DROP FUNCTION local_service.bk01_pending_past_appointment_count(uuid);
-DROP FUNCTION local_service.bk01_release_overdue_queues(uuid,integer);
 CREATE OR REPLACE FUNCTION local_service.create_booking_hold(p_shop_id uuid, p_service_id uuid, p_staff_id uuid DEFAULT NULL::uuid, p_customer_name character varying DEFAULT ''::character varying, p_customer_phone character varying DEFAULT ''::character varying, p_customer_email character varying DEFAULT NULL::character varying, p_booking_date date DEFAULT CURRENT_DATE, p_start_time time without time zone DEFAULT '09:00:00'::time without time zone, p_notes text DEFAULT NULL::text)
  RETURNS json
  LANGUAGE plpgsql
