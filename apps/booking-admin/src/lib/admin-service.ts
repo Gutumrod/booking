@@ -663,8 +663,10 @@ export async function recordBookingDepositRefund(
 
 /**
  * B8 — the audit trail behind a refunded deposit. The RPC returns the rows the
- * trigger recorded in local_service.booking_status_history; an empty array means
- * this booking has no recorded refund history to show.
+ * refund record wrote into local_service.audit_events (action
+ * 'deposit_refunded') — see evidence/b8-spec-v2-addendum-for-group5.sql, which
+ * replaced the original trigger-based design after caretaker decision brief 23
+ * §5c-3. An empty array means this booking has no recorded refund history yet.
  */
 export async function fetchDepositRefundHistory(bookingId: string): Promise<DepositRefundAuditEntry[]> {
   const { data, error } = await supabase.rpc(DEPOSIT_REFUND_HISTORY_RPC, {
