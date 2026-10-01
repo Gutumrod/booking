@@ -307,7 +307,7 @@ const freeShopsLimit = () => Number(planRow('free').shops_limit);
 
 test('forward migrations exist in timestamp order and the repository policy accepts each', () => {
   const files = readdirSync(MIGRATION_DIR).filter((name) => name.endsWith('.sql')).sort();
-  assert.deepEqual(files, [MIGRATION_FILE, '20260927120000_bk01_runtime_route_rpcs.sql', '20260927130000_bk01_trial_line_bind.sql', '20260928120000_bk01_house_upload_grants.sql', '20260930120000_bk01_link_token_no_extensions.sql']);
+  assert.deepEqual(files, [MIGRATION_FILE, '20260927120000_bk01_runtime_route_rpcs.sql', '20260927130000_bk01_trial_line_bind.sql', '20260928120000_bk01_house_upload_grants.sql', '20260930120000_bk01_link_token_no_extensions.sql', '20261001023000_bk01_queue_release.sql']);
   assert.match(MIGRATION_FILE, /^\d{14}_[a-z0-9_]+\.sql$/);
   assert.equal(validateBk01MigrationSql(rawSql, MIGRATION_FILE), true);
   assert.equal(validateBk01MigrationSql(readFileSync(`${MIGRATION_DIR}/20260927120000_bk01_runtime_route_rpcs.sql`, 'utf8'), '20260927120000_bk01_runtime_route_rpcs.sql'), true);
@@ -318,6 +318,11 @@ test('forward migrations exist in timestamp order and the repository policy acce
   assert.match(linkTokenMigration, /BK01-PRESERVE-EXISTING-PUBLIC-EXECUTE:\s*local_service\.generate_link_token\(\)/);
   assert.match(linkTokenMigration, /ALTER POLICY "Users view own shop memberships"\s+ON local_service\.shop_users/);
   assert.doesNotMatch(linkTokenMigration.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/--.*$/gm, ' '), /\bauth\s*\./i);
+  const queueReleaseMigration = readFileSync(`${MIGRATION_DIR}/20261001023000_bk01_queue_release.sql`, 'utf8');
+  assert.equal(validateBk01MigrationSql(queueReleaseMigration, '20261001023000_bk01_queue_release.sql'), true);
+  assert.match(queueReleaseMigration, /queue_released_at IS NULL/);
+  assert.match(queueReleaseMigration, /local_service\.bk01_pending_past_appointment_count/);
+  assert.match(queueReleaseMigration, /queue_released_at IS NOT NULL THEN[\s\S]*?confirmation is unavailable/);
   assert.throws(() => validateBk01MigrationSql('CREATE OR REPLACE FUNCTION local_service.other() RETURNS int LANGUAGE sql AS $$ SELECT 1 $$;\n-- BK01-PRESERVE-EXISTING-PUBLIC-EXECUTE: local_service.generate_link_token()', '20260930120000_bk01_link_token_no_extensions.sql'), /must match exactly one/);
   assert.throws(() => validateBk01MigrationSql('CREATE OR REPLACE FUNCTION local_service.generate_link_token() RETURNS text LANGUAGE sql AS $$ SELECT \'x\' $$;\n-- BK01-PRESERVE-EXISTING-PUBLIC-EXECUTE: local_service.generate_link_token()', 'crafted:not-a11.sql'), /limited to the A11 migration/);
   for (const name of files) {

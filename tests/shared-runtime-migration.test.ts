@@ -15,6 +15,16 @@ test('BK01 migration policy accepts explicitly qualified product-local changes',
   `, 'accepted.sql'), true);
 });
 
+test('BK01 migration policy validates UPDATE trigger targets without treating the event as a table update', () => {
+  assert.equal(
+    validateBk01MigrationSql(
+      'create trigger queue_expiry before update on local_service.bookings for each row execute function local_service_internal.set_queue_expiry();',
+      'qualified-update-trigger.sql',
+    ),
+    true,
+  );
+});
+
 test('BK01 migration policy rejects unqualified and foreign mutation targets', () => {
   assert.throws(() => validateBk01MigrationSql('create table unsafe(id int);', 'unsafe.sql'), /explicitly qualified/);
   assert.throws(() => validateBk01MigrationSql('alter table ps01.bookings add column bad int;', 'ps01.sql'), /BK01 schema/);

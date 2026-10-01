@@ -94,7 +94,9 @@ const TARGET_PATTERNS = [
   { label: 'TYPE', re: /\b(?:create\s+type|alter\s+type|drop\s+type(?:\s+if\s+exists)?)\s+([^\s(;]+)/gi },
   { label: 'SEQUENCE', re: /\b(?:create\s+sequence(?:\s+if\s+not\s+exists)?|alter\s+sequence|drop\s+sequence(?:\s+if\s+exists)?)\s+([^\s(;]+)/gi },
   { label: 'INSERT', re: /\binsert\s+into\s+([^\s(;]+)/gi },
-  { label: 'UPDATE', re: /\bupdate\s+([^\s(;]+)/gi },
+  // Avoid parsing the event words in CREATE TRIGGER ... BEFORE/AFTER UPDATE ON ...
+  // as an UPDATE statement; the dedicated TRIGGER pattern validates its ON target.
+  { label: 'UPDATE', re: /\bupdate\s+(?!of\b|on\b)([^\s(;]+)/gi },
   { label: 'DELETE', re: /\bdelete\s+from\s+([^\s(;]+)/gi },
   { label: 'TRUNCATE', re: /\btruncate(?:\s+table)?\s+([^\s(;]+)/gi },
   { label: 'INDEX', re: /\b(?:alter\s+index|drop\s+index(?:\s+if\s+exists)?)\s+([^\s(;]+)/gi },
