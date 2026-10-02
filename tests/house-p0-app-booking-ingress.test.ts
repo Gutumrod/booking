@@ -395,7 +395,13 @@ test('the booking page renders a challenge widget and sends the token with the r
   const page = read('apps/booking-consumer/src/app/book/[slug]/page.tsx');
   assert.match(page, /NEXT_PUBLIC_TURNSTILE_SITEKEY/, 'the sitekey is public and configurable');
   assert.match(page, /challenges\.cloudflare\.com\/turnstile/, 'the official widget script');
-  assert.match(page, /turnstile_token: tokenRef\.current/, 'the token travels with the booking request');
+  // D2 (2026-10-02): the token used to be held in a ref the widget lifecycle wrote to.
+  // The widget never rendered, so that ref was always empty and every hold answered
+  // 400. The property this assertion has always been about is "the token the widget
+  // produced travels with the booking request", so it is now asserted on the request
+  // payload and on the widget lifecycle call that fills it, not on a variable name.
+  assert.match(page, /turnstile_token: turnstileToken/, 'the token travels with the booking request');
+  assert.match(page, /onToken: setTurnstileToken/, 'the widget lifecycle must write the token the page sends');
   // The secret is never in the page, and neither is a real key.
   assert.doesNotMatch(page, /TURNSTILE_SECRET_KEY/, 'the secret must not be shipped to the browser');
 });

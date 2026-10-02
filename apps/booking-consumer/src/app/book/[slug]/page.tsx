@@ -20,6 +20,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { resolveBookingPageState, type BookingPageState } from '../../../lib/booking-state';
 import { resolvePaymentInstruction, preHoldServiceDeposit, isServicePaymentBlocked } from '../../../lib/payment-instruction';
 import { loadBookingRoute, createRequestGate } from '../../../lib/booking-route-load';
+import { mountTurnstileWidget } from '../../../lib/turnstile-widget';
 // F1: the binding target is the CENTRAL OA only. Sourced from lib/line-link.ts so
 // the page and the URL builder cannot drift apart, and never from a per-shop value
 // (the public profile no longer even exposes one).
@@ -40,16 +41,6 @@ import { CENTRAL_LINE_OA_ID } from '../../../lib/line-link';
 const TURNSTILE_TEST_SITEKEY = '1x00000000000000000000AA';
 const TURNSTILE_SITEKEY = process.env.NEXT_PUBLIC_TURNSTILE_SITEKEY || TURNSTILE_TEST_SITEKEY;
 const TURNSTILE_SCRIPT_SRC = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
-
-declare global {
-  interface Window {
-    turnstile?: {
-      render(container: HTMLElement, options: Record<string, unknown>): string;
-      reset(widgetId?: string): void;
-      remove(widgetId?: string): void;
-    };
-  }
-}
 
 const ALL_TIME_SLOTS = ['09:00', '09:30', '10:00', '10:30', '11:00', '11:30', '12:00', '13:00', '13:30', '14:00', '14:30', '15:00', '15:30', '16:00', '16:30', '17:00', '17:30', '18:00', '18:30', '19:00'];
 const thaiMobilePhonePattern = /^0[689]\d{8}$/;
@@ -164,7 +155,11 @@ function BookingRoute({ slug }: { slug: string }) {
   const [holdResult, setHoldResult] = useState<HoldResponse | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const qrContainerRef = useRef<HTMLDivElement>(null);
-  const turnstileRef = useRef<HTMLDivElement>(null);
+  // D2: the widget container. It is state, not a ref, because the effect has to observe
+  // the element actually appearing on step 2 -- that is the whole defect: the old effect
+  // ran once at mount, the container did not exist yet, and nothing ever re-ran it.
+  const [turnstileContainer, setTurnstileContainer] = useState<HTMLDivElement | null>(null);
+  const [turnstileToken, setTurnstileToken] = useState('');
 
   // Deposit hold countdown. Derived from the server-issued expires_at on the
   // hold response -- never a client-side duration literal, so it stays correct
@@ -337,53 +332,36 @@ function BookingRoute({ slug }: { slug: string }) {
   );
 
   /*
-   * The Turnstile widget (H4 / G01). It renders explicitly into `turnstileRef` once
-   * the script is up, and hands the token to `handleCreateHold` through `tokenRef`
-   * (a ref, not state: the token is read once at submit time and must not cause a
-   * re-render, and a stale state value would be the bug the widget exists to avoid).
+   * The Turnstile widget (H4 / G01), fixed for D2. The lifecycle is in
+   * `lib/turnstile-widget.ts`; what belongs to the page is WHEN the widget may exist.
    *
-   * FAIL-SOFT ON PURPOSE. If the script cannot load, the widget is simply absent and
-   * the server decides what that means — in production a missing secret refuses the
-   * booking, in development the test secret lets it through. A page that refuses to
-   * render because an optional third-party script failed would take booking down for
-   * every customer, which is the worse failure.
+   * The container below is rendered only on step 2, so it is passed in through a callback
+   * ref and this effect depends on the element AND the step. That is the fix: whether the
+   * script arrives before step 2 or after it, the effect re-runs when the container
+   * appears, renders the widget, and tears it down when the customer leaves the step.
+   *
+   * FAIL-SOFT ON PURPOSE. If the script cannot load, the widget is simply absent and the
+   * server decides what that means — in production a missing secret refuses the booking,
+   * in development the test secret lets it through. A page that refuses to render because
+   * an optional third-party script failed would take booking down for every customer,
+   * which is the worse failure.
    */
-  const tokenRef = useRef<string>('');
-  const widgetIdRef = useRef<string>('');
-
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-    let cancelled = false;
-
-    const render = () => {
-      if (cancelled || !window.turnstile || !turnstileRef.current || widgetIdRef.current) return;
-      widgetIdRef.current = window.turnstile.render(turnstileRef.current, {
-        sitekey: TURNSTILE_SITEKEY,
-        callback: (token: string) => { tokenRef.current = token; },
-        'expired-callback': () => { tokenRef.current = ''; },
-        'error-callback': () => { tokenRef.current = ''; },
-      });
-    };
-
-    if (window.turnstile) {
-      render();
-      return () => { cancelled = true; };
+    if (!turnstileContainer) {
+      // No container on screen (the widget only exists on step 2). Nothing to tear down
+      // here: leaving step 2 already ran this effect's cleanup, which removed the widget
+      // and cleared the token through the same `onToken` callback.
+      return;
     }
-
-    const existing = document.querySelector<HTMLScriptElement>(`script[src="${TURNSTILE_SCRIPT_SRC}"]`);
-    const script = existing ?? document.createElement('script');
-    if (!existing) {
-      script.src = TURNSTILE_SCRIPT_SRC;
-      script.async = true;
-      script.defer = true;
-      document.head.appendChild(script);
-    }
-    script.addEventListener('load', render);
-    return () => {
-      cancelled = true;
-      script.removeEventListener('load', render);
-    };
-  }, []);
+    return mountTurnstileWidget({
+      window,
+      document,
+      container: turnstileContainer,
+      sitekey: TURNSTILE_SITEKEY,
+      scriptSrc: TURNSTILE_SCRIPT_SRC,
+      onToken: setTurnstileToken,
+    });
+  }, [step, turnstileContainer]);
 
   // Reload one complete snapshot for this slug through the same route loader the
   // initial effect uses. F-14: when the database refuses a hold because the
@@ -456,7 +434,7 @@ function BookingRoute({ slug }: { slug: string }) {
         customer_phone: customerPhone,
         booking_date: selectedDate,
         start_time: selectedTime + ':00',
-        turnstile_token: tokenRef.current,
+        turnstile_token: turnstileToken,
       }, {
         shopBlocked: t('errors.shopBlockedService'),
       });
@@ -864,11 +842,12 @@ function BookingRoute({ slug }: { slug: string }) {
                 </div>
 
                 {/*
-                  H4 / G01: the Turnstile container. The widget renders here when its
-                  script is available; the token it produces is sent with the booking
-                  request and validated on the server.
+                  H4 / G01 + D2: the Turnstile container. It exists only while step 2 is
+                  on screen, and the callback ref puts the element into state so the
+                  widget effect re-runs when it appears -- the old mount-once ref is why
+                  the widget never rendered and every hold answered 400.
                 */}
-                <div ref={turnstileRef} className="pt-2" aria-hidden="true" />
+                <div ref={setTurnstileContainer} className="pt-2" aria-hidden="true" />
               </div>
             )}
 
