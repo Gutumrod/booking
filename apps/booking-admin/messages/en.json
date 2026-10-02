@@ -105,7 +105,7 @@
     "registerSuccessSubtitle": "Taking you to the shop admin dashboard...",
     "checkEmailTitle": "Check your email to confirm your account",
     "checkEmailBody": "A confirmation link was sent to {email}. Once confirmed, you will return here and your shop will be provisioned automatically.",
-    "checkEmailSpam": "Didn't receive it? Check the Spam/Junk folder first.",
+    "checkEmailSpam": "If you don't see the email, check your junk mail folder.",
     "pendingCorrupt": "Your saved registration data is corrupted. Please fill in the form again.",
     "forgotTitle": "Recover shop password",
     "forgotSubtitle": "Enter the email you registered with and we will send a reset link to it.",
