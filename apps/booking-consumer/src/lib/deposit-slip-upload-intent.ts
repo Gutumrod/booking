@@ -29,6 +29,57 @@ export const UPLOAD_INTENT_IP_LIMIT = 20;
 export const UPLOAD_INTENT_WINDOW_MS = 15 * 60 * 1000;
 
 /**
+ * The database's own daily ceiling, and how the app answers it (G09, Codex migration
+ * `supabase/bk01-migrations/20261002150000_bk01_p1_g09_g10.sql`).
+ *
+ * `authorize_deposit_slip_upload` now keeps a per-booking success ledger and, on the
+ * twenty-first successful intent inside 24 hours, raises exactly:
+ *
+ *     RAISE EXCEPTION USING ERRCODE = 'P0001', MESSAGE = 'UPLOAD_INTENT_LIMIT';
+ *
+ * WHY THE MESSAGE IS THE DISCRIMINATOR, NOT THE CODE. Every refusal in that RPC shares
+ * ERRCODE `P0001` — the wrong-token refusal, the malformed-input refusal and this
+ * ceiling are the same code, so the code separates nothing. Only the message does, and
+ * the match below is EXACT: the wrong-token family and the ceiling family differ by a
+ * suffix, so a substring rule would report an honest holder with a stale token as a
+ * quota exhaustion (and vice versa), which is the misclassification this mapping exists
+ * to prevent. The code is not required alongside the message: it adds no discrimination
+ * here, and demanding it would only add a way for a dropped `code` field to hide the
+ * daily refusal behind a wrong-token message.
+ */
+export const UPLOAD_INTENT_DAILY_LIMIT_SQL_MESSAGE = 'UPLOAD_INTENT_LIMIT';
+export const UPLOAD_INTENT_DAILY_LIMIT_CODE = 'UPLOAD_INTENT_DAILY_LIMIT';
+
+/**
+ * The daily ceiling is a third refusal layer, apart from the two window budgets above:
+ * 'booking' means this booking's 5-per-15-minute window, 'source' means the caller's
+ * address, and 'booking_daily' means the database's 20-per-24-hour ledger.
+ */
+export const UPLOAD_INTENT_DAILY_LIMIT_SCOPE = 'booking_daily';
+
+/**
+ * The copy the customer reads, and the Thai default the API itself returns.
+ *
+ * It is the SAME string as `booking.errors.slipUploadDailyLimit` in both catalogues —
+ * a test asserts the equality, so the API default and the localized page copy cannot
+ * drift. The API does not read the request's locale, which is why the client passes its
+ * own translated string (see `uploadDepositSlip`); the value here is the product's Thai
+ * default for any caller reading the response body directly.
+ */
+export const UPLOAD_INTENT_DAILY_LIMIT_MESSAGE_TH = 'ครบจำนวนครั้งที่อัปโหลดสลิปได้แล้ว กรุณาติดต่อร้าน';
+
+/**
+ * What the 429 advertises for `Retry-After`.
+ *
+ * The SQL counts inside a rolling 24-hour window whose reset instant the raised error
+ * does not disclose, so the app cannot compute the real remaining time. It therefore
+ * advertises the whole window — the honest upper bound it can back — rather than a
+ * shorter number it cannot guarantee and a customer would retry against in vain. The
+ * customer-facing instruction is the copy above: contact the shop.
+ */
+export const UPLOAD_INTENT_DAILY_LIMIT_RETRY_AFTER_SECONDS = 24 * 60 * 60;
+
+/**
  * In-memory, per Worker isolate — the same limitation the booking ingress documents,
  * reported rather than hidden. It is a hard ceiling per isolate against one holder,
  * and the durable counter remains an edge/platform configuration item.
@@ -107,6 +158,46 @@ function rateLimited(scope: 'booking' | 'source', decision: BucketDecision): Res
     { error, code: 'UPLOAD_INTENT_RATE_LIMITED', scope },
     { status: 429, headers: { 'Retry-After': String(decision.retryAfterSeconds ?? 60) } },
   );
+}
+
+/**
+ * The refusal for the database's daily ceiling (G09).
+ *
+ * 429, like the window budgets — the holder's capability is fine and the request is not
+ * malformed; the booking has simply spent its day. The scope is `booking_daily` so a
+ * caller can tell the three layers apart, the code is its own so a client can act on it
+ * without reading prose, and the message is the approved "contact the shop" copy. It is
+ * deliberately NOT the wrong-token 403: that would tell an honest customer their own
+ * token is invalid, and it would invite a retry that cannot succeed until the window
+ * rolls over.
+ *
+ * The booking budget is released before this returns. The database refused the intent,
+ * so no grant exists; keeping the reserved unit would let a booking that is merely at
+ * the SQL ceiling burn its 5-per-15-minute window too and get the wrong refusal layer.
+ */
+function dailyLimited(bookingKey: string, nowMs: number): Response {
+  release(bookingKey, nowMs);
+  return Response.json(
+    {
+      error: UPLOAD_INTENT_DAILY_LIMIT_MESSAGE_TH,
+      code: UPLOAD_INTENT_DAILY_LIMIT_CODE,
+      scope: UPLOAD_INTENT_DAILY_LIMIT_SCOPE,
+    },
+    { status: 429, headers: { 'Retry-After': String(UPLOAD_INTENT_DAILY_LIMIT_RETRY_AFTER_SECONDS) } },
+  );
+}
+
+/**
+ * Is this RPC error the database's daily ceiling?
+ *
+ * EXACT equality, never `includes`/`startsWith`: `UPLOAD_INTENT_LIMIT_REACHED` and the
+ * wrong-token message both contain substrings that a looser rule would misread, and a
+ * misread here changes which customer instruction is shown. See the constant above for
+ * why the shared `P0001` code is not part of the test.
+ */
+function isDailyUploadLimit(error: unknown): boolean {
+  const message = (error as { message?: unknown } | null | undefined)?.message;
+  return typeof message === 'string' && message.trim() === UPLOAD_INTENT_DAILY_LIMIT_SQL_MESSAGE;
 }
 
 /**
@@ -205,6 +296,12 @@ export async function handleUploadIntent(req: Request, runtimeProvider: RuntimeP
     });
     const grant = Array.isArray(grants) ? grants[0] : grants;
     if (grantError || !grant?.object_path) {
+      /*
+       * G09. The database's own 20-per-24-hours ledger is the third refusal layer and it
+       * is checked FIRST, because its error is also a grant-less failure and the generic
+       * branch below would otherwise report it to the customer as a bad token.
+       */
+      if (isDailyUploadLimit(grantError)) return dailyLimited(admission.bookingKey, nowMs);
       /*
        * The token was not good, so this attempt must not count against the booking: the
        * id is public, and an attacker holding only the id would otherwise be able to

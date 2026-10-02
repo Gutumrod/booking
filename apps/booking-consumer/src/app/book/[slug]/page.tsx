@@ -527,6 +527,7 @@ function BookingRoute({ slug }: { slug: string }) {
         unsupportedType: t('errors.slipUnsupportedType'),
         tooLarge: t('errors.slipTooLarge'),
         urlFailed: t('errors.slipUrlFailed'),
+        dailyLimitReached: t('errors.slipUploadDailyLimit'),
       });
       await submitDepositSlip(holdResult.booking_id, holdResult.link_token, slipObjectPath);
       setBookingSuccess(true);

@@ -133,6 +133,7 @@
       "slipUnsupportedType": "Only JPG, PNG, or WebP files are supported.",
       "slipTooLarge": "The slip file must be 5 MB or smaller.",
       "slipUrlFailed": "Could not create the slip URL.",
+      "slipUploadDailyLimit": "You have reached the maximum number of slip uploads. Please contact the shop.",
       "shopBlockedService": "This shop is not accepting online bookings right now.",
       "paymentNotConfigured": "This shop requires a deposit but hasn't finished its payment setup yet. Please contact the shop to book.",
       "serviceOutsidePlan": "This service is outside the entitlement of the plan this shop is on, so it cannot be booked online yet. Please choose another service.",

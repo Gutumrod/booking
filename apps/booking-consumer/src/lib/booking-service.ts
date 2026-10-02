@@ -287,12 +287,14 @@ export interface UploadDepositSlipMessages {
   unsupportedType: string;
   tooLarge: string;
   urlFailed: string;
+  dailyLimitReached: string;
 }
 
 const defaultUploadDepositSlipMessages: UploadDepositSlipMessages = {
   unsupportedType: 'รองรับเฉพาะไฟล์ JPG, PNG หรือ WebP',
   tooLarge: 'ไฟล์สลิปต้องมีขนาดไม่เกิน 5 MB',
   urlFailed: 'Failed to create deposit slip URL',
+  dailyLimitReached: 'ครบจำนวนครั้งที่อัปโหลดสลิปได้แล้ว กรุณาติดต่อร้าน',
 };
 
 export async function uploadDepositSlip(
@@ -313,8 +315,20 @@ export async function uploadDepositSlip(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ bookingId, recoveryToken, contentType: file.type, size: file.size }),
   });
-  const intent = await intentResponse.json().catch(() => null) as { objectPath?: string; token?: string; error?: string } | null;
+  const intent = await intentResponse.json().catch(() => null) as
+    { objectPath?: string; token?: string; error?: string; code?: string } | null;
   if (!intentResponse.ok || !intent?.objectPath || !intent.token) {
+    /*
+     * G09. The database caps successful upload intents at 20 per booking per 24 hours and
+     * the route reports that as its own code. It is not one of the window-budget 429s and
+     * not a bad token, so the customer needs different instructions: the slip cannot be
+     * uploaded again today and the shop is the way forward. The route's Thai default is
+     * used only when the page did not supply its own localized copy, so a raw English
+     * server message can never reach a Thai customer here.
+     */
+    if (intent?.code === 'UPLOAD_INTENT_DAILY_LIMIT') {
+      throw new Error(messages.dailyLimitReached || intent.error || defaultUploadDepositSlipMessages.dailyLimitReached);
+    }
     throw new Error(intent?.error || messages.urlFailed);
   }
   const { error } = await supabase.storage
