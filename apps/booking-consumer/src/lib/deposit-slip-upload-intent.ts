@@ -35,6 +35,23 @@ export const UPLOAD_INTENT_WINDOW_MS = 15 * 60 * 1000;
  */
 const uploadIntentBuckets = new Map<string, { count: number; resetAt: number }>();
 
+/**
+ * The one booking-id spelling this endpoint accepts: canonical, lower case, hyphenated
+ * 8-4-4-4-12.
+ *
+ * WHY IT IS HERE (F1, found by both paired reviewers on `4d067fd`). The budget used to
+ * key on the RAW `bookingId` string while the RPC's parameter is a Postgres `uuid`, and
+ * Postgres accepts several spellings of one value (upper case, braces, hyphens omitted
+ * or added after any four digits). One booking therefore had one bucket per spelling,
+ * so the per-booking ceiling was a property of the spelling rather than of the booking:
+ * a measured 20 grants — the full per-source ceiling — against a single booking by
+ * varying only the spelling, and opencode measured 5 + 5 from a single address by
+ * switching between the canonical and the hyphen-less form. `gen_random_uuid()` always
+ * prints the canonical form, so refusing every other spelling costs no real caller
+ * anything and closes the bypass before a bucket is ever consulted.
+ */
+const CANONICAL_BOOKING_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
 /** Test seam: forget every bucket so a case starts from zero. */
 export function resetUploadIntentRateLimit(): void {
   uploadIntentBuckets.clear();
@@ -58,22 +75,76 @@ function consume(key: string, limit: number, nowMs: number): BucketDecision {
   return { allowed: true, retryAfterSeconds: null };
 }
 
+/** Give back one unit of a budget a request reserved but did not earn. */
+function release(key: string, nowMs: number): void {
+  const existing = uploadIntentBuckets.get(key);
+  if (!existing || existing.resetAt <= nowMs) return;
+  existing.count = Math.max(0, existing.count - 1);
+}
+
 /**
- * Count one intent request against BOTH budgets and refuse if either is spent.
- *
- * The booking key is the one that must hold: it is the only identity an anonymous
- * caller always has, so a caller behind no `CF-Connecting-IP` is still capped. The
- * per-source key is defence in depth for one address working many bookings. An
- * unidentifiable caller shares one `unknown-client` bucket instead of being given a
- * pass, which is the same fail-closed direction the booking ingress chose.
+ * The source bucket key. An unidentifiable caller shares one `unknown-client` bucket
+ * instead of being given a pass, which is the fail-closed direction the booking ingress
+ * chose for the same situation.
  */
-function consumeUploadIntentBudget(input: { bookingId: string; clientIp: string | null; now?: Date }): BucketDecision {
-  const nowMs = (input.now ?? new Date()).getTime();
-  const ip = typeof input.clientIp === 'string' && input.clientIp.trim().length > 0 ? input.clientIp.trim() : 'unknown-client';
-  const byBooking = consume(`upload-intent:booking:${input.bookingId}`, UPLOAD_INTENT_BOOKING_LIMIT, nowMs);
-  const byIp = consume(`upload-intent:ip:${ip}`, UPLOAD_INTENT_IP_LIMIT, nowMs);
-  if (!byBooking.allowed) return byBooking;
-  return byIp;
+function sourceBucketKey(clientIp: string | null): string {
+  return typeof clientIp === 'string' && clientIp.trim().length > 0 ? clientIp.trim() : 'unknown-client';
+}
+
+/**
+ * A 429 that names the layer that refused it (F5, opencode).
+ *
+ * WHY. The old text always blamed "this booking", including when the source ceiling was
+ * what refused — a caller cannot act on a message that names the wrong layer, and the
+ * two refusals have different remedies ("wait for this booking's window" vs "you are
+ * sharing an address that is working many bookings").
+ */
+function rateLimited(scope: 'booking' | 'source', decision: BucketDecision): Response {
+  const error = scope === 'booking'
+    ? 'Too many upload attempts for this booking. Please try again shortly.'
+    : 'Too many upload attempts from this network address. Please try again shortly.';
+  return Response.json(
+    { error, code: 'UPLOAD_INTENT_RATE_LIMITED', scope },
+    { status: 429, headers: { 'Retry-After': String(decision.retryAfterSeconds ?? 60) } },
+  );
+}
+
+/**
+ * The admission control, in the order the request passes through it.
+ *
+ * TWO BUDGETS, TWO DIFFERENT CHARGING RULES (F4, opencode). The booking budget is the
+ * one that must hold, but the booking id is not a secret — it is in the customer's own
+ * booking URL — so charging the booking budget for every attempt, valid token or not,
+ * let anyone who could read a booking link spend the real customer's five attempts with
+ * junk tokens and lock them out for the window (measured on `4d067fd`: five 403s turned
+ * the customer's next honest upload into a 429).
+ *
+ * The booking unit is therefore RESERVED before the runtime — so the ceiling still
+ * holds against a flood and against concurrent requests, which a read-then-charge
+ * sequence would not — and RELEASED when the RPC refuses the token (`release`). A
+ * refused token costs the caller nothing but their own source budget, and the source
+ * budget is charged on every attempt and never released, so an attacker gains nothing
+ * net.
+ */
+interface UploadIntentAdmission {
+  /** The key the booking budget is kept under, canonicalised once. */
+  bookingKey: string;
+  /** The source bucket decision, already charged — `allowed: false` ends the request. */
+  source: BucketDecision;
+  /** The booking bucket decision, already charged and refundable — see `release`. */
+  booking: BucketDecision;
+}
+
+function admitUploadIntent(input: { bookingId: string; clientIp: string | null; nowMs: number }): UploadIntentAdmission {
+  const bookingKey = `upload-intent:booking:${input.bookingId}`;
+  const source = consume(`upload-intent:ip:${sourceBucketKey(input.clientIp)}`, UPLOAD_INTENT_IP_LIMIT, input.nowMs);
+  if (!source.allowed) {
+    // The source layer already refused, so this request cannot reach the runtime; do not
+    // let it also drain a booking's budget, which would let one shared address exhaust
+    // the budgets of many bookings while being refused itself.
+    return { bookingKey, source, booking: { allowed: true, retryAfterSeconds: null } };
+  }
+  return { bookingKey, source, booking: consume(bookingKey, UPLOAD_INTENT_BOOKING_LIMIT, input.nowMs) };
 }
 
 /**
@@ -103,18 +174,26 @@ export async function handleUploadIntent(req: Request, runtimeProvider: RuntimeP
   }
 
   /*
+   * F1: the booking id is canonicalised BEFORE it becomes a budget key. Postgres would
+   * accept several spellings of this uuid, so a bucket keyed on the raw string was a
+   * bucket per spelling. The id has to be exactly the form `gen_random_uuid()` prints —
+   * the form the caller was given in their own booking URL — or it is not a booking id
+   * at all, and the request stops here rather than being counted under a made-up key.
+   */
+  if (!CANONICAL_BOOKING_ID.test(body.bookingId)) {
+    return Response.json({ error: 'Invalid upload request' }, { status: 400 });
+  }
+
+  /*
    * The abuse budget runs BEFORE the runtime, exactly like the booking ingress: a
    * flood must not be able to spend a House runtime token round trip and a database
    * transaction per request, and a caller over budget must not learn anything about
    * whether their token was good.
    */
-  const rate = consumeUploadIntentBudget({ bookingId: body.bookingId, clientIp: readClientIp(req.headers) });
-  if (!rate.allowed) {
-    return Response.json(
-      { error: 'Too many upload attempts for this booking. Please try again shortly.', code: 'UPLOAD_INTENT_RATE_LIMITED' },
-      { status: 429, headers: { 'Retry-After': String(rate.retryAfterSeconds ?? 60) } },
-    );
-  }
+  const nowMs = Date.now();
+  const admission = admitUploadIntent({ bookingId: body.bookingId, clientIp: readClientIp(req.headers), nowMs });
+  if (!admission.source.allowed) return rateLimited('source', admission.source);
+  if (!admission.booking.allowed) return rateLimited('booking', admission.booking);
 
   try {
     const runtime = await runtimeProvider();
@@ -126,6 +205,14 @@ export async function handleUploadIntent(req: Request, runtimeProvider: RuntimeP
     });
     const grant = Array.isArray(grants) ? grants[0] : grants;
     if (grantError || !grant?.object_path) {
+      /*
+       * The token was not good, so this attempt must not count against the booking: the
+       * id is public, and an attacker holding only the id would otherwise be able to
+       * spend a real customer's budget with junk (F4). The unit reserved above is given
+       * back; the source unit is not, so the attacker's own budget still pays for the
+       * attempt.
+       */
+      release(admission.bookingKey, nowMs);
       return Response.json({ error: 'Invalid or expired booking capability' }, { status: 403 });
     }
 
@@ -133,10 +220,14 @@ export async function handleUploadIntent(req: Request, runtimeProvider: RuntimeP
     // the exact path registered atomically by authorize_deposit_slip_upload.
     const { data, error } = await runtime.storage.from(BK01_DEPOSIT_SLIP_BUCKET).createSignedUploadUrl(grant.object_path);
     if (error || !data?.token) {
+      // The grant was registered but no URL could be minted; the holder may honestly
+      // retry, so this attempt is refunded too rather than costing the booking a unit.
+      release(admission.bookingKey, nowMs);
       return Response.json({ error: 'Storage upload authorization is unavailable', code: 'STORAGE_GRANT_UNAVAILABLE' }, { status: 503 });
     }
     return Response.json({ objectPath: grant.object_path, token: data.token });
   } catch {
+    release(admission.bookingKey, nowMs);
     return Response.json({ error: 'Runtime upload authorization is unavailable' }, { status: 503 });
   }
 }

@@ -92,20 +92,46 @@ dry-run ผ่าน Storage HTTP API แต่ต้องพึ่ง operator
 
 ## 4. หลักฐานที่ผู้เขียนมีอยู่ ให้ Codex ต่อยอด
 
-- เทสต์ฝั่งแอปสองชุด (GREEN แล้ว): `tests/g36-upload-intent-abuse.test.ts` (6 เคส),
-  `tests/g36-deposit-slip-cleanup.test.ts` (11 เคส)
-- ตัว planner ที่พิสูจน์แล้วว่าไม่ vacuous ด้วย mutation harness 6 mutations (caught 6/6):
+- เทสต์ฝั่งแอปสองชุด (GREEN แล้ว, หลังรีวิวรอบ R2): `tests/g36-upload-intent-abuse.test.ts` (10 เคส),
+  `tests/g36-deposit-slip-cleanup.test.ts` (16 เคส)
+- ตัว planner ที่พิสูจน์แล้วว่าไม่ vacuous ด้วย mutation harness 8 mutations (caught 8/8 รอบ R2,
+  รวม F1/F2/F4/F5):
   `scripts/lib/deposit-slip-retention.mjs`
+- **ข้อผูกพันของ planner ที่ Codex ต้องไม่ทำให้หลุดเมื่อเขียน R1–R3:** `planDepositSlipCleanup`
+  เป็น fail-closed โดยเจตนา — ถ้า `facts.objects`/`bookings`/`grants` ไม่ใช่ array, ถ้า `expires_at`
+  ของ grant อ่านไม่ได้, หรือถ้าไม่มี `minAgeHours` → **โยน error** ไม่ใช่ตีว่า "ไม่มีอะไรอ้างถึง = ลบได้"
+  (ช่องโหว่ F2 ที่ผู้ตรวจสองคนวัดได้จากของเดิม) ห้ามเปลี่ยนเป็น fallback เพื่อความสะดวก
 - สคริปต์ dry-run: `scripts/cleanup-stale-deposit-slips.mjs` (dry-run เป็นค่าเริ่มต้น,
   ต้องมี `--min-age-hours` เสมอ ไม่มี default)
-- `npm test` = 477/477 PASS บน worktree `bk01-g2-qwen-20261002` @ `9f452d4`+งานนี้
+- `npm test` = 486/486 PASS บน worktree `bk01-g2-qwen-20261002` @ `4d067fd`+งานรอบ R2
 
 **หลักการที่ต้องคงไว้ในทุกข้อ:** เกณฑ์ที่ผิดต้องนำไปสู่ "เก็บ" ไม่ใช่ "ลบ"
 (ทุกกรณีที่อ่านข้อมูลไม่ได้ → ไม่ลบ) และทุกการลบต้องมีบันทึกที่ตรวจสอบย้อนหลังได้
 
 ---
 
-## 5. สิ่งที่ผู้เขียนไม่รู้ (ระบุตรง ๆ)
+## 5. แก้ไขเพิ่มหลังรีวิวรอบ R2 (2026-10-02)
+
+ผู้ตรวจอิสระสองคน (opencode + AGY) รีวิว `4d067fd` แล้วพบ 4 ข้อที่ **แก้แล้วในงานรอบ R2**
+บันทึกไว้ที่นี่เพื่อให้ Codex เห็น "สัญญาณที่ห้ามทำซ้ำ" เมื่อต่อยอด ไม่ใช่แค่รายการฟีเจอร์:
+
+- **F1 (HIGH) — uuid ต้องเป็น canonical ก่อนเป็นคีย์:** เดิมคีย์งบต่อ booking ใช้สตริงดิบ
+  แต่ RPC รับ `uuid` ที่ Postgres ยอมรับหลายสะกด → booking เดียวได้หลาย bucket (วัดได้ 5+5
+  จาก IP เดียว, และ 20/20 ด้วยการสลับสะกด). ตอนนี้ handler **ปฏิเสธ 400 ก่อนเข้า limiter**
+  ทุกสะกดที่ไม่ใช่ `gen_random_uuid()` form (lowercase มีขีด). **Codex ต้องไม่ผ่อน regex นี้**
+  เพื่อ "รองรับ input ยืดหยุ่น" — ความยืดหยุ่นนั้นคือช่องโหว่นี้
+- **F2 (MEDIUM) — fail-closed ใน planner:** ดูข้อผูกพันใน §4 (facts ขาดคีย์/ค่า grant อ่านไม่ได้ → โยน error)
+- **F4 (LOW) — อย่าให้คนที่รู้แค่ bookingId เผางบลูกค้า:** งบต่อ booking ถูก "จอง" ก่อนเรียก runtime
+  และ "คืน" เมื่อ RPC ปฏิเสธ token (หรือเมื่อ storage ล้ม) — งบต่อ source ไม่คืน เพื่อไม่ให้ attacker ได้เปล่า
+  **ห้ามเปลี่ยนกลับเป็น "หักทุกครั้งก่อนตรวจ token"**
+- **F5 (LOW) — ข้อความ 429 ต้องบอกชั้นที่ปฏิเสธ:** response มี `scope: 'booking' | 'source'`
+  **ห้ามยุบกลับเป็นข้อความเดียว** เพราะผู้ใช้จัดการคนละวิธี
+- **F3 (MEDIUM/HOLD) — ไม่ได้แก้ในรอบนี้:** ตัวนับยังเป็น in-memory ต่อ Worker isolate
+  (`wrangler.jsonc` ยังไม่มี Cloudflare rate-limit rule) — งาน edge/platform ไม่ใช่ app
+
+---
+
+## 6. สิ่งที่ผู้เขียนไม่รู้ (ระบุตรง ๆ)
 
 - ไม่ได้รัน SQL ใด ๆ กับฐานจริง — ข้อ R1–R3 เป็นข้อเสนอจาการอ่าน source เท่านั้น
 - ไม่ทราบว่ามี House-side scheduler/retention อยู่แล้วหรือไม่ (House-owned schema

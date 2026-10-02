@@ -46,6 +46,28 @@ function parseObjectPath(name) {
 }
 
 /**
+ * Read a required fact list, or refuse.
+ *
+ * WHY THIS IS NOT A FALLBACK (F2, both paired reviewers on `4d067fd`). This planner used
+ * to read a missing key as an empty list. With `bookings` absent, `referencedPaths` was
+ * empty, so a slip that a customer's booking still points at looked like orphaned
+ * residue — the one guarantee this tool exists to keep, defeated by a typo in the
+ * operator's facts file, with a plausible `planSha256` printed for `--apply` to act on.
+ * Missing evidence must never read as "safe to delete": a fact list that is absent, null
+ * or not an array stops the plan instead of shrinking it.
+ */
+function requiredList(input, key) {
+  const value = input?.[key];
+  if (!Array.isArray(value)) {
+    throw new TypeError(
+      `facts.${key} must be an array; ${value === undefined ? 'it is missing' : `it is ${JSON.stringify(value)}`}. `
+      + 'A missing list is not an empty list — reading it as one would let this plan delete evidence it cannot see.',
+    );
+  }
+  return value;
+}
+
+/**
  * Plan the removal of stale deposit-slip objects.
  *
  * @param {object} input
@@ -64,9 +86,9 @@ export function planDepositSlipCleanup(input) {
     throw new TypeError('minAgeHours must be a positive number of hours; a default would delete on a guess');
   }
 
-  const objects = Array.isArray(input?.objects) ? input.objects : [];
-  const bookings = Array.isArray(input?.bookings) ? input.bookings : [];
-  const grants = Array.isArray(input?.grants) ? input.grants : [];
+  const objects = requiredList(input, 'objects');
+  const bookings = requiredList(input, 'bookings');
+  const grants = requiredList(input, 'grants');
 
   // Every path a booking points at. A slip is referenced if ANY booking names it,
   // regardless of that booking's age or status.
@@ -79,16 +101,26 @@ export function planDepositSlipCleanup(input) {
       .map((booking) => booking?.slip_url)
       .filter((value) => typeof value === 'string' && value.length > 0),
   );
-  const liveGrantPaths = new Set(
-    grants
-      .filter((grant) => {
-        if (!grant?.expires_at) return false;
-        const expiry = new Date(grant.expires_at);
-        return !Number.isNaN(expiry.getTime()) && expiry.getTime() > now.getTime();
-      })
-      .map((grant) => grant.object_path)
-      .filter((value) => typeof value === 'string' && value.length > 0),
-  );
+  const liveGrantPaths = new Set();
+  for (const [index, grant] of grants.entries()) {
+    const expiry = grant?.expires_at ? new Date(grant.expires_at) : null;
+    if (!expiry || Number.isNaN(expiry.getTime())) {
+      /*
+       * An unreadable grant expiry is not evidence that the grant is dead. Treating it
+       * as expired would delete an object a customer may be uploading through right
+       * now, so the plan stops instead of guessing either way (F2: the reviewers measured
+       * a live grant becoming deletable this way).
+       */
+      throw new TypeError(
+        `facts.grants[${index}].expires_at is missing or unreadable (${JSON.stringify(grant?.expires_at ?? null)}); `
+        + 'an unreadable expiry is not evidence that the upload grant has expired',
+      );
+    }
+    if (expiry.getTime() > now.getTime()) {
+      const path = grant?.object_path;
+      if (typeof path === 'string' && path.length > 0) liveGrantPaths.add(path);
+    }
+  }
 
   const cutoffMs = now.getTime() - minAgeHours * 60 * 60 * 1000;
   const deletable = [];

@@ -177,12 +177,16 @@ test('dispatch checks its secret before runtime, claims context, sends LINE, and
 });
 
 test('upload intent authorizes by RPC, returns Storage URL, and reports Storage/issuer failures clearly', async () => {
-  const body = JSON.stringify({ bookingId: 'booking-1', recoveryToken: 'recovery', contentType: 'image/png', size: 2048 });
-  const runtime = { rpc: async () => ({ data: [{ object_path: 'booking-1/grant.png' }], error: null }), storage: {
+  // The intent handler now requires the canonical booking uuid (G36 F1: a raw-string key
+  // gave one booking one bucket per spelling). This case is about the RPC/Storage wiring,
+  // so it uses the form `gen_random_uuid()` prints.
+  const uploadBookingId = '3f2504e0-4f89-41d3-9a0c-0305e82c3301';
+  const body = JSON.stringify({ bookingId: uploadBookingId, recoveryToken: 'recovery', contentType: 'image/png', size: 2048 });
+  const runtime = { rpc: async () => ({ data: [{ object_path: `${uploadBookingId}/grant.png` }], error: null }), storage: {
     from: (bucket: string) => ({ createSignedUploadUrl: async (path: string) => ({ data: { token: `${bucket}:${path}` }, error: null }) }),
   } };
   const response = await uploadRoute.handleUploadIntent(request('/upload', body), async () => runtime as any);
-  assert.deepEqual(await responseJson(response), { objectPath: 'booking-1/grant.png', token: 'deposit-slips:booking-1/grant.png' });
+  assert.deepEqual(await responseJson(response), { objectPath: `${uploadBookingId}/grant.png`, token: `deposit-slips:${uploadBookingId}/grant.png` });
 
   const grantFailure = await uploadRoute.handleUploadIntent(request('/upload', body), async () => ({
     rpc: async () => ({ data: null, error: { code: '42501' } }), storage: runtime.storage,

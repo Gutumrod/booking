@@ -158,6 +158,90 @@ test('a plan with a negative or missing grace window is refused', () => {
 });
 
 /*
+ * F2 (opencode MEDIUM, AGY MEDIUM). The planner used to read a missing key as an
+ * empty list. With `bookings` absent, `referencedPaths` was empty and a slip that a
+ * customer's booking still points at became "orphaned" — the one guarantee this tool
+ * exists to keep, defeated by a typo in the operator's facts file, with a plausible
+ * sha256 printed for `--apply`. Missing evidence must never read as "safe to delete":
+ * an absent or non-array `bookings`/`grants` is refused outright, and an unreadable
+ * grant expiry counts as live (KEEP), not as expired.
+ */
+function factsFrom(source: Record<string, unknown>) {
+  const facts: Record<string, unknown> = {
+    objects: source.objects,
+    bookings: source.bookings,
+    grants: source.grants,
+  };
+  for (const key of Object.keys(facts)) {
+    if (facts[key] === undefined) delete facts[key];
+  }
+  return facts;
+}
+
+test('facts without a bookings list are refused, not read as "no booking references anything"', () => {
+  const { bookings: _omitted, ...withoutBookings } = factsFrom(fixture());
+  assert.throws(
+    () => retention.planDepositSlipCleanup({ ...withoutBookings, minAgeHours: 24, now: NOW }),
+    /bookings/,
+    'an absent bookings list must not become an empty one',
+  );
+  assert.throws(
+    () => retention.planDepositSlipCleanup({ ...factsFrom(fixture()), bookings: null, minAgeHours: 24, now: NOW }),
+    /bookings/,
+    'a null bookings list must not become an empty one',
+  );
+});
+
+test('facts without a grants list are refused, so a live upload cannot look expired', () => {
+  const { grants: _omitted, ...withoutGrants } = factsFrom(fixture());
+  assert.throws(
+    () => retention.planDepositSlipCleanup({ ...withoutGrants, minAgeHours: 24, now: NOW }),
+    /grants/,
+    'an absent grants list must not become an empty one',
+  );
+  assert.throws(
+    () => retention.planDepositSlipCleanup({ ...factsFrom(fixture()), grants: null, minAgeHours: 24, now: NOW }),
+    /grants/,
+    'a null grants list must not become an empty one',
+  );
+});
+
+test('a grant whose expiry cannot be read stops the plan instead of being treated as expired', () => {
+  const facts = factsFrom(fixture());
+  assert.throws(
+    () => retention.planDepositSlipCleanup({
+      ...facts,
+      grants: [...(facts.grants as unknown[]), { object_path: FRESH_ORPHAN.replace('77777777', '99999999'), expires_at: 'not-a-date' }],
+      minAgeHours: 24,
+      now: NOW,
+    }),
+    /grants\[2\]\.expires_at/,
+    'an unreadable grant expiry is not evidence that the grant is dead',
+  );
+  assert.throws(
+    () => retention.planDepositSlipCleanup({
+      ...facts,
+      grants: [{ object_path: FRESH_ORPHAN.replace('77777777', '99999999') }],
+      minAgeHours: 24,
+      now: NOW,
+    }),
+    /grants\[0\]\.expires_at/,
+    'a grant with no expiry at all is not evidence that the grant has expired',
+  );
+});
+
+test('an objects list that is absent or not an array is refused', () => {
+  assert.throws(
+    () => retention.planDepositSlipCleanup({ bookings: [], grants: [], minAgeHours: 24, now: NOW }),
+    /objects/,
+  );
+  assert.throws(
+    () => retention.planDepositSlipCleanup({ objects: {}, bookings: [], grants: [], minAgeHours: 24, now: NOW }),
+    /objects/,
+  );
+});
+
+/*
  * The CLI is the part an operator actually runs, so the safety property has to hold
  * there too. These two cases read the tool's own output rather than its source.
  */
@@ -201,6 +285,22 @@ test('the cleanup script refuses to plan without an explicit grace window', () =
     const result = runCli(['--facts', planFile], repoRoot);
     assert.notEqual(result.status, 0, 'a default grace window would delete on a guess');
     assert.match(`${result.stdout}${result.stderr}`, /min-age-hours/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('the cleanup script refuses facts that omit the booking list instead of planning a deletion', () => {
+  const repoRoot = join(import.meta.dirname, '..');
+  const dir = mkdtempSync(join(tmpdir(), 'g36-cleanup-'));
+  try {
+    const planFile = join(dir, 'plan.json');
+    const facts = fixture();
+    writeFileSync(planFile, JSON.stringify({ objects: facts.objects, grants: facts.grants }));
+    const result = runCli(['--facts', planFile, '--min-age-hours', '24', '--now', NOW.toISOString()], repoRoot);
+    assert.notEqual(result.status, 0, 'facts missing the booking list must not produce an actionable plan');
+    assert.match(`${result.stdout}${result.stderr}`, /bookings/);
+    assert.doesNotMatch(`${result.stdout}`, /delete /, 'no deletion may be planned from facts that cannot prove a slip is orphaned');
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

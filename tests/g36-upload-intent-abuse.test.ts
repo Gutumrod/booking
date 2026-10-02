@@ -25,6 +25,8 @@ const route = await import('../apps/booking-consumer/src/lib/deposit-slip-upload
 
 const BOOKING_ID = '11111111-1111-4111-8111-111111111111';
 const OTHER_BOOKING_ID = '22222222-2222-4222-8222-222222222222';
+/** A booking id with hex letters: case and hyphen changes are visible on it. */
+const LETTERED_BOOKING_ID = '1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d';
 
 function body(bookingId = BOOKING_ID) {
   return { bookingId, recoveryToken: 'RECOVERY-TOKEN', contentType: 'image/png', size: 2048 };
@@ -40,8 +42,12 @@ function request(payload: unknown, ip: string | null = '203.0.113.9') {
   });
 }
 
-/** A runtime that mints a fresh grant every time, like the real RPC does. */
-function runtimeHarness() {
+/**
+ * A runtime that mints a fresh grant every time, like the real RPC does.
+ * `validToken: false` models a caller who knows the booking id but not the token:
+ * the RPC refuses and mints nothing — the case the booking budget must not punish.
+ */
+function runtimeHarness({ validToken = true }: { validToken?: boolean } = {}) {
   const rpcCalls: string[] = [];
   let minted = 0;
   return {
@@ -50,6 +56,7 @@ function runtimeHarness() {
     runtime: {
       rpc: async (name: string) => {
         rpcCalls.push(name);
+        if (!validToken) return { data: null, error: { message: 'invalid_capability' } };
         minted += 1;
         return { data: [{ object_path: `${BOOKING_ID}/${minted}.png`, grant_id: `grant-${minted}` }], error: null };
       },
@@ -112,8 +119,10 @@ test('a booking is also capped in absolute terms, so many source addresses canno
   reset();
   const harness = runtimeHarness();
   let accepted = 0;
-  // 20 distinct source addresses, 5 grants each: the per-source budget alone would
-  // allow 100 grants against one booking. A per-booking ceiling must stop it.
+  // 20 distinct source addresses, 5 attempts each: the per-source budget is never
+  // reached (5 of 20), so the per-booking ceiling is the only thing that can stop
+  // this. Asserting `<= 20` would have passed while the cap was 4x too loose — the
+  // ceiling under test is 5, so the assertion is 5.
   for (let source = 0; source < 20; source += 1) {
     for (let attempt = 0; attempt < 5; attempt += 1) {
       const response = await route.handleUploadIntent(
@@ -123,7 +132,7 @@ test('a booking is also capped in absolute terms, so many source addresses canno
       if (response.status === 200) accepted += 1;
     }
   }
-  assert.ok(accepted <= 20, `a booking accepted ${accepted} grants from 20 different addresses`);
+  assert.equal(accepted, 5, `a booking accepted ${accepted} grants from 20 different addresses, not its budget of 5`);
 });
 
 test('a caller with no identifiable address is limited, not given a free pass', async () => {
@@ -160,4 +169,104 @@ test('an unrecognised caller walking many bookings shares one source bucket and 
     `an unidentifiable caller minted ${accepted} grants across distinct bookings, so the shared source ceiling of 20 did not hold`,
   );
   assert.equal(harness.rpcCalls.length, 20, 'the refused requests must not reach the runtime');
+});
+
+/*
+ * F1 (opencode + AGY, HIGH). The budget keyed on the RAW `bookingId` string, while
+ * the RPC's parameter is a Postgres `uuid`, which accepts several spellings of the
+ * same value. One booking therefore had a bucket per spelling, and the ceiling was
+ * a property of the spelling rather than of the booking. The first case here refuses
+ * every non-canonical spelling; the second measures the ceiling across spellings and
+ * demands exactly 5, which the loose `<= 20` assertion could never catch.
+ */
+test('a booking id that is not the canonical uuid form is refused before the budget and the runtime', async () => {
+  reset();
+  const harness = runtimeHarness();
+  const nonCanonical = [
+    LETTERED_BOOKING_ID.replace(/-/g, ''),          // no hyphens — Postgres accepts it
+    LETTERED_BOOKING_ID.toUpperCase(),              // upper case — Postgres accepts it
+    `{${LETTERED_BOOKING_ID}}`,                     // brace form — Postgres accepts it
+    ` ${LETTERED_BOOKING_ID}`,                      // leading space
+    `${LETTERED_BOOKING_ID} `,                      // trailing space
+    '3f2504e0-4f89-41d3-9a0c-0305e82c330',          // truncated by one hex digit
+    '',                                             // empty
+  ];
+  for (const shape of nonCanonical) {
+    const response = await route.handleUploadIntent(request(body(shape)), async () => harness.runtime as never);
+    assert.equal(response.status, 400, `booking id ${JSON.stringify(shape)} was not refused as malformed (HTTP ${response.status})`);
+  }
+  assert.equal(harness.rpcCalls.length, 0, 'a malformed booking id must be refused before the budget and the runtime');
+});
+
+test('the per-booking ceiling is 5 whatever spelling the caller starts with', async () => {
+  reset();
+  const harness = runtimeHarness();
+  const spellings = [LETTERED_BOOKING_ID, LETTERED_BOOKING_ID.replace(/-/g, ''), LETTERED_BOOKING_ID.toUpperCase(), `{${LETTERED_BOOKING_ID}}`];
+  let accepted = 0;
+  for (let attempt = 0; attempt < 25; attempt += 1) {
+    const response = await route.handleUploadIntent(
+      request(body(spellings[attempt % spellings.length])),
+      async () => harness.runtime as never,
+    );
+    if (response.status === 200) accepted += 1;
+  }
+  assert.equal(accepted, 5, `one booking accepted ${accepted} grants across re-spellings of its own id, not its budget of 5`);
+  assert.equal(harness.rpcCalls.length, 5, 'nothing but the accepted requests may reach the runtime');
+});
+
+/*
+ * F4 (opencode, LOW). Spending the per-booking budget BEFORE the token is verified
+ * let anyone who merely knows a booking id (it is in the customer's own URL) burn
+ * the real customer's five attempts and lock them out for the window. The booking
+ * budget is therefore only charged when a valid token produced a grant; the source
+ * budget is still charged on every attempt, so an attacker gains nothing net.
+ */
+test('a caller who knows only the booking id cannot lock the real customer out', async () => {
+  reset();
+  const impostor = runtimeHarness({ validToken: false });
+  for (let attempt = 0; attempt < 7; attempt += 1) {
+    const response = await route.handleUploadIntent(request(body()), async () => impostor.runtime as never);
+    assert.equal(response.status, 403, 'a wrong token is refused on its own merits');
+  }
+  assert.equal(impostor.minted, 0, 'a refused token must not mint a grant');
+
+  const genuine = runtimeHarness();
+  let accepted = 0;
+  for (let attempt = 0; attempt < 7; attempt += 1) {
+    const response = await route.handleUploadIntent(request(body()), async () => genuine.runtime as never);
+    if (response.status === 200) accepted += 1;
+  }
+  assert.equal(accepted, 5, `the real customer got ${accepted} of their 5 grants after a stranger spent the booking budget`);
+});
+
+/*
+    * F5 (opencode, LOW). The single 429 text blamed the booking even when the source
+    * ceiling was what refused. A caller cannot act on a message that names the wrong
+    * layer, so the refusal carries the layer that refused it.
+    */
+test('the 429 names the layer that refused it', async () => {
+  reset();
+  const byBooking = runtimeHarness();
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    await route.handleUploadIntent(request(body(), '203.0.113.10'), async () => byBooking.runtime as never);
+  }
+  const bookingRefusal = await route.handleUploadIntent(request(body(), '203.0.113.10'), async () => byBooking.runtime as never);
+  assert.equal(bookingRefusal.status, 429);
+  const bookingBody = await bookingRefusal.json() as { scope?: string };
+  assert.equal(bookingBody.scope, 'booking', 'the refusal must name the booking layer');
+  assert.match(bookingBody.scope ?? '', /booking/);
+
+  reset();
+  const bySource = runtimeHarness();
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const bookingId = `44444444-4444-4444-8444-${String(attempt).padStart(12, '0')}`;
+    const response = await route.handleUploadIntent(request(body(bookingId), '203.0.113.11'), async () => bySource.runtime as never);
+    assert.equal(response.status, 200, 'each distinct booking has its own booking budget');
+  }
+  const fifthBooking = `44444444-4444-4444-8444-${String(99).padStart(12, '0')}`;
+  const sourceRefusal = await route.handleUploadIntent(request(body(fifthBooking), '203.0.113.11'), async () => bySource.runtime as never);
+  assert.equal(sourceRefusal.status, 429);
+  const sourceBody = await sourceRefusal.json() as { scope?: string; error?: string };
+  assert.equal(sourceBody.scope, 'source', 'the refusal must name the source layer, not the booking');
+  assert.match(String(sourceBody.error), /address|network|source/i);
 });
