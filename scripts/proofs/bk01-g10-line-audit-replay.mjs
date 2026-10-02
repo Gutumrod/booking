@@ -26,11 +26,13 @@ try{
  psql('postgres',['-c','REVOKE ALL ON SCHEMA extensions FROM PUBLIC; ALTER ROLE postgres NOSUPERUSER CREATEROLE BYPASSRLS;']);
  // Neither product role is pre-created; platform scripts create them under real non-superuser authority.
  psql('postgres',['-1','-f',roleSql]);psql('postgres',['-1','-f',path.resolve('supabase/shared-runtime/bk01-platform-bootstrap.sql')]);
- psql('fixture_admin',['-c',`CREATE ROLE operator LOGIN CREATEROLE BYPASSRLS; GRANT bk01_migrator TO operator WITH INHERIT FALSE,SET TRUE; GRANT service_role TO operator WITH INHERIT FALSE,SET TRUE;
+ psql('fixture_admin',['-c',`CREATE ROLE operator LOGIN CREATEROLE BYPASSRLS; GRANT bk01_migrator TO operator WITH INHERIT FALSE,SET TRUE;
  CREATE ROLE runtime_probe LOGIN NOINHERIT; GRANT bk01_runtime TO runtime_probe WITH INHERIT FALSE,SET TRUE;
  CREATE ROLE anon_probe LOGIN NOINHERIT; GRANT anon TO anon_probe WITH INHERIT FALSE,SET TRUE;
  CREATE ROLE auth_probe LOGIN NOINHERIT; GRANT authenticated TO auth_probe WITH INHERIT FALSE,SET TRUE;
  REVOKE CREATE ON DATABASE postgres FROM PUBLIC; REVOKE CREATE ON SCHEMA public FROM PUBLIC;`]);
+ // Explicit proof-only membership, separate from the original role fixture.
+ psql('fixture_admin',['-c','GRANT service_role TO operator WITH INHERIT FALSE,SET TRUE;']);
  const url=`postgresql://operator@127.0.0.1:${port}/postgres`,env={...process.env,BK01_PLATFORM_DATABASE_URL:url,BK01_OPERATOR_LOGINS:'operator',BK01_SHARED_RUNTIME_ENV:'local',BK01_RELEASE_ID:'HOUSE-BK01-P0-SQL',BK01_P0_LOCAL_URL:url,BK01_P0_DATA_DIR:data,BK01_P0_EVIDENCE_DIR:dir};
  step('base-apply',['scripts/bk01-migrate.mjs','apply','--through','20261001140000_bk01_pack_notify_group67.sql'],env);
  step('baseline',['scripts/proofs/bk01-council-p0-pg17.mjs','baseline'],env);

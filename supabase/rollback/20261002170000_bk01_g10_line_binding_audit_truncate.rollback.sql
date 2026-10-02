@@ -1,3 +1,18 @@
+-- One atomic statement, also safe inside an existing caller transaction.
+-- Lock source writes and the ledger before inspecting retained audit evidence.
+DO $bk01_170000_rollback$
+BEGIN
+    LOCK TABLE local_service.customers, local_service.line_users IN ACCESS EXCLUSIVE MODE;
+    LOCK TABLE local_service_internal.line_binding_audit IN SHARE ROW EXCLUSIVE MODE;
+    IF EXISTS (
+        SELECT 1 FROM local_service_internal.line_binding_audit WHERE operation = 'TRUNCATE'
+    ) THEN
+        RAISE EXCEPTION USING
+            ERRCODE = '55000',
+            MESSAGE = 'BK01 170000 rollback blocked: retained TRUNCATE audit evidence exists',
+            HINT = 'Export and retain the audit evidence before any separately reviewed remediation. This rollback never deletes audit evidence.';
+    END IF;
+
 DROP TRIGGER IF EXISTS bk01_customer_line_binding_audit_delete ON local_service.customers;
 DROP TRIGGER IF EXISTS bk01_customer_line_binding_audit_update ON local_service.customers;
 DROP TRIGGER IF EXISTS bk01_customer_line_binding_audit_insert ON local_service.customers;
@@ -80,3 +95,6 @@ AFTER UPDATE OF line_user_id ON local_service.customers
 FOR EACH ROW
 WHEN (OLD.line_user_id IS DISTINCT FROM NEW.line_user_id)
 EXECUTE FUNCTION local_service_internal.capture_line_binding_audit();
+
+END;
+$bk01_170000_rollback$;
