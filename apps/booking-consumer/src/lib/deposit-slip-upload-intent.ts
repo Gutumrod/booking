@@ -1,8 +1,242 @@
+import { readClientIp } from './booking-ingress';
+
 const ALLOWED_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 const BK01_DEPOSIT_SLIP_BUCKET = 'deposit-slips';
 type RuntimeClient = Awaited<ReturnType<typeof import('./bk01-runtime').getBk01RuntimeClient>>;
 type RuntimeProvider = () => Promise<RuntimeClient>;
 const defaultRuntimeProvider: RuntimeProvider = async () => (await import('./bk01-runtime')).getBk01RuntimeClient();
+
+/**
+ * How many upload grants one booking may be issued inside the window.
+ *
+ * WHY THIS EXISTS (council finding G36, AGY F-13). This endpoint had no admission
+ * control of its own. The authorization RPC does call
+ * `authorize_booking_recovery_attempt`, but that counter only increments on a FAILED
+ * token (`supabase/migrations/20260829105155_bk_a_v1_contract_remediation.sql`: it
+ * counts `failed_attempts` and blocks at five). A holder who presents the CORRECT
+ * token DELETEs its counter row and returns true, so the limiter protects the token
+ * from guessing and never limits the endpoint itself. The measured result was an
+ * unbounded number of registered object paths and signed upload URLs for one live
+ * booking — 5 MB each, none of which the holder ever has to submit.
+ *
+ * The budget is deliberately small: a customer uploads one slip, and a retry after a
+ * rejected slip is the only honest reason to ask again. The window matches the
+ * 5-minute lifetime of the signed URL several times over, which is what an operator
+ * needs to see a stuck customer without opening a support ticket.
+ */
+export const UPLOAD_INTENT_BOOKING_LIMIT = 5;
+export const UPLOAD_INTENT_IP_LIMIT = 20;
+export const UPLOAD_INTENT_WINDOW_MS = 15 * 60 * 1000;
+
+/**
+ * The database's own daily ceiling, and how the app answers it (G09, Codex migration
+ * `supabase/bk01-migrations/20261002150000_bk01_p1_g09_g10.sql`).
+ *
+ * `authorize_deposit_slip_upload` now keeps a per-booking success ledger and, on the
+ * twenty-first successful intent inside 24 hours, raises exactly:
+ *
+ *     RAISE EXCEPTION USING ERRCODE = 'P0001', MESSAGE = 'UPLOAD_INTENT_LIMIT';
+ *
+ * WHY THE MESSAGE IS THE DISCRIMINATOR, NOT THE CODE. Every refusal in that RPC shares
+ * ERRCODE `P0001` — the wrong-token refusal, the malformed-input refusal and this
+ * ceiling are the same code, so the code separates nothing. Only the message does, and
+ * the match below is EXACT: the wrong-token family and the ceiling family differ by a
+ * suffix, so a substring rule would report an honest holder with a stale token as a
+ * quota exhaustion (and vice versa), which is the misclassification this mapping exists
+ * to prevent. The code is not required alongside the message: it adds no discrimination
+ * here, and demanding it would only add a way for a dropped `code` field to hide the
+ * daily refusal behind a wrong-token message.
+ */
+export const UPLOAD_INTENT_DAILY_LIMIT_SQL_MESSAGE = 'UPLOAD_INTENT_LIMIT';
+export const UPLOAD_INTENT_DAILY_LIMIT_CODE = 'UPLOAD_INTENT_DAILY_LIMIT';
+
+/**
+ * The daily ceiling is a third refusal layer, apart from the two window budgets above:
+ * 'booking' means this booking's 5-per-15-minute window, 'source' means the caller's
+ * address, and 'booking_daily' means the database's 20-per-24-hour ledger.
+ */
+export const UPLOAD_INTENT_DAILY_LIMIT_SCOPE = 'booking_daily';
+
+/**
+ * The copy the customer reads, and the Thai default the API itself returns.
+ *
+ * It is the SAME string as `booking.errors.slipUploadDailyLimit` in both catalogues —
+ * a test asserts the equality, so the API default and the localized page copy cannot
+ * drift. The API does not read the request's locale, which is why the client passes its
+ * own translated string (see `uploadDepositSlip`); the value here is the product's Thai
+ * default for any caller reading the response body directly.
+ */
+export const UPLOAD_INTENT_DAILY_LIMIT_MESSAGE_TH = 'ครบจำนวนครั้งที่อัปโหลดสลิปได้แล้ว กรุณาติดต่อร้าน';
+
+/**
+ * What the 429 advertises for `Retry-After`.
+ *
+ * The SQL counts inside a rolling 24-hour window whose reset instant the raised error
+ * does not disclose, so the app cannot compute the real remaining time. It therefore
+ * advertises the whole window — the honest upper bound it can back — rather than a
+ * shorter number it cannot guarantee and a customer would retry against in vain. The
+ * customer-facing instruction is the copy above: contact the shop.
+ */
+export const UPLOAD_INTENT_DAILY_LIMIT_RETRY_AFTER_SECONDS = 24 * 60 * 60;
+
+/**
+ * In-memory, per Worker isolate — the same limitation the booking ingress documents,
+ * reported rather than hidden. It is a hard ceiling per isolate against one holder,
+ * and the durable counter remains an edge/platform configuration item.
+ */
+const uploadIntentBuckets = new Map<string, { count: number; resetAt: number }>();
+
+/**
+ * The one booking-id spelling this endpoint accepts: canonical, lower case, hyphenated
+ * 8-4-4-4-12.
+ *
+ * WHY IT IS HERE (F1, found by both paired reviewers on `4d067fd`). The budget used to
+ * key on the RAW `bookingId` string while the RPC's parameter is a Postgres `uuid`, and
+ * Postgres accepts several spellings of one value (upper case, braces, hyphens omitted
+ * or added after any four digits). One booking therefore had one bucket per spelling,
+ * so the per-booking ceiling was a property of the spelling rather than of the booking:
+ * a measured 20 grants — the full per-source ceiling — against a single booking by
+ * varying only the spelling, and opencode measured 5 + 5 from a single address by
+ * switching between the canonical and the hyphen-less form. `gen_random_uuid()` always
+ * prints the canonical form, so refusing every other spelling costs no real caller
+ * anything and closes the bypass before a bucket is ever consulted.
+ */
+const CANONICAL_BOOKING_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+/** Test seam: forget every bucket so a case starts from zero. */
+export function resetUploadIntentRateLimit(): void {
+  uploadIntentBuckets.clear();
+}
+
+interface BucketDecision {
+  allowed: boolean;
+  retryAfterSeconds: number | null;
+}
+
+function consume(key: string, limit: number, nowMs: number): BucketDecision {
+  const existing = uploadIntentBuckets.get(key);
+  if (!existing || existing.resetAt <= nowMs) {
+    uploadIntentBuckets.set(key, { count: 1, resetAt: nowMs + UPLOAD_INTENT_WINDOW_MS });
+    return { allowed: true, retryAfterSeconds: null };
+  }
+  if (existing.count >= limit) {
+    return { allowed: false, retryAfterSeconds: Math.max(1, Math.ceil((existing.resetAt - nowMs) / 1000)) };
+  }
+  existing.count += 1;
+  return { allowed: true, retryAfterSeconds: null };
+}
+
+/** Give back one unit of a budget a request reserved but did not earn. */
+function release(key: string, nowMs: number): void {
+  const existing = uploadIntentBuckets.get(key);
+  if (!existing || existing.resetAt <= nowMs) return;
+  existing.count = Math.max(0, existing.count - 1);
+}
+
+/**
+ * The source bucket key. An unidentifiable caller shares one `unknown-client` bucket
+ * instead of being given a pass, which is the fail-closed direction the booking ingress
+ * chose for the same situation.
+ */
+function sourceBucketKey(clientIp: string | null): string {
+  return typeof clientIp === 'string' && clientIp.trim().length > 0 ? clientIp.trim() : 'unknown-client';
+}
+
+/**
+ * A 429 that names the layer that refused it (F5, opencode).
+ *
+ * WHY. The old text always blamed "this booking", including when the source ceiling was
+ * what refused — a caller cannot act on a message that names the wrong layer, and the
+ * two refusals have different remedies ("wait for this booking's window" vs "you are
+ * sharing an address that is working many bookings").
+ */
+function rateLimited(scope: 'booking' | 'source', decision: BucketDecision): Response {
+  const error = scope === 'booking'
+    ? 'Too many upload attempts for this booking. Please try again shortly.'
+    : 'Too many upload attempts from this network address. Please try again shortly.';
+  return Response.json(
+    { error, code: 'UPLOAD_INTENT_RATE_LIMITED', scope },
+    { status: 429, headers: { 'Retry-After': String(decision.retryAfterSeconds ?? 60) } },
+  );
+}
+
+/**
+ * The refusal for the database's daily ceiling (G09).
+ *
+ * 429, like the window budgets — the holder's capability is fine and the request is not
+ * malformed; the booking has simply spent its day. The scope is `booking_daily` so a
+ * caller can tell the three layers apart, the code is its own so a client can act on it
+ * without reading prose, and the message is the approved "contact the shop" copy. It is
+ * deliberately NOT the wrong-token 403: that would tell an honest customer their own
+ * token is invalid, and it would invite a retry that cannot succeed until the window
+ * rolls over.
+ *
+ * The booking budget is released before this returns. The database refused the intent,
+ * so no grant exists; keeping the reserved unit would let a booking that is merely at
+ * the SQL ceiling burn its 5-per-15-minute window too and get the wrong refusal layer.
+ */
+function dailyLimited(bookingKey: string, nowMs: number): Response {
+  release(bookingKey, nowMs);
+  return Response.json(
+    {
+      error: UPLOAD_INTENT_DAILY_LIMIT_MESSAGE_TH,
+      code: UPLOAD_INTENT_DAILY_LIMIT_CODE,
+      scope: UPLOAD_INTENT_DAILY_LIMIT_SCOPE,
+    },
+    { status: 429, headers: { 'Retry-After': String(UPLOAD_INTENT_DAILY_LIMIT_RETRY_AFTER_SECONDS) } },
+  );
+}
+
+/**
+ * Is this RPC error the database's daily ceiling?
+ *
+ * EXACT equality, never `includes`/`startsWith`: `UPLOAD_INTENT_LIMIT_REACHED` and the
+ * wrong-token message both contain substrings that a looser rule would misread, and a
+ * misread here changes which customer instruction is shown. See the constant above for
+ * why the shared `P0001` code is not part of the test.
+ */
+function isDailyUploadLimit(error: unknown): boolean {
+  const message = (error as { message?: unknown } | null | undefined)?.message;
+  return typeof message === 'string' && message.trim() === UPLOAD_INTENT_DAILY_LIMIT_SQL_MESSAGE;
+}
+
+/**
+ * The admission control, in the order the request passes through it.
+ *
+ * TWO BUDGETS, TWO DIFFERENT CHARGING RULES (F4, opencode). The booking budget is the
+ * one that must hold, but the booking id is not a secret — it is in the customer's own
+ * booking URL — so charging the booking budget for every attempt, valid token or not,
+ * let anyone who could read a booking link spend the real customer's five attempts with
+ * junk tokens and lock them out for the window (measured on `4d067fd`: five 403s turned
+ * the customer's next honest upload into a 429).
+ *
+ * The booking unit is therefore RESERVED before the runtime — so the ceiling still
+ * holds against a flood and against concurrent requests, which a read-then-charge
+ * sequence would not — and RELEASED when the RPC refuses the token (`release`). A
+ * refused token costs the caller nothing but their own source budget, and the source
+ * budget is charged on every attempt and never released, so an attacker gains nothing
+ * net.
+ */
+interface UploadIntentAdmission {
+  /** The key the booking budget is kept under, canonicalised once. */
+  bookingKey: string;
+  /** The source bucket decision, already charged — `allowed: false` ends the request. */
+  source: BucketDecision;
+  /** The booking bucket decision, already charged and refundable — see `release`. */
+  booking: BucketDecision;
+}
+
+function admitUploadIntent(input: { bookingId: string; clientIp: string | null; nowMs: number }): UploadIntentAdmission {
+  const bookingKey = `upload-intent:booking:${input.bookingId}`;
+  const source = consume(`upload-intent:ip:${sourceBucketKey(input.clientIp)}`, UPLOAD_INTENT_IP_LIMIT, input.nowMs);
+  if (!source.allowed) {
+    // The source layer already refused, so this request cannot reach the runtime; do not
+    // let it also drain a booking's budget, which would let one shared address exhaust
+    // the budgets of many bookings while being refused itself.
+    return { bookingKey, source, booking: { allowed: true, retryAfterSeconds: null } };
+  }
+  return { bookingKey, source, booking: consume(bookingKey, UPLOAD_INTENT_BOOKING_LIMIT, input.nowMs) };
+}
 
 /**
  * The deposit-slip upload-intent handler.
@@ -30,6 +264,28 @@ export async function handleUploadIntent(req: Request, runtimeProvider: RuntimeP
     return Response.json({ error: 'Invalid upload request' }, { status: 400 });
   }
 
+  /*
+   * F1: the booking id is canonicalised BEFORE it becomes a budget key. Postgres would
+   * accept several spellings of this uuid, so a bucket keyed on the raw string was a
+   * bucket per spelling. The id has to be exactly the form `gen_random_uuid()` prints —
+   * the form the caller was given in their own booking URL — or it is not a booking id
+   * at all, and the request stops here rather than being counted under a made-up key.
+   */
+  if (!CANONICAL_BOOKING_ID.test(body.bookingId)) {
+    return Response.json({ error: 'Invalid upload request' }, { status: 400 });
+  }
+
+  /*
+   * The abuse budget runs BEFORE the runtime, exactly like the booking ingress: a
+   * flood must not be able to spend a House runtime token round trip and a database
+   * transaction per request, and a caller over budget must not learn anything about
+   * whether their token was good.
+   */
+  const nowMs = Date.now();
+  const admission = admitUploadIntent({ bookingId: body.bookingId, clientIp: readClientIp(req.headers), nowMs });
+  if (!admission.source.allowed) return rateLimited('source', admission.source);
+  if (!admission.booking.allowed) return rateLimited('booking', admission.booking);
+
   try {
     const runtime = await runtimeProvider();
     const { data: grants, error: grantError } = await runtime.rpc('authorize_deposit_slip_upload', {
@@ -40,6 +296,20 @@ export async function handleUploadIntent(req: Request, runtimeProvider: RuntimeP
     });
     const grant = Array.isArray(grants) ? grants[0] : grants;
     if (grantError || !grant?.object_path) {
+      /*
+       * G09. The database's own 20-per-24-hours ledger is the third refusal layer and it
+       * is checked FIRST, because its error is also a grant-less failure and the generic
+       * branch below would otherwise report it to the customer as a bad token.
+       */
+      if (isDailyUploadLimit(grantError)) return dailyLimited(admission.bookingKey, nowMs);
+      /*
+       * The token was not good, so this attempt must not count against the booking: the
+       * id is public, and an attacker holding only the id would otherwise be able to
+       * spend a real customer's budget with junk (F4). The unit reserved above is given
+       * back; the source unit is not, so the attacker's own budget still pays for the
+       * attempt.
+       */
+      release(admission.bookingKey, nowMs);
       return Response.json({ error: 'Invalid or expired booking capability' }, { status: 403 });
     }
 
@@ -47,10 +317,14 @@ export async function handleUploadIntent(req: Request, runtimeProvider: RuntimeP
     // the exact path registered atomically by authorize_deposit_slip_upload.
     const { data, error } = await runtime.storage.from(BK01_DEPOSIT_SLIP_BUCKET).createSignedUploadUrl(grant.object_path);
     if (error || !data?.token) {
+      // The grant was registered but no URL could be minted; the holder may honestly
+      // retry, so this attempt is refunded too rather than costing the booking a unit.
+      release(admission.bookingKey, nowMs);
       return Response.json({ error: 'Storage upload authorization is unavailable', code: 'STORAGE_GRANT_UNAVAILABLE' }, { status: 503 });
     }
     return Response.json({ objectPath: grant.object_path, token: data.token });
   } catch {
+    release(admission.bookingKey, nowMs);
     return Response.json({ error: 'Runtime upload authorization is unavailable' }, { status: 503 });
   }
 }
