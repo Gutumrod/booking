@@ -4,9 +4,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   BK01_RUNTIME_BOOTSTRAP_FUNCTIONS,
-  BK01_RUNTIME_ROUTE_FUNCTIONS,
+  BK01_RUNTIME_ROUTE_FUNCTIONS as CURRENT_RUNTIME_ROUTE_FUNCTIONS,
   BK01_PUBLIC_LEGACY_EXECUTE_EXCEPTIONS,
-  BK01_RUNTIME_EFFECTIVE_FUNCTIONS,
+  BK01_RUNTIME_EFFECTIVE_FUNCTIONS as CURRENT_RUNTIME_EFFECTIVE_FUNCTIONS,
 } from './lib/bk01-runtime-allowlist.mjs';
 
 // ---------------------------------------------------------------------------
@@ -31,6 +31,11 @@ import {
 // identity, substitutes the one expression, and re-emits it with its original security
 // mode and an explicit search_path pin.
 // ---------------------------------------------------------------------------
+
+// Keep the pinned bootstrap generation at the pre-P0 phase. R1 adds its executor
+// in the new product migration and validates final surfaces independently.
+const BK01_RUNTIME_ROUTE_FUNCTIONS = CURRENT_RUNTIME_ROUTE_FUNCTIONS.filter(x => !x.startsWith('local_service.create_booking_hold(')).map(x => x.startsWith('local_service.claim_due_shop_email_notifications(') ? 'local_service.claim_due_shop_email_notifications(integer)' : x);
+const BK01_RUNTIME_EFFECTIVE_FUNCTIONS = CURRENT_RUNTIME_EFFECTIVE_FUNCTIONS.filter(x => !x.startsWith('local_service.create_booking_hold(')).map(x => x.startsWith('local_service.claim_due_shop_email_notifications(') ? 'local_service.claim_due_shop_email_notifications(integer)' : x);
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const legacyDir = path.join(root, 'supabase', 'migrations');
@@ -626,13 +631,14 @@ BEGIN
   WHERE n.nspname='local_service' AND p.oid::regprocedure::text IN (
 ${BK01_RUNTIME_ROUTE_FUNCTIONS.map((identity) => `    '${identity}'`).join(',\n')}
   );
-  IF v_route_function_count NOT IN (0, 5, ${BK01_RUNTIME_ROUTE_FUNCTIONS.length})
+  IF v_route_function_count NOT IN (0, 5, 6, ${BK01_RUNTIME_ROUTE_FUNCTIONS.length})
      OR (v_route_function_count = 5 AND to_regprocedure('local_service.bk01_line_bind_booking_trial(text,text,text,text)') IS NOT NULL) THEN
     RAISE EXCEPTION 'BK01 route RPC migration is partially present';
   END IF;
   v_expected_exec_count := CASE v_route_function_count
     WHEN 0 THEN ${BK01_RUNTIME_BOOTSTRAP_FUNCTIONS.length + BK01_PUBLIC_LEGACY_EXECUTE_EXCEPTIONS.length}
     WHEN 5 THEN ${BK01_RUNTIME_BOOTSTRAP_FUNCTIONS.length + 5 + BK01_PUBLIC_LEGACY_EXECUTE_EXCEPTIONS.length}
+    WHEN 6 THEN ${BK01_RUNTIME_BOOTSTRAP_FUNCTIONS.length + 6 + BK01_PUBLIC_LEGACY_EXECUTE_EXCEPTIONS.length}
     ELSE ${BK01_RUNTIME_EFFECTIVE_FUNCTIONS.length} END;
   IF EXISTS (
     SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace

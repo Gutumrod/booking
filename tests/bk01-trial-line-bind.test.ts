@@ -41,12 +41,12 @@ test('trial binding migration adds the exact runtime identity and one-time token
   assert.doesNotMatch(sql, /GRANT EXECUTE ON FUNCTION local_service\.bk01_line_bind_booking_trial[^;]*TO (?:PUBLIC|anon|authenticated|service_role)/i);
 });
 
-test('runtime exact allowlist includes trial binding and rejects the twelfth explicit RPC', () => {
+test('runtime exact allowlist includes trial binding and rejects the fourteenth explicit RPC', () => {
   assert.ok(BK01_RUNTIME_FUNCTIONS.includes(identity));
-  assert.equal(BK01_RUNTIME_FUNCTIONS.length, 11);
-  assert.equal(BK01_RUNTIME_EFFECTIVE_FUNCTIONS.length, 19);
+  assert.equal(BK01_RUNTIME_FUNCTIONS.length, 13);
+  assert.equal(BK01_RUNTIME_EFFECTIVE_FUNCTIONS.length, 21);
   assert.throws(() => validateBk01RuntimeEffectiveExecuteSet([
     ...BK01_RUNTIME_EFFECTIVE_FUNCTIONS,
-    'local_service.twelfth_probe()',
+    'local_service.fourteenth_probe()',
   ]));
 });

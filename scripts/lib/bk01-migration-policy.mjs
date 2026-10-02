@@ -96,9 +96,9 @@ const TARGET_PATTERNS = [
   { label: 'INSERT', re: /\binsert\s+into\s+([^\s(;]+)/gi },
   // Avoid parsing the event words in CREATE TRIGGER ... BEFORE/AFTER UPDATE ON ...
   // as an UPDATE statement; the dedicated TRIGGER pattern validates its ON target.
-  { label: 'UPDATE', re: /\bupdate\s+(?!of\b|on\b)([^\s(;]+)/gi },
+  { label: 'UPDATE', re: /\bupdate\s+(?!of\b|on\b|or\b)([^\s(;]+)/gi },
   { label: 'DELETE', re: /\bdelete\s+from\s+([^\s(;]+)/gi },
-  { label: 'TRUNCATE', re: /\btruncate(?:\s+table)?\s+([^\s(;]+)/gi },
+  { label: 'TRUNCATE', re: /\btruncate(?:\s+table)?\s+(?!on\b)([^\s(;]+)/gi },
   { label: 'INDEX', re: /\b(?:alter\s+index|drop\s+index(?:\s+if\s+exists)?)\s+([^\s(;]+)/gi },
 ];
 
@@ -127,7 +127,7 @@ const FUNCTION_REVOKE_FROM_PUBLIC =
 // migration stream and A11 permits replacing its body only when the declaration
 // names this exact identity. This does not permit new PUBLIC grants or other
 // functions to bypass the default-revoke rule.
-const PRESERVE_PUBLIC_EXECUTE = /^[^\S\n]*--[^\S\n]*BK01-PRESERVE-EXISTING-PUBLIC-EXECUTE\s*:\s*(local_service\.generate_link_token\s*\(\s*\))\s*$/gim;
+const PRESERVE_PUBLIC_EXECUTE = /^[^\S\n]*--[^\S\n]*BK01-PRESERVE-EXISTING-PUBLIC-EXECUTE\s*:\s*(local_service\.(?:generate_link_token|enqueue_booking_notifications|suppress_new_overdue_line_reminder)\s*\(\s*\))\s*$/gim;
 
 const squash = (value) => value.replace(/\s+/g, ' ').trim().toLowerCase();
 
@@ -140,7 +140,7 @@ function parseArgumentTypes(rawArguments) {
     // does not (`timestamptz`). Both forms must resolve to the same type list.
     .map((part) => {
       const tokens = part.split(' ').filter((token) => token.length > 0);
-      return (tokens.length > 1 ? tokens.slice(1) : tokens).join(' ').toUpperCase();
+      return (tokens.length > 1 && !/^(?:uuid|text|varchar|character|integer|int|bigint|boolean|numeric|jsonb?|date|time|timestamp|timestamptz|record|double|real)$/i.test(tokens[0]) ? tokens.slice(1) : tokens).join(' ').toUpperCase();
     });
 }
 
@@ -180,9 +180,24 @@ function assertFunctionsRevokePublic(body, sourceName) {
   for (const match of Array.from(sourceName.sql?.matchAll(PRESERVE_PUBLIC_EXECUTE) ?? [])) {
     preserved.add(functionSignature(match[1].replace(/\(\s*\)$/, ''), ''));
   }
-  if (preserved.size > 1) throw new Error(`${sourceName.name}: multiple PUBLIC ACL preservation declarations are forbidden`);
-  if (preserved.size > 0 && sourceName.name !== '20260930120000_bk01_link_token_no_extensions.sql') {
-    throw new Error(`${sourceName.name}: legacy PUBLIC ACL preservation is limited to the A11 migration`);
+  if (preserved.size > 2) throw new Error(`${sourceName.name}: too many PUBLIC ACL preservation declarations`);
+  const allowedPreservationFiles = new Set([
+    '20260930120000_bk01_link_token_no_extensions.sql',
+    '20261002120000_bk01_council_p0.sql',
+    '20261001140000_bk01_pack_notify_group67.sql',
+  ]);
+  if (preserved.size > 0 && !allowedPreservationFiles.has(sourceName.name)) {
+    throw new Error(`${sourceName.name}: legacy PUBLIC ACL preservation is limited to the A11 migration or reviewed Group67 migration`);
+  }
+  if (sourceName.name === '20261001140000_bk01_pack_notify_group67.sql'
+      && [...preserved].some(signature => ![
+        'local_service.enqueue_booking_notifications()',
+        'local_service.suppress_new_overdue_line_reminder()',
+      ].includes(signature))) {
+    throw new Error(`${sourceName.name}: unapproved PUBLIC ACL preservation identity`);
+  }
+  if (sourceName.name === '20261002120000_bk01_council_p0.sql' && [...preserved].some(signature => signature !== 'local_service.generate_link_token()')) {
+    throw new Error(`${sourceName.name}: P0 may preserve only the existing token function PUBLIC ACL`);
   }
   for (const signature of preserved) {
     const matching = creations.filter(creation => creation.signature === signature && creation.replaced);
@@ -306,7 +321,7 @@ export function validateBk01MigrationSql(sql, sourceName = 'migration') {
 
   const grants = body.match(GRANT_STATEMENT) ?? [];
   for (const statement of grants) {
-    const target = statement.match(/\bon\s+(?:table|sequence|function|routine|schema)?\s*([^\s(;]+)/i);
+    const target = statement.match(/\bon\s+(?:table|sequence|function|routine|schema|type)?\s*([^\s(;]+)/i);
     if (!target) throw new Error(`${sourceName}: unable to validate GRANT/REVOKE target`);
     assertOwnedQualifiedTarget(target[1], `${sourceName}: GRANT/REVOKE`);
     assertAllowedGrantees(statement, sourceName);

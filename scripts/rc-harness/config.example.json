@@ -1,0 +1,12 @@
+{
+  "sqlSha": "54de7e6752e54faa413ecf06eb59081292537345",
+  "appSha": "c3fdf2fa6a47962e8324c56606e832145361e65a",
+  "auditSqlSha": "9d5ca2bfd34dc50414c69536b9a6a6cd4bbf11fc",
+  "pgBin": "ABSOLUTE_PATH_TO_REVIEWED_PG17_11_BIN",
+  "runtimeRoleSql": "ABSOLUTE_PATH_TO_REVIEWED_h3_bk01_runtime_role.sql",
+  "postgrest": "ABSOLUTE_PATH_TO_POSTGREST_13_0_8_EXE",
+  "chromium": "ABSOLUTE_PATH_TO_HEADLESS_CHROMIUM_EXE",
+  "evidenceRoot": "ABSOLUTE_PATH_TO_EXTERNAL_DISPOSABLE_EVIDENCE_ROOT",
+  "rcWorktree": "ABSOLUTE_PATH_TO_UNIFIED_RC3_WORKTREE",
+  "rcBranch": "codex/bk01-rc3-20261002"
+}

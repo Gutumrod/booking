@@ -1,0 +1,10 @@
+{
+  "name": "bk01-local-rc-harness",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "esbuild": "0.25.4",
+    "playwright": "1.63.0",
+    "postgres": "3.4.9"
+  }
+}

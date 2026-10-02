@@ -853,10 +853,10 @@ record('non-vacuity rejects a 9th PUBLIC-executable function', publicProbeReject
 
 await exec('grant execute on function local_service.wu2_extra_probe() to bk01_runtime');
 let explicitProbeRejected = false;
-try { validateBk01RuntimeEffectiveExecuteSet(await effectiveRuntimeSet(), '12th explicit route RPC identity'); }
+try { validateBk01RuntimeEffectiveExecuteSet(await effectiveRuntimeSet(), '13th explicit route RPC identity'); }
 catch { explicitProbeRejected = true; }
 await exec('revoke execute on function local_service.wu2_extra_probe() from bk01_runtime; drop function local_service.wu2_extra_probe()');
-record('non-vacuity rejects a 12th explicit bk01_runtime RPC grant', explicitProbeRejected,
+record('non-vacuity rejects a 13th explicit bk01_runtime RPC grant', explicitProbeRejected,
   'temporary direct grant was detected then revoked');
 
 // ---------------------------------------------------------------------------

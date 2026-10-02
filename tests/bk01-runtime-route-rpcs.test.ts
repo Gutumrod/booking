@@ -17,7 +17,7 @@ const routeFunctions = [
 ];
 const trialRouteFunction = 'local_service.bk01_line_bind_booking_trial(text,text,text,text)';
 
-test('BK01 runtime allowlist is the exact 11 identities plus 8 legacy PUBLIC exceptions', () => {
+test('BK01 runtime allowlist is the exact 13 identities plus 8 legacy PUBLIC exceptions', () => {
   assert.deepEqual(BK01_RUNTIME_FUNCTIONS, [
     'local_service.authorize_booking_recovery_attempt(uuid,text)',
     'local_service.claim_due_line_notifications(integer)',
@@ -26,8 +26,24 @@ test('BK01 runtime allowlist is the exact 11 identities plus 8 legacy PUBLIC exc
     'local_service.sync_subscription_state_bk_a(text,bigint,uuid,text,text,text,text,bigint,boolean)',
     ...routeFunctions,
     trialRouteFunction,
+    'local_service.claim_due_shop_email_notifications(integer,local_service.bk01_ops_alert_kind,text,boolean)',
+    'local_service.create_booking_hold(uuid,uuid,uuid,character varying,character varying,character varying,date,time without time zone,text)',
   ].sort());
-  assert.equal(BK01_RUNTIME_EFFECTIVE_FUNCTIONS.length, 19);
+  assert.equal(BK01_RUNTIME_EFFECTIVE_FUNCTIONS.length, 21);
+  // P0/120000 moves the 9-argument hold to runtime; 130000 replaces the
+  // one-argument email claim with the alert-context identity (not another RPC).
+  for (const [file, identity] of [
+    ['20261002120000_bk01_council_p0.sql', 'local_service.create_booking_hold(uuid,uuid,uuid,character varying,character varying,character varying,date,time without time zone,text)'],
+    ['20261002130000_bk01_p0_alert_context.sql', 'local_service.claim_due_shop_email_notifications(integer,local_service.bk01_ops_alert_kind,text,boolean)'],
+  ]) {
+    const sql = fs.readFileSync(`supabase/bk01-migrations/${file}`, 'utf8');
+    const escaped = identity.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    assert.match(sql, new RegExp(`GRANT EXECUTE ON FUNCTION ${escaped} TO bk01_runtime;`));
+    assert.match(sql, new RegExp(`REVOKE ALL ON FUNCTION ${escaped} FROM PUBLIC,anon,authenticated,service_role,bk01_runtime;`));
+  }
+  assert.equal(validateBk01RuntimeEffectiveExecuteSet(BK01_RUNTIME_EFFECTIVE_FUNCTIONS), true);
+  assert.throws(() => validateBk01RuntimeEffectiveExecuteSet(BK01_RUNTIME_EFFECTIVE_FUNCTIONS.slice(1)), /missing=/);
+  assert.throws(() => validateBk01RuntimeEffectiveExecuteSet([...BK01_RUNTIME_EFFECTIVE_FUNCTIONS, BK01_RUNTIME_EFFECTIVE_FUNCTIONS[0]]));
   assert.throws(() => validateBk01RuntimeEffectiveExecuteSet([
     ...BK01_RUNTIME_EFFECTIVE_FUNCTIONS,
     'local_service.eleventh_probe()'
@@ -35,10 +51,13 @@ test('BK01 runtime allowlist is the exact 11 identities plus 8 legacy PUBLIC exc
 });
 
 test('generated bootstrap accepts only exact pre and post route-migration privilege states', () => {
+  // Frozen baseline: 5 explicit + 8 PUBLIC = 13; five route RPCs = 18;
+  // trial = 19; group67's one-argument email claim = 20. Final 21 applies
+  // after P0 changes hold ownership; this is not a wider bootstrap allowance.
   const bootstrap = fs.readFileSync('supabase/shared-runtime/bk01-platform-bootstrap.sql', 'utf8');
-  assert.match(bootstrap, /route_function_count NOT IN \(0, 5, 6\)/);
+  assert.match(bootstrap, /route_function_count NOT IN \(0, 5, 6, 7\)/);
   assert.match(bootstrap, /v_route_function_count = 5 AND to_regprocedure\('local_service\.bk01_line_bind_booking_trial\(text,text,text,text\)'\) IS NOT NULL/);
-  assert.match(bootstrap, /WHEN 0 THEN 13\s+WHEN 5 THEN 18\s+ELSE 19 END/);
+  assert.match(bootstrap, /WHEN 0 THEN 13\s+WHEN 5 THEN 18\s+WHEN 6 THEN 19\s+ELSE 20 END/);
   assert.match(bootstrap, /effective EXECUTE set differs from an exact approved migration phase/);
 });
 

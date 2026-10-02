@@ -85,7 +85,7 @@ for (const [index, sql] of violatingInputs.entries()) {
 const effectiveSetProbes = [
   ['9th PUBLIC function', [...BK01_RUNTIME_EFFECTIVE_FUNCTIONS, 'local_service.ninth_public_probe()']],
   ['extra explicit runtime grant', [...BK01_RUNTIME_EFFECTIVE_FUNCTIONS, 'local_service.extra_runtime_probe()']],
-  ['12th explicit RPC identity', [...BK01_RUNTIME_EFFECTIVE_FUNCTIONS, 'local_service.twelfth_route_probe()']],
+  ['13th explicit RPC identity', [...BK01_RUNTIME_EFFECTIVE_FUNCTIONS, 'local_service.thirteenth_route_probe()']],
 ];
 for (const [label, observed] of effectiveSetProbes) {
   let rejected = false;
