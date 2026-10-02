@@ -4,12 +4,12 @@
  * from).
  *
  * WHY THE UI HAS A GATE AT ALL. The SQL guard is the authority: after the P0 SQL set,
- * `set_booking_outcome` refuses `completed` on a booking whose appointment has not
- * started (finding G06, brief 28 §3 S10). A button that is offered and then refused
- * is a worse experience than a button that is not offered — the shop assumes the
- * click worked, the row does not change, and the queue silently stays open. H6 asks
- * for the button to be hidden before the appointment, so the UI agrees with the guard
- * instead of discovering it.
+ * `local_service.set_booking_outcome` refuses the outcome unless the appointment has
+ * STARTED — `bookings.start_timestamptz IS NOT NULL AND start_timestamptz <= now()`.
+ * A button that is offered and then refused is a worse experience than a button that
+ * is not offered — the shop assumes the click worked, the row does not change, and the
+ * queue silently stays open. H6 asks for the button to be hidden before the
+ * appointment starts, so the UI agrees with the guard instead of discovering it.
  *
  * WHERE THE TIME COMES FROM — THE POINT OF G35. The earlier F-17 defect was a gate
  * that reconstructed the appointment instant by string-matching `booking_date` and
@@ -18,59 +18,84 @@
  * started" FOREVER, so the shop could never mark a no-show and fell back to
  * `cancel_booking` — a different state with different money and statistics.
  *
- * This gate therefore takes the SERVER's `end_timestamptz` and nothing else. It is a
- * real instant, it handles a null by saying so, and it never parses a display string.
+ * This gate therefore takes the SERVER's `start_timestamptz` and `end_timestamptz` and
+ * never parses a display string.
  *
- * FAIL DIRECTION IS DELIBERATE AND IS THE OPPOSITE OF THE OLD GATE. When the instant
- * is missing the gate ANSWERS `true` (offer the action) rather than `false`: the SQL
- * guard is the authority and it rejects what it must, whereas hiding the button on a
- * row the shop legitimately needs to close has no recovery path at all. The two
- * directions are asserted in `tests/house-p0-app-completed-gate.test.ts`.
+ * THE START INSTANT IS THE PRIMARY FACT, because it is the instant the SQL guard
+ * tests. `startTime` reached -> offer the action; `startTime` still in the future ->
+ * do not offer it. `startTime` missing or unparseable -> fall back to `endTime` when
+ * that is a usable instant (an older projection may not carry the start); if neither
+ * instant is usable the gate ANSWERS `true` so the SQL guard, not the button, decides.
+ *
+ * FAIL DIRECTION IS DELIBERATE. When no usable instant is present the gate offers the
+ * action rather than hiding it: the SQL guard rejects what it must, whereas hiding the
+ * button on a row the shop legitimately needs to close has no recovery path at all.
+ * Both directions are asserted in `tests/house-p0-app-h6.test.ts`.
  *
  * Pure and framework-free so `tests/` can pin it without a clock or a browser.
  */
 
 /** The server-supplied instants the gate needs. Both are ISO-8601 or null. */
 export interface BookingOutcomeTiming {
-  /** `bookings.end_timestamptz` as the server returned it. */
-  endTime?: string | null;
-  /** `bookings.start_timestamptz` as the server returned it. Optional: an older
-   *  projection may not carry it, and `endTime` alone is enough. */
+  /** `bookings.start_timestamptz` as the server returned it. The primary fact — the
+   *  instant `set_booking_outcome` itself tests. Optional: a projection may omit it. */
   startTime?: string | null;
+  /** `bookings.end_timestamptz` as the server returned it. The fallback for a
+   *  projection that carries no usable start. */
+  endTime?: string | null;
 }
 
 export interface AppointmentTimingDecision {
   /** True when the appointment instant has been reached (or cannot be judged). */
   reached: boolean;
-  /** Why, for the operator and for the tests. */
-  basis: 'end_time_passed' | 'start_time_passed' | 'instant_missing' | 'instant_invalid' | 'appointment_in_future';
+  /**
+   * Which instant decided, for the operator and for the tests. The `*_start_time_*`
+   * codes name the PRIMARY start instant; `end_time_reached_fallback` and
+   * `appointment_in_future` name the end instant, used only when the start is
+   * unusable; `instant_missing` / `instant_invalid` name the deliberate fail-open.
+   */
+  basis:
+    | 'start_time_reached'
+    | 'start_time_in_future'
+    | 'end_time_reached_fallback'
+    | 'appointment_in_future'
+    | 'instant_missing'
+    | 'instant_invalid';
 }
 
 /**
  * Whether the appointment has been reached and the outcome actions may be offered.
  *
- * `endTime` is the primary fact (a no-show is only decidable once the appointment has
- * finished); `startTime` is a fallback for a projection that carries no end. A missing
- * or unparseable instant answers `reached: true` so the SQL guard decides — see the
+ * The START instant is the primary decider — the same fact the SQL guard tests — and
+ * the END instant is only consulted when the start is missing or unparseable. A booking
+ * with no usable instant answers `reached: true` so the SQL guard decides — see the
  * header.
  */
 export function resolveAppointmentReached(
   booking: BookingOutcomeTiming,
   now: Date = new Date(),
 ): AppointmentTimingDecision {
-  const end = parseInstant(booking.endTime);
-  if (end === 'missing' || end === 'invalid') {
-    const start = parseInstant(booking.startTime);
-    if (start instanceof Date) {
-      return start.getTime() <= now.getTime()
-        ? { reached: true, basis: 'start_time_passed' }
-        : { reached: true, basis: 'instant_missing' };
-    }
-    return { reached: true, basis: end === 'missing' ? 'instant_missing' : 'instant_invalid' };
+  // PRIMARY FACT: the start instant the SQL guard itself tests.
+  const start = parseInstant(booking.startTime);
+  if (start instanceof Date) {
+    return start.getTime() <= now.getTime()
+      ? { reached: true, basis: 'start_time_reached' }
+      : { reached: false, basis: 'start_time_in_future' };
   }
-  return end.getTime() <= now.getTime()
-    ? { reached: true, basis: 'end_time_passed' }
-    : { reached: false, basis: 'appointment_in_future' };
+
+  // FALLBACK: the start is unusable, so the end instant decides when it is usable.
+  const end = parseInstant(booking.endTime);
+  if (end instanceof Date) {
+    return end.getTime() <= now.getTime()
+      ? { reached: true, basis: 'end_time_reached_fallback' }
+      : { reached: false, basis: 'appointment_in_future' };
+  }
+
+  // Neither instant is usable: fail OPEN so the SQL guard is the authority.
+  return {
+    reached: true,
+    basis: start === 'invalid' || end === 'invalid' ? 'instant_invalid' : 'instant_missing',
+  };
 }
 
 /**

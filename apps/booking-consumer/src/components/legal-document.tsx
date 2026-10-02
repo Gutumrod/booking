@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { AlertTriangle, ArrowLeft, Scale } from 'lucide-react';
 import { useMessages, useTranslations } from 'next-intl';
 import { LanguageToggle } from '@/components/language-toggle';
+import { renderNeutralPlaceholders } from '@/lib/legal-placeholder';
 
 export type LegalDocumentKey = 'terms' | 'privacy';
 
@@ -81,6 +82,12 @@ function SectionBody({ body }: { body: string }) {
 
 export function LegalDraftNotice({ documentTitle }: { documentTitle?: string }) {
   const t = useTranslations('legal.meta');
+  const meta = (useMessages() as unknown as LegalMessages).legal.meta;
+  // G32: the catalogue deliberately keeps its [[OWNER INPUT …]] placeholders (the
+  // Owner facts are still missing and the placeholder gate must keep failing), so the
+  // neutral "not yet confirmed" value is substituted here, at render time, and the raw
+  // placeholder never reaches the screen.
+  const pending = meta.pendingOwnerValue;
   return (
     <section
       role="note"
@@ -96,9 +103,11 @@ export function LegalDraftNotice({ documentTitle }: { documentTitle?: string }) 
       </h2>
       <p className="mt-1.5 text-xs leading-relaxed text-amber-100/90">{t('draftBody')}</p>
       <p className="mt-2 border-t border-amber-500/40 pt-2 text-[11px] font-semibold text-amber-200">{t('draftFooter')}</p>
-      <p className="mt-1.5 text-[11px] leading-relaxed text-amber-100/80">{t('ownerInputLegend')}</p>
+      <p className="mt-1.5 text-[11px] leading-relaxed text-amber-100/80">
+        {renderNeutralPlaceholders(t('ownerInputLegend'), pending)}
+      </p>
       <p className="mt-1.5 text-[11px] font-mono text-amber-200/90">
-        {t('lastUpdatedLabel')} {t('lastUpdatedValue')}
+        {t('lastUpdatedLabel')} {renderNeutralPlaceholders(t('lastUpdatedValue'), pending)}
       </p>
     </section>
   );
@@ -109,6 +118,12 @@ export function LegalDocument({ documentKey }: { documentKey: LegalDocumentKey }
   const messages = useMessages() as unknown as LegalMessages;
   const doc = messages.legal[documentKey];
   const sectionKeys = LEGAL_SECTION_ORDER[documentKey];
+  // G32: every customer-visible legal string is neutralised at render time, so the
+  // catalogue can keep its [[OWNER INPUT …]] placeholders (the placeholder gate must
+  // keep failing until the Owner supplies the facts) while the screen shows only the
+  // neutral "not yet confirmed" text.
+  const pending = messages.legal.meta.pendingOwnerValue;
+  const title = renderNeutralPlaceholders(doc.title, pending);
 
   return (
     <div className="min-h-screen bg-slate-950 font-sans text-slate-100">
@@ -120,13 +135,13 @@ export function LegalDocument({ documentKey }: { documentKey: LegalDocumentKey }
         </div>
 
         <header>
-          <h1 className="text-2xl font-bold text-white">{doc.title}</h1>
-          <p className="text-xs font-semibold text-amber-300">{doc.subtitle}</p>
+          <h1 className="text-2xl font-bold text-white">{title}</h1>
+          <p className="text-xs font-semibold text-amber-300">{renderNeutralPlaceholders(doc.subtitle, pending)}</p>
         </header>
 
-        <LegalDraftNotice documentTitle={doc.title} />
+        <LegalDraftNotice documentTitle={title} />
 
-        <p className="text-xs leading-relaxed text-slate-300">{doc.intro}</p>
+        <p className="text-xs leading-relaxed text-slate-300">{renderNeutralPlaceholders(doc.intro, pending)}</p>
 
         <div className="space-y-4">
           {sectionKeys.map((key) => {
@@ -134,14 +149,14 @@ export function LegalDocument({ documentKey }: { documentKey: LegalDocumentKey }
             if (!section) return null;
             return (
               <section key={key} className="space-y-2 rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-                <h2 className="text-sm font-bold text-white">{section.h}</h2>
-                <SectionBody body={section.b} />
+                <h2 className="text-sm font-bold text-white">{renderNeutralPlaceholders(section.h, pending)}</h2>
+                <SectionBody body={renderNeutralPlaceholders(section.b, pending)} />
               </section>
             );
           })}
         </div>
 
-        <LegalDraftNotice documentTitle={doc.title} />
+        <LegalDraftNotice documentTitle={title} />
 
         <nav className="flex flex-col gap-2 border-t border-slate-800 pt-4">
           <div className="flex flex-wrap gap-2 text-xs">

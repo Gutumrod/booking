@@ -8,6 +8,9 @@
 // and the alert ledger arrived), so the probe passes the injected arguments as a
 // trailing array and adapts to whichever arity the source under test has.
 
+import { pathToFileURL } from 'node:url';
+import { parseHandlerParameterNames, PROBE_PARAMETER_NAMES } from './lib/handler-parameter-names.mjs';
+
 const route = await import('../apps/booking-consumer/src/lib/notification-dispatch.ts');
 const budget = await import('../apps/booking-consumer/src/lib/notification-push-budget.ts');
 const entitlement = await import('../apps/booking-consumer/src/lib/notification-entitlement.ts');
@@ -96,12 +99,21 @@ function dispatchRequest() {
   });
 }
 
+/*
+ * The parameter-name parser is NO LONGER defined here. It lives, pure and
+ * side-effect-free, in `tests/lib/handler-parameter-names.mjs` and is imported above.
+ * It was extracted because the lock test had to import THIS file (an executable
+ * script) to reach it, which ran the whole probe and mutated `process.env` inside the
+ * shared test process — see the module header for the full account. This probe stays
+ * diagnostic (no assertions); the permanent lock lives in
+ * `tests/house-p0-app-n2-probe-parser.test.ts`.
+ */
+
 async function dispatch(handler, h, { usage, sink } = {}) {
   // The dispatcher's parameter list changed between rounds (the merchant resolver
   // was removed, the alert ledger added), so the arguments are mapped by the
   // handler's own parameter NAMES rather than by position.
-  const names = (handler.toString().match(/^[^(]*\(([\s\S]*?)\)/) || [, ''])[1]
-    .split(',').map((part) => part.trim().split(/[=:\s]/)[0]).filter(Boolean);
+  const names = parseHandlerParameterNames(handler);
   const values = {
     req: dispatchRequest(),
     runtimeProvider: async () => h.runtime,
@@ -213,3 +225,22 @@ results.push({
 });
 
 for (const result of results) console.log(JSON.stringify(result));
+
+// Self-check (N2): when run AS the entry point, assert the parser recovered the
+// full real parameter list — a comment must never silently disable injection again.
+// The permanent lock for this lives in tests/house-p0-app-n2-probe-parser.test.ts;
+// the probe itself stays diagnostic (no assertions) when imported by a test.
+//
+// `PROBE_PARAMETER_NAMES` (the frozen expected list) is re-exported from the pure
+// helper module so the probe stays self-contained for its own self-check, while the
+// lock test can import the helper WITHOUT importing this executable probe.
+export { PROBE_PARAMETER_NAMES };
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  const names = parseHandlerParameterNames(route.handleNotificationDispatch);
+  const missing = PROBE_PARAMETER_NAMES.filter((name) => !names.includes(name));
+  if (missing.length > 0) {
+    console.error(`probe parser self-check FAILED: missing ${missing.join(', ')}`);
+    process.exitCode = 1;
+  }
+}

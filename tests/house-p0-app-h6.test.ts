@@ -102,62 +102,63 @@ test('the gate is wired into the package scripts so a release run can call it', 
 });
 
 // ---------------------------------------------------------------------------
-// G06 (UI) — the completed action is not offered before the appointment
+// G06 (UI) — the completed/no-show actions open when the appointment STARTS,
+// the same instant the SQL guard tests, and are hidden only before the start
 // ---------------------------------------------------------------------------
 
 const NOW = new Date('2026-10-05T12:00:00Z');
 
-test('an appointment in the future does NOT offer the outcome actions', () => {
-  const decision = resolveAppointmentReached(
-    { startTime: '2026-10-12T02:00:00Z', endTime: '2026-10-12T03:00:00Z' },
-    NOW,
-  );
+test('an appointment that has not started (start still in the future) does NOT offer the actions', () => {
+  const booking = { startTime: '2026-10-12T02:00:00Z', endTime: '2026-10-12T03:00:00Z' };
+  const decision = resolveAppointmentReached(booking, NOW);
   assert.equal(decision.reached, false);
-  assert.equal(decision.basis, 'appointment_in_future');
-  assert.equal(canOfferOutcomeActions({ startTime: '2026-10-12T02:00:00Z', endTime: '2026-10-12T03:00:00Z' }, NOW), false);
+  assert.equal(decision.basis, 'start_time_in_future');
+  assert.equal(canOfferOutcomeActions(booking, NOW), false);
 });
 
-test('an appointment whose end has passed DOES offer the actions', () => {
+test('an appointment that has STARTED (start past, end still future) DOES offer the actions', () => {
+  // THE BEHAVIOURAL CHANGE: the authority opens the action when the appointment
+  // STARTS, so mid-appointment the shop may already mark completed/no-show. The old
+  // test asserted the opposite because it keyed off the end instant.
+  const booking = { startTime: '2026-10-05T11:30:00Z', endTime: '2026-10-05T13:00:00Z' };
+  const decision = resolveAppointmentReached(booking, NOW);
+  assert.equal(decision.reached, true);
+  assert.equal(decision.basis, 'start_time_reached');
+  assert.equal(canOfferOutcomeActions(booking, NOW), true);
+  // The boundary: exactly now counts as started, so a shop is never locked out of a
+  // queue that starts this second.
+  assert.equal(canOfferOutcomeActions({ startTime: NOW.toISOString() }, NOW), true);
+});
+
+test('an appointment that has finished DOES offer the actions', () => {
   assert.equal(canOfferOutcomeActions(
     { startTime: '2026-10-05T01:00:00Z', endTime: '2026-10-05T02:00:00Z' }, NOW,
   ), true);
-  // The boundary: exactly now counts as reached, so a shop is never locked out of a
-  // queue that finished this second.
-  assert.equal(canOfferOutcomeActions({ endTime: NOW.toISOString() }, NOW), true);
+  // When the start is missing, the end instant is the fallback that decides.
+  const fallback = resolveAppointmentReached({ endTime: '2026-10-05T02:00:00Z' }, NOW);
+  assert.equal(fallback.reached, true);
+  assert.equal(fallback.basis, 'end_time_reached_fallback');
+  // ...and an end still ahead with no usable start is NOT offered.
+  assert.equal(canOfferOutcomeActions({ endTime: '2026-10-05T13:00:00Z' }, NOW), false);
 });
 
-test('a booking that started but has not ended is offered on the START instant fallback', () => {
-  // Mid-appointment: the end is still ahead, so the end alone would hide the action
-  // for a whole service duration. The start fallback keeps the shop able to close it.
-  const decision = resolveAppointmentReached(
-    { startTime: '2026-10-05T11:30:00Z', endTime: '2026-10-05T13:00:00Z' },
-    NOW,
-  );
-  assert.equal(decision.reached, false, 'the end has not passed, so the primary fact says not yet');
-
-  // ...and when only the start is available (an older projection), it decides.
-  const startOnly = resolveAppointmentReached({ startTime: '2026-10-05T11:30:00Z' }, NOW);
-  assert.equal(startOnly.reached, true);
-  assert.equal(startOnly.basis, 'start_time_passed');
-});
-
-test('a missing or malformed instant OFFERS the action — the SQL guard is the authority', () => {
-  // G35's lesson, and the deliberate opposite of the old F-17 gate: the old gate
-  // reconstructed the instant from text and answered "never started", which bricked
-  // the "no-show" button on any row whose text did not match exactly. Hiding the
-  // button has no recovery path; letting the guard refuse it does.
+test('a booking with no usable instant still OFFERS the action — the SQL guard is the authority', () => {
+  // G35's lesson, and the deliberate fail direction: hiding the button on a row whose
+  // instants are unreadable has no recovery path, whereas the guard can refuse it.
   for (const booking of [
-    { endTime: null },
-    { endTime: undefined },
-    { endTime: '' },
-    { endTime: 'not-a-date' },
     { startTime: null, endTime: null },
+    { startTime: undefined, endTime: undefined },
+    { startTime: '', endTime: '' },
+    { startTime: 'not-a-date' },
+    { endTime: null },
+    { endTime: 'not-a-date' },
   ]) {
     const decision = resolveAppointmentReached(booking as any, NOW);
     assert.equal(decision.reached, true, `${JSON.stringify(booking)} must still be closeable`);
   }
-  assert.equal(resolveAppointmentReached({ endTime: null }, NOW).basis, 'instant_missing');
-  assert.equal(resolveAppointmentReached({ endTime: 'garbage' }, NOW).basis, 'instant_invalid');
+  assert.equal(resolveAppointmentReached({ startTime: null, endTime: null }, NOW).basis, 'instant_missing');
+  assert.equal(resolveAppointmentReached({ startTime: 'garbage' }, NOW).basis, 'instant_invalid');
+  assert.equal(resolveAppointmentReached({ startTime: null, endTime: 'garbage' }, NOW).basis, 'instant_invalid');
 });
 
 test('the gate reads the SERVER instant and never re-parses the display text', () => {

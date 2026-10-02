@@ -181,6 +181,7 @@
       "ownerInputLegend": "ข้อความที่แสดงเป็น [[OWNER INPUT: ...]] ถูกเว้นว่างไว้โดยเจตนา เจ้าของผลิตภัณฑ์ยังไม่ได้ให้ค่านี้ และร่างนี้ไม่ได้คิดค่านี้ขึ้นเอง",
       "lastUpdatedLabel": "เวอร์ชันและวันที่ของร่าง:",
       "lastUpdatedValue": "[[OWNER INPUT: effective date and version number of the approved document]]",
+      "pendingOwnerValue": "ยังไม่ยืนยัน (รอการอนุมัติจากเจ้าของผลิตภัณฑ์)",
       "back": "กลับสู่หน้าจองคิว"
     },
     "terms": {

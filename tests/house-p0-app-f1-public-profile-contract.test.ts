@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 import test from 'node:test';
 
 /*
@@ -13,20 +14,121 @@ import test from 'node:test';
  * This test reads the AUTHORITATIVE column list out of the migration source rather
  * than restating it: any future SQL/app column drift fails here, not only this one
  * field. The SQL worktree is read-only from the app side.
+ *
+ * SQL SOURCE RESOLUTION — ordered, documented, FAIL CLOSED (see
+ * resolvePublicProfileSql()). The function definition must never be assumed to live
+ * in any single tree, and its absence must never be mistaken for a pass or a skip.
+ * The lookup tries, in order:
+ *   1. $BK01_PUBLIC_PROFILE_SQL         — explicit override (absolute or repo-relative).
+ *   2. supabase/bk01-migrations/*.sql  — this repository's own migration stream,
+ *                                        newest file first, and only the first file
+ *                                        that ACTUALLY defines the function.
+ *   3. the sibling SQL worktree path   — resolved relative to THIS test file
+ *                                        (read-only; the path used historically).
+ * If no candidate defines the function, the test throws an Error naming every path
+ * that was tried and the reason each one failed (missing file vs. function absent).
  */
 
-const SQL_WORKTREE_MIGRATION =
-  '../bk01-p0-sql-20261002/supabase/bk01-migrations/20261002120000_bk01_council_p0.sql';
+const FUNCTION_SIGNATURE = 'CREATE FUNCTION local_service.bk01_public_shop_profiles()';
+const ENV_SQL_OVERRIDE = 'BK01_PUBLIC_PROFILE_SQL';
+const REPO_LOCAL_MIGRATION_DIR = 'supabase/bk01-migrations';
+const SIBLING_SQL_MIGRATION_REL =
+  '../../bk01-p0-sql-20261002/supabase/bk01-migrations/20261002120000_bk01_council_p0.sql';
+
+const TEST_DIR = import.meta.dirname;
+const REPO_ROOT = resolve(TEST_DIR, '..');
+
 const SERVICE = 'apps/booking-consumer/src/lib/booking-service.ts';
 const PAGE = 'apps/booking-consumer/src/app/book/[slug]/page.tsx';
 
-const read = (path: string) => readFileSync(path, 'utf8');
+const read = (filePath: string) => readFileSync(filePath, 'utf8');
+
+/** Newest-first by filename: migration names are timestamp-prefixed, so lexicographic desc == newest first. */
+function sqlFilesNewestFirst(dir: string): string[] {
+  return readdirSync(dir)
+    .filter((name) => name.endsWith('.sql'))
+    .sort((a, b) => (a < b ? 1 : a > b ? -1 : 0));
+}
+
+/**
+ * Resolve the SQL migration source that defines `local_service.bk01_public_shop_profiles()`.
+ *
+ * Returns `{ path, sql }` for the first candidate that actually contains the function
+ * definition. When no candidate does, throws an Error naming every path that was tried
+ * and why each one failed — absence is never treated as success and the caller is never
+ * allowed to skip silently.
+ */
+function resolvePublicProfileSql(): { path: string; sql: string } {
+  const attempts: string[] = [];
+  const tryFile = (source: string, filePath: string): { path: string; sql: string } | null => {
+    let sql: string;
+    try {
+      sql = read(filePath);
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code ?? String(error);
+      attempts.push(`${source}: ${filePath} — unreadable (${code})`);
+      return null;
+    }
+    if (!sql.includes(FUNCTION_SIGNATURE)) {
+      attempts.push(`${source}: ${filePath} — file present but does not define the function`);
+      return null;
+    }
+    console.log(`[F1] public-profile SQL resolved via ${source}: ${filePath}`);
+    return { path: filePath, sql };
+  };
+
+  // 1. Explicit override. When set it is authoritative: no fallback, so a typo or a
+  //    stale path fails loudly instead of silently falling through to another tree.
+  const override = process.env[ENV_SQL_OVERRIDE]?.trim();
+  if (override) {
+    const resolved = resolve(REPO_ROOT, override);
+    const hit = tryFile(`${ENV_SQL_OVERRIDE} override`, resolved);
+    if (hit) return hit;
+    throw new Error(
+      `F1 recurrence guard: ${ENV_SQL_OVERRIDE} is set but did not yield ` +
+        `"${FUNCTION_SIGNATURE}".\nTried:\n  - ${attempts.join('\n  - ')}\n` +
+        `Unset ${ENV_SQL_OVERRIDE} (or point it at a migration that defines the function) to use the default lookup.`,
+    );
+  }
+
+  // 2. This repository's own migration stream: newest *.sql first, but only the first
+  //    file that ACTUALLY defines the function — newest alone is not good enough.
+  const repoLocalDir = join(REPO_ROOT, REPO_LOCAL_MIGRATION_DIR);
+  let repoLocalFiles: string[];
+  try {
+    repoLocalFiles = sqlFilesNewestFirst(repoLocalDir);
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code ?? String(error);
+    attempts.push(`repo-local ${REPO_LOCAL_MIGRATION_DIR}: ${repoLocalDir} — unreadable (${code})`);
+    repoLocalFiles = [];
+  }
+  if (repoLocalFiles.length === 0) {
+    attempts.push(`repo-local ${REPO_LOCAL_MIGRATION_DIR}: ${repoLocalDir} — no *.sql migration found`);
+  }
+  for (const name of repoLocalFiles) {
+    const hit = tryFile(`repo-local ${REPO_LOCAL_MIGRATION_DIR}`, join(repoLocalDir, name));
+    if (hit) return hit;
+  }
+
+  // 3. The sibling SQL worktree path used historically. Resolved relative to THIS test
+  //    file (not the process cwd) and read-only.
+  const siblingPath = resolve(TEST_DIR, SIBLING_SQL_MIGRATION_REL);
+  const hit = tryFile('sibling SQL worktree', siblingPath);
+  if (hit) return hit;
+
+  throw new Error(
+    `F1 recurrence guard: no SQL source defines "${FUNCTION_SIGNATURE}".\nTried:\n  - ` +
+      `${attempts.join('\n  - ')}\n` +
+      `Set ${ENV_SQL_OVERRIDE} to the migration that defines the function, or add it to ` +
+      `${REPO_LOCAL_MIGRATION_DIR}/ in this repository.`,
+  );
+}
 
 /** The column names of `local_service.bk01_public_shop_profiles()`'s RETURNS TABLE. */
 function sqlPublicProfileColumns(): string[] {
-  const sql = read(SQL_WORKTREE_MIGRATION);
-  const fnStart = sql.indexOf('CREATE FUNCTION local_service.bk01_public_shop_profiles()');
-  assert.ok(fnStart >= 0, `the public-profile function must exist in ${SQL_WORKTREE_MIGRATION}`);
+  const { path: sqlPath, sql } = resolvePublicProfileSql();
+  const fnStart = sql.indexOf(FUNCTION_SIGNATURE);
+  assert.ok(fnStart >= 0, `the public-profile function must exist in ${sqlPath}`);
   const body = sql.slice(fnStart);
   const match = body.match(/RETURNS\s+TABLE\s*\(([\s\S]*?)\)/i);
   assert.ok(match, 'the public-profile function must declare an explicit RETURNS TABLE');

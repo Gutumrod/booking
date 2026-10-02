@@ -181,6 +181,7 @@
       "ownerInputLegend": "Items shown as [[OWNER INPUT: ...]] are intentionally blank. The Owner has not supplied these values and this draft does not invent them.",
       "lastUpdatedLabel": "Draft version and date:",
       "lastUpdatedValue": "[[OWNER INPUT: effective date and version number of the approved document]]",
+      "pendingOwnerValue": "Not yet confirmed (pending Owner approval)",
       "back": "Back to the booking portal"
     },
     "terms": {
