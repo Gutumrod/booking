@@ -10,9 +10,10 @@ const migrationPath = path.join(root, 'supabase/bk01-migrations', migrationName)
 const migration = readFileSync(migrationPath, 'utf8');
 const rollback = readFileSync(path.join(root, 'supabase/rollback/20261002170000_bk01_g10_line_binding_audit_truncate.rollback.sql'), 'utf8');
 
-test('170000 is the final, policy-valid BK01 migration', () => {
+test('170000 precedes the platform-admin repair and remains policy-valid', () => {
   const migrations = readdirSync(path.join(root, 'supabase/bk01-migrations')).filter((name) => name.endsWith('.sql')).sort();
-  assert.equal(migrations.at(-1), migrationName);
+  assert.equal(migrations.at(-2), migrationName);
+  assert.equal(migrations.at(-1), '20261002180000_bk01_platform_admin_return_types.sql');
   assert.equal(validateBk01MigrationSql(migration, migrationName), true);
 });
 
