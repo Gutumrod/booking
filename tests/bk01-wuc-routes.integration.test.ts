@@ -2,9 +2,13 @@ import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import test from 'node:test';
 
-const lineRoute = await import('../apps/booking-consumer/src/app/api/line/webhook/route.ts');
-const dispatchRoute = await import('../apps/booking-consumer/src/app/api/notifications/dispatch/route.ts');
-const uploadRoute = await import('../apps/booking-consumer/src/app/api/deposit-slips/upload-intent/route.ts');
+// The handlers live in library modules now. Next 16.3.6 asserts that an App Router
+// route module exports nothing but the HTTP methods and the documented config
+// symbols (a non-method export fails the build as TS2344), so each route module
+// re-exports POST and the handler is imported from `src/lib` here.
+const lineRoute = await import('../apps/booking-consumer/src/lib/line-webhook.ts');
+const dispatchRoute = await import('../apps/booking-consumer/src/lib/notification-dispatch.ts');
+const uploadRoute = await import('../apps/booking-consumer/src/lib/deposit-slip-upload-intent.ts');
 
 function request(path: string, body: string, headers: Record<string, string> = {}, method = 'POST') {
   return new Request(`https://bk01.test${path}`, { method, headers, body: method === 'GET' ? undefined : body });
@@ -198,7 +202,7 @@ test('upload intent authorizes by RPC, returns Storage URL, and reports Storage/
 test('Stripe verifies signature before token issuer; happy, replay, RPC error, and issuer error paths use only RPCs', async () => {
   process.env.STRIPE_WEBHOOK_SECRET = 'stripe-secret';
   process.env.STRIPE_SECRET_KEY = 'stripe-api-key';
-  const stripeRoute = await import('../apps/booking-admin/src/app/api/webhooks/stripe/route.ts');
+  const stripeRoute = await import('../apps/booking-admin/src/lib/stripe-webhook.ts');
   const stripeClient = (constructError = false) => ({ webhooks: {
     constructEvent: () => {
       if (constructError) throw new Error('signature invalid');

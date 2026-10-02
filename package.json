@@ -22,7 +22,9 @@
     "db:bk01:verify": "node scripts/verify-bk01-shared-runtime.mjs",
     "db:bk01:policy": "node scripts/check-bk01-migration-policy.mjs",
     "db:bk01:plan": "node scripts/bk01-migrate.mjs plan",
-    "db:bk01:apply": "node scripts/bk01-migrate.mjs apply"
+    "db:bk01:apply": "node scripts/bk01-migrate.mjs apply",
+    "gate:owner-input": "node scripts/check-owner-input-placeholders.mjs",
+    "gate:owner-input:enforce": "node scripts/check-owner-input-placeholders.mjs --enforce"
   },
   "devDependencies": {
     "postgres": "3.4.9"

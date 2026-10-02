@@ -11,7 +11,10 @@ const identity = 'local_service.bk01_line_bind_booking_trial(text,text,text,text
 const migration = 'supabase/bk01-migrations/20260927130000_bk01_trial_line_bind.sql';
 
 test('trial LINE route uses the no-shop-id RPC only for the central OA after signature verification', () => {
-  const source = fs.readFileSync('apps/booking-consumer/src/app/api/line/webhook/route.ts', 'utf8');
+  // The webhook handler lives in a library module now (a route module may export
+  // only HTTP methods — Next 16.3.6 / TS2344); this is the code that holds the
+  // trial RPC name and the signature check.
+  const source = fs.readFileSync('apps/booking-consumer/src/lib/line-webhook.ts', 'utf8');
   assert.match(source, /config\.mode\s*===\s*'central'\s*\?\s*'bk01_line_bind_booking_trial'/);
   assert.match(source, /verifySignature\(rawBody/);
   assert.ok(source.indexOf('verifySignature(rawBody') < source.indexOf('runtimeProvider()'));

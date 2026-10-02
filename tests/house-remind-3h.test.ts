@@ -74,11 +74,20 @@ test('the reminder text names no lead time, so a legacy 24-hour row is not misde
 });
 
 test('the dispatch route renders reminders through the shared builder, not an inline string', () => {
-  const route = read('apps/booking-consumer/src/app/api/notifications/dispatch/route.ts');
-  assert.match(route, /buildCustomerReminderText/);
-  assert.match(route, /reminder_3h/);
-  // The retired inline copy must be gone.
+  const route = read('apps/booking-consumer/src/lib/notification-dispatch.ts');
+  // The reminder text has ONE owner (`customer-reminder-text.ts`). Since P0 H1 the
+  // route builds EVERY customer message through `buildCustomerEventText`, which
+  // delegates the reminder to that shared builder — so the route must reach the
+  // builder, but not by calling it directly and not by inlining a copy.
+  assert.match(route, /buildCustomerEventText/);
+  assert.match(route, /notification-event-registry/);
+  const textModule = read('apps/booking-consumer/src/lib/notification-customer-text.ts');
+  assert.match(textModule, /buildCustomerReminderText/);
+  assert.match(textModule, /reminder_3h/);
+  // The retired inline copy must be gone from the route, and no default
+  // confirmation may stand in for an event the route does not recognise.
   assert.doesNotMatch(route, /`แจ้งเตือนคิวที่ \$\{context\.shop_name/);
+  assert.doesNotMatch(route, /ยืนยันคิวที่ \$\{context\.shop_name/);
 });
 
 test('the LINE binding card states the queue code and the 3-hour reminder in TH and EN', () => {

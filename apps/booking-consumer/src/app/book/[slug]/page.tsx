@@ -23,6 +23,32 @@ import { loadBookingRoute, createRequestGate } from '../../../lib/booking-route-
 
 const CENTRAL_LINE_OA_ID = process.env.NEXT_PUBLIC_CENTRAL_LINE_OA_ID || 'central_booking_oa';
 
+/*
+ * H4 / G01 (brief 28 §4, A-24 item 1): the booking page no longer calls
+ * `create_booking_hold` itself — it posts to `/api/bookings/hold`, which validates a
+ * Cloudflare Turnstile challenge SERVER-side and applies an abuse budget before the
+ * RPC runs as `bk01_runtime`. The widget below only PRODUCES a token; whether one is
+ * required, and whether it is valid, is decided on the server.
+ *
+ * The sitekey is public by design (Cloudflare ships it in the page HTML), so it is a
+ * NEXT_PUBLIC_ variable. The SECRET never is, and never appears in this file.
+ * During development the official test sitekey passes on any domain, including
+ * localhost; the Owner creates the real one later (A-24 item 1).
+ */
+const TURNSTILE_TEST_SITEKEY = '1x00000000000000000000AA';
+const TURNSTILE_SITEKEY = process.env.NEXT_PUBLIC_TURNSTILE_SITEKEY || TURNSTILE_TEST_SITEKEY;
+const TURNSTILE_SCRIPT_SRC = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+
+declare global {
+  interface Window {
+    turnstile?: {
+      render(container: HTMLElement, options: Record<string, unknown>): string;
+      reset(widgetId?: string): void;
+      remove(widgetId?: string): void;
+    };
+  }
+}
+
 const ALL_TIME_SLOTS = ['09:00', '09:30', '10:00', '10:30', '11:00', '11:30', '12:00', '13:00', '13:30', '14:00', '14:30', '15:00', '15:30', '16:00', '16:30', '17:00', '17:30', '18:00', '18:30', '19:00'];
 const thaiMobilePhonePattern = /^0[689]\d{8}$/;
 
@@ -136,6 +162,7 @@ function BookingRoute({ slug }: { slug: string }) {
   const [holdResult, setHoldResult] = useState<HoldResponse | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const qrContainerRef = useRef<HTMLDivElement>(null);
+  const turnstileRef = useRef<HTMLDivElement>(null);
 
   // Deposit hold countdown. Derived from the server-issued expires_at on the
   // hold response -- never a client-side duration literal, so it stays correct
@@ -307,6 +334,55 @@ function BookingRoute({ slug }: { slug: string }) {
     slot => slot.time === selectedTime && slot.isAvailable
   );
 
+  /*
+   * The Turnstile widget (H4 / G01). It renders explicitly into `turnstileRef` once
+   * the script is up, and hands the token to `handleCreateHold` through `tokenRef`
+   * (a ref, not state: the token is read once at submit time and must not cause a
+   * re-render, and a stale state value would be the bug the widget exists to avoid).
+   *
+   * FAIL-SOFT ON PURPOSE. If the script cannot load, the widget is simply absent and
+   * the server decides what that means — in production a missing secret refuses the
+   * booking, in development the test secret lets it through. A page that refuses to
+   * render because an optional third-party script failed would take booking down for
+   * every customer, which is the worse failure.
+   */
+  const tokenRef = useRef<string>('');
+  const widgetIdRef = useRef<string>('');
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    let cancelled = false;
+
+    const render = () => {
+      if (cancelled || !window.turnstile || !turnstileRef.current || widgetIdRef.current) return;
+      widgetIdRef.current = window.turnstile.render(turnstileRef.current, {
+        sitekey: TURNSTILE_SITEKEY,
+        callback: (token: string) => { tokenRef.current = token; },
+        'expired-callback': () => { tokenRef.current = ''; },
+        'error-callback': () => { tokenRef.current = ''; },
+      });
+    };
+
+    if (window.turnstile) {
+      render();
+      return () => { cancelled = true; };
+    }
+
+    const existing = document.querySelector<HTMLScriptElement>(`script[src="${TURNSTILE_SCRIPT_SRC}"]`);
+    const script = existing ?? document.createElement('script');
+    if (!existing) {
+      script.src = TURNSTILE_SCRIPT_SRC;
+      script.async = true;
+      script.defer = true;
+      document.head.appendChild(script);
+    }
+    script.addEventListener('load', render);
+    return () => {
+      cancelled = true;
+      script.removeEventListener('load', render);
+    };
+  }, []);
+
   // Reload one complete snapshot for this slug through the same route loader the
   // initial effect uses. F-14: when the database refuses a hold because the
   // chosen row is outside the shop's entitlement, the choice list on screen is
@@ -378,6 +454,7 @@ function BookingRoute({ slug }: { slug: string }) {
         customer_phone: customerPhone,
         booking_date: selectedDate,
         start_time: selectedTime + ':00',
+        turnstile_token: tokenRef.current,
       }, {
         shopBlocked: t('errors.shopBlockedService'),
       });
@@ -782,6 +859,13 @@ function BookingRoute({ slug }: { slug: string }) {
                     )}
                   </button>
                 </div>
+
+                {/*
+                  H4 / G01: the Turnstile container. The widget renders here when its
+                  script is available; the token it produces is sent with the booking
+                  request and validated on the server.
+                */}
+                <div ref={turnstileRef} className="pt-2" aria-hidden="true" />
               </div>
             )}
 

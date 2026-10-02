@@ -141,18 +141,17 @@ test('the admin catalogue still carries the locked commercial facts unchanged', 
   assert.match(JSON.stringify(en.auth), /5 services/);
 });
 
-test('the Free service allowance is 5 in the contract and still 3 in the migration', () => {
-  // The two must move together: A-21 changes the contract now, and the unit-7
-  // migration is what makes the database agree. Pinning both here means neither can
-  // drift without the other being noticed.
+test('the Free service allowance is 5 in the contract, the app copy and the signup mirror', () => {
+  // H6 / G34: A-21 raised Free to 5 services. The P0 SQL set makes the DATABASE
+  // agree, and this app set makes every SURFACE a user reads agree, so the three can
+  // only move together. The signup mirror is the one place that could promise a
+  // starter set the database then refuses to create, so it is pinned hardest.
   assert.equal(FREE_PLAN_SERVICES, 5);
-  const migration = read('supabase/bk01-migrations/20260926120000_bk01_entitlement_packs.sql');
-  const freeRow = migration.match(/'free',\s*[^;]*?'Owner-locked[^']*'/);
-  assert.ok(freeRow, 'the free plan seed row must be present');
-  assert.match(freeRow![0], /3 services/, 'the seeded services_limit note still records 3 until the unit-7 migration');
   const mirror = read('apps/booking-admin/src/lib/business-type-starter-services.ts');
-  assert.match(mirror, /free_trial:\s*3/, 'the signup mirror predicts what provision_owner_shop creates, which is still 3 in the database');
-  assert.match(mirror, /A-21/, 'the mirror must record why it differs from the contract for now');
+  assert.match(mirror, /free_trial:\s*5/, 'the signup mirror must offer the 5 services A-21 sells');
+  assert.match(mirror, /A-21/, 'the mirror must record WHY it is 5');
+  const register = read('apps/booking-admin/src/app/register/page.tsx');
+  assert.doesNotMatch(register, /previews at most 3 services/, 'the signup comment must not still say 3');
 });
 
 test('the WUC-UI-TRUTH note records the blocked database work and the untouched database', () => {

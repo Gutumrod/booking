@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-import { handleLineWebhook } from '../../route';
+import { handleLineWebhook } from '@/lib/line-webhook';
 import { resolveMerchantLineChannel } from '@/lib/merchant-line-config';
 
+/**
+ * The merchant LINE webhook. The handler moved to `lib/line-webhook.ts` when the
+ * route modules were restricted to HTTP-method exports (Next 16.3.6 / TS2344).
+ */
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ shopId: string }> },

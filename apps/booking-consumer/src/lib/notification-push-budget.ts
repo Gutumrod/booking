@@ -37,15 +37,25 @@
  * Pure and framework-free so `tests/` can pin the boundaries without a database.
  */
 
-/** LINE push events that consume the monthly allowance. Reply is not one of them. */
-export const METERED_PUSH_EVENTS: readonly string[] = ['reminder_3h', 'reminder_24h', 'deposit_rejected', 'deposit_slip_decision'];
+import { meteredNotificationEventTypes, unmeteredNotificationEventTypes } from './notification-event-registry';
 
 /**
- * LINE reply is free and is never metered, so the binding confirmation is
- * excluded by name rather than by omission — a future event that is not a reply
- * must be added to METERED_PUSH_EVENTS explicitly to be charged.
+ * LINE push events that consume the monthly allowance. Reply is not one of them.
+ *
+ * DERIVED, NOT RESTATED. The list comes from `notification-event-registry.ts`, so
+ * an event cannot be sendable and unmetered in one file while the other still
+ * thinks it is charged (or vice versa). The round-1 review found the metering list
+ * and the event list maintained separately, which is how `deposit_approved` and
+ * the legacy `reminder_1h` were sendable but never counted.
  */
-export const UNMETERED_EVENTS: readonly string[] = ['booking_created', 'binding_confirmation', 'booking_cancelled', 'booking_rescheduled'];
+export const METERED_PUSH_EVENTS: readonly string[] = meteredNotificationEventTypes();
+
+/**
+ * Events that reach a customer without consuming the allowance. `binding_confirmation`
+ * is included by name rather than by omission — a future event that is not a reply
+ * must be added to the registry's metered set explicitly to be charged.
+ */
+export const UNMETERED_EVENTS: readonly string[] = unmeteredNotificationEventTypes();
 
 export function countsAgainstPushCap(eventType: string): boolean {
   return METERED_PUSH_EVENTS.includes(eventType);

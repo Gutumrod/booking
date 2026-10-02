@@ -369,16 +369,17 @@ function provisionedStarterServices(
 test('the preview shows exactly what provision_owner_shop creates, capped by the selected plan', () => {
   const rows = parsedRows(BARBER_ROWS);
 
-  // Free: services_limit 3. The barber type has exactly 3 starter services, so all 3 are
-  // created — and the deleted app-side table's 5-service barber pattern is gone, so the
-  // old over-count (5 shown, 3 given) cannot recur.
+  // Free: services_limit 5 (A-21). The barber type has exactly 3 starter services, so all
+  // 3 are created — the cap does not add services the type does not have, and the deleted
+  // app-side table's 5-service barber pattern is gone, so the old over-count (5 shown, 3
+  // given) cannot recur.
   const free = starterServicesForType(rows, 'barber', SIGNUP_PLAN_SERVICES_LIMIT.free_trial);
   assert.equal(free.status, 'loaded');
-  assert.equal(free.planLimit, 3);
+  assert.equal(free.planLimit, 5);
   assert.equal(free.services.length, 3);
   assert.deepEqual(
     free.services.map((service) => ({ name: service.serviceName, duration_minutes: service.durationMinutes })),
-    provisionedStarterServices(rows, 'barber', 3),
+    provisionedStarterServices(rows, 'barber', 5),
   );
 
   // Basic: services_limit 50 — the cap does not add services the type does not have.
@@ -390,37 +391,38 @@ test('the preview shows exactly what provision_owner_shop creates, capped by the
   );
 });
 
-test('a plan cap really truncates: a five-service type on Free previews exactly three, in order', () => {
+test('a plan cap really truncates: a six-service type on Free previews exactly five, in order', () => {
   // A type whose projection holds MORE rows than the Free allowance, which is the case the
   // finding is about. The cap must cut the projection's own order, exactly as
-  // provision_owner_shop's loop does.
-  const fiveRows = parsedRows([0, 1, 2, 3, 4].map((order) => ({
+  // provision_owner_shop's loop does. Free is 5 (A-21), so the type must hold MORE than 5
+  // for the cap to bite.
+  const sixRows = parsedRows([0, 1, 2, 3, 4, 5].map((order) => ({
     type_code: 'five_service_type',
     service_order: order,
     service_name: `บริการที่ ${order + 1}`,
     duration_minutes: 30 + order * 15,
   })));
 
-  const preview = starterServicesForType(fiveRows, 'five_service_type', SIGNUP_PLAN_SERVICES_LIMIT.free_trial);
+  const preview = starterServicesForType(sixRows, 'five_service_type', SIGNUP_PLAN_SERVICES_LIMIT.free_trial);
 
   assert.equal(preview.status, 'loaded');
-  assert.equal(preview.availableCount, 5, 'the projection holds five rows for the type');
-  assert.equal(preview.services.length, 3, 'Free creates at most three');
+  assert.equal(preview.availableCount, 6, 'the projection holds six rows for the type');
+  assert.equal(preview.services.length, 5, 'Free creates at most five');
   assert.deepEqual(
     preview.services.map((service) => service.serviceName),
-    ['บริการที่ 1', 'บริการที่ 2', 'บริการที่ 3'],
+    ['บริการที่ 1', 'บริการที่ 2', 'บริการที่ 3', 'บริการที่ 4', 'บริการที่ 5'],
   );
   assert.deepEqual(
     preview.services.map((service) => ({ name: service.serviceName, duration_minutes: service.durationMinutes })),
-    provisionedStarterServices(fiveRows, 'five_service_type', 3),
+    provisionedStarterServices(sixRows, 'five_service_type', 5),
   );
 
   // The same rows under Basic (50) are not truncated at all.
-  const basic = starterServicesForType(fiveRows, 'five_service_type', SIGNUP_PLAN_SERVICES_LIMIT.basic_490);
-  assert.equal(basic.services.length, 5);
+  const basic = starterServicesForType(sixRows, 'five_service_type', SIGNUP_PLAN_SERVICES_LIMIT.basic_490);
+  assert.equal(basic.services.length, 6);
   assert.deepEqual(
     basic.services.map((service) => ({ name: service.serviceName, duration_minutes: service.durationMinutes })),
-    provisionedStarterServices(fiveRows, 'five_service_type', 50),
+    provisionedStarterServices(sixRows, 'five_service_type', 50),
   );
 });
 
@@ -432,7 +434,7 @@ test('a type with no starter services yields no set at all and invents nothing',
   assert.deepEqual(preview, {
     status: 'empty',
     typeCode: 'spa_massage',
-    planLimit: 3,
+    planLimit: 5,
     availableCount: 0,
     services: [],
   });
@@ -440,7 +442,7 @@ test('a type with no starter services yields no set at all and invents nothing',
   // provision_owner_shop creates nothing for it either — the comparison is [] vs [].
   assert.deepEqual(
     preview.services.map((service) => service.serviceName),
-    provisionedStarterServices(rows, 'spa_massage', 3).map((service) => service.name),
+    provisionedStarterServices(rows, 'spa_massage', 5).map((service) => service.name),
   );
 
   // A type with no row in the projection is still selectable and still records honestly.
@@ -563,14 +565,14 @@ test('a genuine read failure reaches the unavailable state through the reader it
  * ------------------------------------------------------------------------- */
 
 test('the plan allowance and the database plan code resolve from the offered plans only', () => {
-  assert.deepEqual(SIGNUP_PLAN_SERVICES_LIMIT, { free_trial: 3, basic_490: 50, pro_990: 100 });
+  assert.deepEqual(SIGNUP_PLAN_SERVICES_LIMIT, { free_trial: 5, basic_490: 50, pro_990: 100 });
   assert.deepEqual(SIGNUP_PLAN_DB_CODE, {
     free_trial: 'free',
     basic_490: 'basic_490',
     pro_990: 'pro_990',
   });
 
-  assert.equal(resolvePlanServicesLimit('free_trial'), 3);
+  assert.equal(resolvePlanServicesLimit('free_trial'), 5);
   assert.equal(resolvePlanServicesLimit('basic_490'), 50);
   assert.equal(resolvePlanServicesLimit('pro_990'), 100);
   assert.equal(resolvePlanDbCode('free_trial'), 'free');
@@ -624,7 +626,7 @@ test('signup records the type the database returned, with its starter set and pl
   }
   assert.equal(intent.starter.starter_service_count, 3);
   assert.equal(intent.starter.starter_available_service_count, 3);
-  assert.equal(intent.starter.starter_plan_limit, 3);
+  assert.equal(intent.starter.starter_plan_limit, 5);
   assert.equal(intent.starter.starter_total_duration_minutes, 120);
 
   // No money and no language the database does not store on the record at all.

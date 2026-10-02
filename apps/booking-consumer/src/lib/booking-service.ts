@@ -77,6 +77,12 @@ export interface CreateHoldParams {
   booking_date: string;
   start_time: string;
   notes?: string;
+  /**
+   * The Turnstile challenge token from the booking widget (H4 / G01). Optional
+   * here because the SERVER route, not this layer, decides whether a challenge is
+   * configured and required — see `createBookingHold`.
+   */
+  turnstile_token?: string | null;
 }
 
 export interface HoldResponse {
@@ -220,27 +226,39 @@ export async function createBookingHold(
   params: CreateHoldParams,
   messages?: CreateBookingHoldMessages,
 ): Promise<HoldResponse> {
-  const { data, error } = await supabase.rpc('create_booking_hold', {
-    p_shop_id: params.shop_id,
-    p_service_id: params.service_id,
-    p_staff_id: params.staff_id || null,
-    p_customer_name: params.customer_name,
-    p_customer_phone: params.customer_phone,
-    p_customer_email: params.customer_email || null,
-    p_booking_date: params.booking_date,
-    p_start_time: params.start_time,
-    p_notes: params.notes || null,
+  /*
+   * H4 / G01 (brief 28 §4, A-24 item 1): a public booking is created through the
+   * SERVER route, never by calling `create_booking_hold` from the browser. The P0
+   * SQL set revokes the RPC from anon/authenticated and grants it to `bk01_runtime`
+   * only, so this call is not just the intended path — it is the only one that
+   * works. The route checks the abuse budget and the Turnstile challenge first.
+   *
+   * The challenge token is optional at THIS layer: the page supplies one when the
+   * widget is configured, and the route refuses a missing token on its own terms.
+   * The page does not decide whether a challenge is required — the server does.
+   */
+  const response = await fetch('/api/bookings/hold', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...params, turnstileToken: params.turnstile_token ?? '' }),
   });
 
-  if (error) {
-    console.error('Error in create_booking_hold RPC:', error);
-    if (error.message?.includes('SHOP_NOT_ACCEPTING_ONLINE_BOOKINGS')) {
+  const payload = await response.json().catch(() => null) as
+    | { hold?: HoldResponse; error?: string }
+    | null;
+
+  if (!response.ok) {
+    const message = payload?.error ?? '';
+    // The shop-blocked refusal keeps its own customer-facing wording, which is the
+    // one error the page has always translated itself.
+    if (message.includes('SHOP_NOT_ACCEPTING_ONLINE_BOOKINGS')) {
       throw new Error(messages?.shopBlocked || 'ร้านนี้ไม่รับจองคิวออนไลน์ในขณะนี้');
     }
-    throw new Error(error.message || 'Failed to create booking hold');
+    throw new Error(message || 'Failed to create booking hold');
   }
+  if (!payload?.hold) throw new Error('Failed to create booking hold');
 
-  return data as HoldResponse;
+  return payload.hold;
 }
 
 export async function submitDepositSlip(bookingId: string, recoveryToken: string, slipObjectPath: string, transRef?: string) {

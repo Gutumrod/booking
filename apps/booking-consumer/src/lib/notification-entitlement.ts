@@ -33,6 +33,8 @@
  * Pure and framework-free so `tests/` can pin it without a database.
  */
 
+import { notificationEventSpec } from './notification-event-registry';
+
 /** The plan identities `local_service.bk01_effective_plan` can resolve to. */
 export type EffectivePlan = 'free' | 'basic_490' | 'pro_990';
 
@@ -126,20 +128,16 @@ export function entitlementsForPlan(plan: unknown): PlanNotificationEntitlements
   return isEffectivePlan(plan) ? PLAN_NOTIFICATION_ENTITLEMENTS[plan] : null;
 }
 
-/** The entitlement column that governs a customer push event, or null if unknown. */
+/**
+ * The entitlement column that governs a customer push event, or null if unknown.
+ *
+ * DERIVED FROM THE EVENT REGISTRY. An event's pack right and whether it is a
+ * customer push at all are properties of the event, so they live in one place
+ * (`notification-event-registry.ts`). `null` keeps its meaning — the caller must
+ * not push this event — and now covers three cases the dispatcher has to tell
+ * apart itself: an event it does not know, a shop-addressed event, and a real
+ * event that travels on another path (the binding reply).
+ */
 export function pushEntitlementColumn(eventType: string): keyof PlanNotificationEntitlements | null {
-  switch (eventType) {
-    case 'reminder_3h':
-    // A legacy row created before the move to 3 hours. It is still a reminder the
-    // shop's pack paid for, so it uses the same entitlement column. Its text is the
-    // same reminder text (it names no lead time), so nothing in the message claims a
-    // timing the row was not created under.
-    case 'reminder_24h':
-      return 'customer_reminder_push';
-    case 'deposit_rejected':
-    case 'deposit_slip_decision':
-      return 'customer_slip_decision_push';
-    default:
-      return null;
-  }
+  return notificationEventSpec(eventType)?.entitlement ?? null;
 }

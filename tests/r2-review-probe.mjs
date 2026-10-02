@@ -8,16 +8,27 @@
 // and the alert ledger arrived), so the probe passes the injected arguments as a
 // trailing array and adapts to whichever arity the source under test has.
 
-const route = await import('../apps/booking-consumer/src/app/api/notifications/dispatch/route.ts');
+const route = await import('../apps/booking-consumer/src/lib/notification-dispatch.ts');
 const budget = await import('../apps/booking-consumer/src/lib/notification-push-budget.ts');
 const entitlement = await import('../apps/booking-consumer/src/lib/notification-entitlement.ts');
 const breaker = await import('../apps/booking-consumer/src/lib/notification-oa-breaker.ts');
 
 const results = [];
 
+/**
+ * A REAL lowercase shop UUID. The dedupe key contract (F1/F2) refuses any shop
+ * segment that is not a `local_service.shops.id` UUID, so a display slug produces
+ * no key at all and no alert. The probe uses UUIDs for the same reason the route
+ * does on a real deployment.
+ */
+const SHOP_UUID = '3f1e2d4c-0000-4000-8000-000000000001';
+const SHOP_UUID_FREE = '3f1e2d4c-0000-4000-8000-0000000000f1';
+const SHOP_UUID_BASIC = '3f1e2d4c-0000-4000-8000-0000000000b2';
+const SHOP_UUID_PRO = '3f1e2d4c-0000-4000-8000-0000000000a3';
+
 function row(overrides = {}) {
   return {
-    id: overrides.id ?? 'notification-1', shop_id: 'shop-1', event_type: 'reminder_3h', recipient_type: 'customer',
+    id: overrides.id ?? 'notification-1', shop_id: SHOP_UUID, event_type: 'reminder_3h', recipient_type: 'customer',
     attempt_count: 1, line_user_id: 'U' + 'a'.repeat(32), line_oa_id: null, shop_name: 'ร้านทดสอบ',
     subscription_plan: 'basic_490', subscription_status: 'active', current_period_end: null, trial_ends_at: null,
     monthly_push_cap: 600, booking_date: '2026-10-02', start_time: '14:30:00', booking_code: 'BK-1',
@@ -28,8 +39,12 @@ function row(overrides = {}) {
 function harness(rows) {
   const pushes = [];
   const alerts = [];
-  const claimedKeys = [];
-  const seen = new Set();
+  // Every ledger call in order. `delivered: false` is the CLAIM that authorises a
+  // send; `delivered: true` is the ACKNOWLEDGEMENT written only after the provider
+  // accepted the mail. A `dedupeKey` on the wire is not proof of either.
+  const ledgerCalls = [];
+  const claimed = new Set();
+  const acknowledged = new Set();
   const runtime = {
     rpc: async (name, args) => {
       if (name === 'claim_due_line_notifications') {
@@ -50,7 +65,7 @@ function harness(rows) {
     return new Response('{}', { status: 200 });
   };
   return {
-    pushes, alerts, claimedKeys,
+    pushes, alerts, ledgerCalls, claimed, acknowledged,
     runtime, send,
     quotaTransport: { getJson: async (url) => url.endsWith('/consumption')
       ? { ok: true, status: 200, body: { totalUsage: 10 } }
@@ -60,11 +75,17 @@ function harness(rows) {
     // OA is visible as a failed delivery instead of a silent central send.
     merchantResolver: async () => { throw new Error('Merchant LINE credentials are not configured'); },
     usage: async () => 0,
-    sink: { claim: async ({ dedupeKey }) => {
-      claimedKeys.push(dedupeKey);
-      if (seen.has(dedupeKey)) return { claimed: false };
-      seen.add(dedupeKey);
-      return { claimed: true };
+    // The two-phase sink: `{ kind, key, delivered }`.
+    sink: { claim: async ({ kind, key, delivered }) => {
+      ledgerCalls.push({ kind, key, delivered });
+      if (delivered) {
+        claimed.delete(key);
+        acknowledged.add(key);
+        return { claimed: false, delivered: true };
+      }
+      if (claimed.has(key) || acknowledged.has(key)) return { claimed: false, delivered: acknowledged.has(key) };
+      claimed.add(key);
+      return { claimed: true, delivered: false };
     } },
   };
 }
@@ -125,9 +146,9 @@ async function run(label, fn) {
 // Pro rows take the merchant path and cannot be delivered at all.
 await run('P1 every pack sends through the central OA', async () => {
   const h = harness([
-    row({ id: 'free-1', shop_id: 'shop-free', subscription_plan: 'free' }),
-    row({ id: 'basic-1', shop_id: 'shop-basic', subscription_plan: 'basic_490' }),
-    row({ id: 'pro-1', shop_id: 'shop-pro', subscription_plan: 'pro_990' }),
+    row({ id: 'free-1', shop_id: SHOP_UUID_FREE, subscription_plan: 'free' }),
+    row({ id: 'basic-1', shop_id: SHOP_UUID_BASIC, subscription_plan: 'basic_490' }),
+    row({ id: 'pro-1', shop_id: SHOP_UUID_PRO, subscription_plan: 'pro_990' }),
   ]);
   const body = await (await dispatch(route.handleNotificationDispatch, h)).json();
   return {
@@ -143,7 +164,7 @@ await run('P1 every pack sends through the central OA', async () => {
 // the check verified; the round-2 source reports it unverified, alerts OPS and
 // still sends.
 await run('P2 an absent cap in the context is unverified, not a mirrored number', async () => {
-  const h = harness([row({ id: 'n1', shop_id: 'shop-free', subscription_plan: 'free', monthly_push_cap: null })]);
+  const h = harness([row({ id: 'n1', shop_id: SHOP_UUID_FREE, subscription_plan: 'free', monthly_push_cap: null })]);
   const body = await (await dispatch(route.handleNotificationDispatch, h)).json();
   return {
     sent: body.sent,
@@ -160,7 +181,14 @@ await run('P3 the cap alert is limited to once per Thai day', async () => {
   await call();
   await call();
   await call();
-  return { alerts: h.alerts.length, pushes: h.pushes.length, claimedKeys: h.claimedKeys.length };
+  // Run 1 claims AND acknowledges; later runs only claim, because the key is
+  // already delivered — so the ledger sees 4 calls and 1 acknowledgement.
+  return {
+    alerts: h.alerts.length,
+    pushes: h.pushes.length,
+    ledgerCalls: h.ledgerCalls.length,
+    acknowledged: [...h.acknowledged].length,
+  };
 });
 
 // P4 — the mirror must not be able to hold a cap at all.

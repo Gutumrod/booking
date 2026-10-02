@@ -12,8 +12,10 @@ import {
   createStaff,
   deleteShopHoliday,
   fetchAdminDashboardData,
+  fetchDepositRefundHistory,
   linkStaffUser,
   exportCoreBusinessData,
+  recordBookingDepositRefund,
   rejectBookingDeposit,
   requestAccountClosure,
   saveStaffWeeklySchedule,
@@ -24,13 +26,16 @@ import {
   startBillingPortal,
   updateService,
   updateShopSettings,
+  setShopNotificationContact,
   type DashboardBooking,
   type DashboardService,
   type DashboardStaff,
   type DashboardStaffSchedule,
   type DashboardHoliday,
   type DashboardSubscription,
+  type DepositRefundAuditEntry,
 } from '@/lib/admin-service';
+import { canRecordRefund, REFUND_REFERENCE_MAX_LENGTH } from '@/lib/refund-eligibility';
 import { LanguageToggle } from '@/components/language-toggle';
 import { PreviewCustomerPageLink, useSelectedShopIdentity } from '@/components/preview-customer-page';
 import { customerPageUrl, isExactShopIdentityMatch } from '@/lib/customer-page-url';
@@ -39,6 +44,7 @@ import { commitNumericField, DURATION_INPUT_PROPS, DURATION_RULES } from '@/lib/
 import { computeReadiness, isShopReady, needsMerchantAttention, type ReadinessKey } from '@/lib/readiness';
 import { TimeField } from '@/components/time-field';
 import { mergeServerSchedules } from '@/lib/schedule-merge';
+import { canOfferOutcomeActions } from '@/lib/booking-outcome-gate';
 import { BASIC_PLAN_PRICE_THB } from '@/lib/commercial-contract';
 import {
   resolveEntitlementStatusLabel,
@@ -50,7 +56,7 @@ import {
   Settings, AlertCircle, Plus, ShieldCheck,
   QrCode, ExternalLink, CalendarOff, Coffee, Save,
   Copy, MessageCircle, Check, Trash2, Edit3,
-  Scissors, Store, Globe, Phone, X
+  Scissors, Store, Globe, Phone, X, Mail
 } from 'lucide-react';
 
 type Booking = DashboardBooking;
@@ -160,6 +166,15 @@ export default function AdminDashboard() {
   const [signedSlipUrl, setSignedSlipUrl] = useState<string | null>(null);
   const [cancelBookingTarget, setCancelBookingTarget] = useState<Booking | null>(null);
   const [cancelReason, setCancelReason] = useState('');
+  // H5/G23: recording a refund is a bookkeeping act on money the shop already holds
+  // off-system. The system moves nothing, so the modal only captures the shop's own
+  // transfer reference (MANDATORY textual evidence) and an optional note.
+  const [refundBookingTarget, setRefundBookingTarget] = useState<Booking | null>(null);
+  const [refundReference, setRefundReference] = useState('');
+  const [refundNote, setRefundNote] = useState('');
+  const [refundAudit, setRefundAudit] = useState<DepositRefundAuditEntry[]>([]);
+  const [refundAuditLoading, setRefundAuditLoading] = useState(false);
+  const [refundAuditError, setRefundAuditError] = useState('');
   const [isBookingsLoading, setIsBookingsLoading] = useState(true);
   const [bookingError, setBookingError] = useState('');
   const [mutatingBookingId, setMutatingBookingId] = useState<string | null>(null);
@@ -205,6 +220,9 @@ export default function AdminDashboard() {
   const [lineOaId, setLineOaId] = useState('');
   const [requireDeposit, setRequireDeposit] = useState(true);
   const [defaultDepositAmount, setDefaultDepositAmount] = useState<number | null>(null);
+  // H5 / G18 — the shop's notification e-mail, as the server last reported it.
+  const [notificationEmail, setNotificationEmail] = useState<string | null>(null);
+  const [notificationEmailNotice, setNotificationEmailNotice] = useState<string | null>(null);
 
   // Special Holidays
   const [specialHolidayDate, setSpecialHolidayDate] = useState('');
@@ -422,6 +440,31 @@ export default function AdminDashboard() {
     }
   };
 
+  /**
+   * H5/G23 — the shop records that it refunded the deposit itself. The platform
+   * sends no money; this handler only writes the record and refreshes the list.
+   * The action is offered solely through canRecordRefund(), and the RPC re-checks
+   * the same rule at the database. The transfer reference is mandatory: without it
+   * there is no evidence, so the button stays disabled and this guard refuses.
+   */
+  const handleRecordRefund = async () => {
+    if (!tenantSnapshotReady || shopRole === 'staff' || !refundBookingTarget || !refundReference.trim()) return;
+
+    setMutatingBookingId(refundBookingTarget.id);
+    setBookingError('');
+    try {
+      await recordBookingDepositRefund(refundBookingTarget.id, refundReference.trim(), refundNote);
+      setRefundBookingTarget(null);
+      setRefundReference('');
+      setRefundNote('');
+      await loadDashboardBookings(false);
+    } catch (error) {
+      setBookingError(error instanceof Error ? error.message : t('refundFailed'));
+    } finally {
+      setMutatingBookingId(null);
+    }
+  };
+
   const handleBookingOutcome = async (bookingId: string, outcome: 'completed' | 'no_show') => {
     if (!tenantSnapshotReady || shopRole === 'staff') return;
     setMutatingBookingId(bookingId);
@@ -530,6 +573,29 @@ export default function AdminDashboard() {
       setTimeout(() => setShopSettingsSaved(false), 2000);
     } catch (error) {
       setManagementError(error instanceof Error ? error.message : t('saveShopFailed'));
+    } finally {
+      setMutatingResourceId(null);
+    }
+  };
+
+  /**
+   * H5 / G18: record the shop's notification e-mail from the owner's own login.
+   *
+   * No address is sent from here. `set_shop_notification_contact` derives it from the
+   * signed-in JWT's top-level `email` claim and refuses an anonymous session, so the
+   * browser cannot choose whose mailbox a shop's booking alerts go to.
+   */
+  const handleSetNotificationContact = async () => {
+    if (!tenantSnapshotReady || !shopId || shopRole !== 'owner') return;
+    setMutatingResourceId('notify-contact');
+    setManagementError('');
+    setNotificationEmailNotice(null);
+    try {
+      const contact = await setShopNotificationContact(shopId);
+      setNotificationEmail(contact.email);
+      setNotificationEmailNotice(t('notifyContactSaved', { email: contact.email }));
+    } catch (error) {
+      setManagementError(error instanceof Error ? error.message : t('notifyContactFailed'));
     } finally {
       setMutatingResourceId(null);
     }
@@ -1120,7 +1186,7 @@ export default function AdminDashboard() {
                               {t('cancelQueue')}
                             </button>
                           )}
-                          {b.status === 'confirmed' && shopRole !== 'staff' && (
+                          {b.status === 'confirmed' && shopRole !== 'staff' && canOfferOutcomeActions(b) && (
                             <>
                               <button type="button" onClick={() => handleBookingOutcome(b.id, 'completed')}
                                 disabled={mutatingBookingId === b.id}
@@ -1136,6 +1202,39 @@ export default function AdminDashboard() {
                           )}
                           {b.status === 'cancelled' && (
                             <span className="text-slate-500 text-xs italic">{t('cancelledNote')}</span>
+                          )}
+                          {/* H5/G23 — the refund action is offered ONLY through the rule
+                              that mirrors the SQL predicate, and never to staff. */}
+                          {shopRole !== 'staff' && b.depositStatus !== 'refunded' && canRecordRefund({
+                            status: b.status,
+                            depositStatus: b.depositStatus,
+                            date: b.date,
+                            time: b.time,
+                            durationMinutes: b.durationMinutes,
+                            endTime: b.endTime,
+                            queueReleasedAt: b.queueReleasedAt,
+                          }, new Date().toISOString()) && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setRefundBookingTarget(b);
+                                setRefundReference('');
+                                setRefundNote('');
+                                setRefundAudit([]);
+                                setRefundAuditError('');
+                                setRefundAuditLoading(true);
+                                void fetchDepositRefundHistory(b.id)
+                                  .then(setRefundAudit)
+                                  .catch((error) => setRefundAuditError(error instanceof Error ? error.message : t('refundAuditUnavailable')))
+                                  .finally(() => setRefundAuditLoading(false));
+                              }}
+                              disabled={mutatingBookingId === b.id}
+                              title={t('refundActionHint')}
+                              className="bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 px-3 py-1.5 rounded-lg font-semibold text-xs flex items-center gap-1 transition-all"
+                            >
+                              <DollarSign className="w-3.5 h-3.5" />
+                              {t('refundAction')}
+                            </button>
                           )}
                         </div>
                       </td>
@@ -1823,6 +1922,42 @@ export default function AdminDashboard() {
                   </p>
                 </div>
               </div>
+
+              {/*
+                H5 / G18: the shop's notification e-mail had NO caller anywhere in the
+                app, so the setting could never be recorded and the Basic/trial shop
+                e-mail feature was dead at this end. The button derives the address from
+                the signed-in owner's own session on the server — the app never asks for
+                or carries an address of its own, and it cannot be spoofed from the
+                browser.
+              */}
+              <div className="bg-slate-900 border border-slate-800 rounded-xl p-3.5 text-xs space-y-2">
+                <div className="flex items-center gap-1.5 font-bold text-slate-200 text-[11px]">
+                  <Mail className="w-4 h-4 text-emerald-400" />
+                  {t('notifyContactTitle')}
+                </div>
+                <p className="text-[11px] text-slate-400">{t('notifyContactBody')}</p>
+                {notificationEmail && (
+                  <p className="text-[11px] font-mono text-emerald-400">
+                    {t('notifyContactCurrent', { email: notificationEmail })}
+                  </p>
+                )}
+                <button
+                  type="button"
+                  disabled={shopRole !== 'owner' || mutatingResourceId === 'notify-contact'}
+                  onClick={handleSetNotificationContact}
+                  className="bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-emerald-400 font-bold px-3 py-1.5 rounded-lg border border-slate-700 text-xs"
+                >
+                  {shopRole !== 'owner'
+                    ? t('ownerOnlyEdit')
+                    : mutatingResourceId === 'notify-contact'
+                      ? tCommon('saving')
+                      : t('notifyContactUseLoginEmail')}
+                </button>
+                {notificationEmailNotice && (
+                  <p className="text-[11px] text-emerald-400">{notificationEmailNotice}</p>
+                )}
+              </div>
             </div>
             {shopRole === 'owner' && (
               <section className="border-t border-slate-800 pt-5 space-y-3">
@@ -2116,6 +2251,103 @@ export default function AdminDashboard() {
                 className="w-1/2 rounded-xl bg-rose-500 py-2.5 text-xs font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {mutatingBookingId === cancelBookingTarget.id ? t('cancelConfirming') : t('cancelConfirm')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* H5/G23 RECORD-A-REFUND MODAL — the shop moves the money itself; we only log it.
+          The reference field is the MANDATORY textual transfer evidence from the
+          caretaker's answer (room 2026-10-01 966–970); FILE attachments are HOLD
+          until a separate storage contract exists, so this form has no upload. */}
+      {tenantSnapshotReady && refundBookingTarget && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl animate-fade-in">
+            <div>
+              <h3 className="text-base font-bold text-white">{t('refundTitle', { code: refundBookingTarget.bookingCode })}</h3>
+              <p className="mt-1 text-xs text-slate-400">
+                {t('refundDepositAmount')} <span className="font-mono font-bold text-amber-400">฿{refundBookingTarget.depositPrice}.00</span>
+              </p>
+            </div>
+
+            <p className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs leading-relaxed text-amber-200">
+              {t('refundDisclosure')}
+            </p>
+
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-slate-300" htmlFor="refund-reference">
+                {t('refundReferenceLabel')}
+              </label>
+              <input
+                id="refund-reference"
+                value={refundReference}
+                onChange={(event) => setRefundReference(event.target.value)}
+                placeholder={t('refundReferencePlaceholder')}
+                maxLength={REFUND_REFERENCE_MAX_LENGTH}
+                required
+                aria-required="true"
+                className="w-full rounded-xl border border-slate-700 bg-slate-950 p-3 text-xs text-white outline-none focus:border-amber-500"
+              />
+              <p className="text-[10px] text-slate-500">{t('refundReferenceRequired')}</p>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-slate-300" htmlFor="refund-note">
+                {t('refundNoteLabel')}
+              </label>
+              <textarea
+                id="refund-note"
+                value={refundNote}
+                onChange={(event) => setRefundNote(event.target.value)}
+                placeholder={t('refundNotePlaceholder')}
+                rows={2}
+                className="w-full resize-none rounded-xl border border-slate-700 bg-slate-950 p-3 text-xs text-white outline-none focus:border-amber-500"
+              />
+            </div>
+
+            <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+              <p className="text-xs font-semibold text-slate-300">{t('refundAuditTitle')}</p>
+              {refundAuditLoading && <p className="mt-1 text-xs text-slate-500">{tCommon('loading')}</p>}
+              {!refundAuditLoading && refundAuditError && <p className="mt-1 text-xs text-rose-300">{refundAuditError}</p>}
+              {!refundAuditLoading && !refundAuditError && refundAudit.length === 0 && (
+                <p className="mt-1 text-xs text-slate-500">{t('refundAuditEmpty')}</p>
+              )}
+              {!refundAuditLoading && refundAudit.length > 0 && (
+                <ul className="mt-1 space-y-1">
+                  {refundAudit.map((entry, index) => (
+                    <li key={`${entry.at}-${index}`} className="text-xs text-slate-400">
+                      <span className="text-slate-300">{entry.at}</span>
+                      {entry.by ? ` · ${entry.by}` : ''}
+                      {entry.reference ? ` · ${entry.reference}` : ''}
+                      {entry.note ? ` · ${entry.note}` : ''}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            <div className="flex gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setRefundBookingTarget(null);
+                  setRefundReference('');
+                  setRefundNote('');
+                  setRefundAudit([]);
+                  setRefundAuditError('');
+                }}
+                disabled={mutatingBookingId === refundBookingTarget.id}
+                className="w-1/2 rounded-xl border border-slate-700 bg-slate-800 py-2.5 text-xs font-semibold text-slate-300 disabled:opacity-50"
+              >
+                {t('refundCancel')}
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleRecordRefund()}
+                disabled={!refundReference.trim() || mutatingBookingId === refundBookingTarget.id}
+                className="w-1/2 rounded-xl bg-amber-500 py-2.5 text-xs font-bold text-slate-950 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {mutatingBookingId === refundBookingTarget.id ? t('refundRecording') : t('refundConfirm')}
               </button>
             </div>
           </div>

@@ -129,7 +129,8 @@ function RegisterFormContent() {
   // F-13 (preview must match provision): what `provision_owner_shop` would create for the
   // chosen type on the chosen plan — the projection's rows for the type, in the
   // projection's own order, cut to the plan's service allowance. A Free signup therefore
-  // previews at most 3 services, not the 5 the deleted app-side table offered. A type the
+  // previews at most 5 services (A-21 raised Free from 3; the P0 SQL set makes the
+  // database agree). A type the
   // projection holds no row for previews nothing: there is no fallback set.
   const preview = starterServicesForType(
     starterServices,

@@ -19,7 +19,7 @@ import {
 
 // Imported the way the integration suite imports a route module: the handler is
 // exercised directly with injected transports, so no network and no database.
-const dispatchRoute = await import('../apps/booking-consumer/src/app/api/notifications/dispatch/route.ts');
+const dispatchRoute = await import('../apps/booking-consumer/src/lib/notification-dispatch.ts');
 
 /**
  * Unit 7 item 1 + 2 — HOUSE-BK01-PACK-ENTITLE (BK01 brief 25, Owner decision A-21).
@@ -91,6 +91,7 @@ test('no pack number is hard-coded in any notification module or the dispatch ro
     'apps/booking-consumer/src/lib/notification-entitlement.ts',
     'apps/booking-consumer/src/lib/notification-push-budget.ts',
     'apps/booking-consumer/src/lib/notification-oa-breaker.ts',
+    'apps/booking-consumer/src/lib/notification-dispatch.ts',
     'apps/booking-consumer/src/app/api/notifications/dispatch/route.ts',
   ];
   for (const file of files) {
@@ -132,7 +133,7 @@ test('each customer push event maps to the entitlement column A-21 names', () =>
 });
 
 test('the route reads the rights from the database first and the mirror only as fallback', () => {
-  const route = read('apps/booking-consumer/src/app/api/notifications/dispatch/route.ts');
+  const route = read('apps/booking-consumer/src/lib/notification-dispatch.ts');
   assert.match(route, /entitlementsForPlan/);
   assert.match(route, /customer_reminder_push/);
   assert.match(route, /customer_slip_decision_push/);
@@ -141,7 +142,7 @@ test('the route reads the rights from the database first and the mirror only as 
 });
 
 test('the route takes the cap from the delivery context and from nowhere else', () => {
-  const route = stripComments(read('apps/booking-consumer/src/app/api/notifications/dispatch/route.ts'));
+  const route = stripComments(read('apps/booking-consumer/src/lib/notification-dispatch.ts'));
   assert.match(route, /cap:\s*context\.monthly_push_cap/, 'the context column is the cap');
   assert.doesNotMatch(route, /entitlementsForPlan\([^)]*\)\?\.monthly_push_cap/, 'the mirror must not answer for the cap');
   assert.doesNotMatch(route, /monthly_push_cap\s*\?\?\s*\d/, 'no numeric default may stand in for the context');
@@ -189,8 +190,18 @@ test('the binding confirmation reply is free and never metered', () => {
   assert.equal(countsAgainstPushCap('binding_confirmation'), false);
   assert.equal(countsAgainstPushCap('reminder_3h'), true);
   assert.equal(countsAgainstPushCap('deposit_rejected'), true);
-  assert.deepEqual(METERED_PUSH_EVENTS, ['reminder_3h', 'reminder_24h', 'deposit_rejected', 'deposit_slip_decision']);
+  // P0 H1: the metering list is now DERIVED from the event registry, and the
+  // registry makes `deposit_approved` (the legacy approval name) count like the
+  // live slip-decision event it stands in for. The legacy reminder names count too:
+  // they are real reminders the pack paid for, not events to retire silently.
+  assert.deepEqual(METERED_PUSH_EVENTS, [
+    'deposit_approved', 'deposit_rejected', 'deposit_slip_decision', 'reminder_1h', 'reminder_24h', 'reminder_3h',
+  ]);
   assert.ok(UNMETERED_EVENTS.includes('binding_confirmation'));
+  // Cancellation and reschedule reach the customer WITHOUT counting (controller
+  // ruling, room 2026-10-01) — the round-1 defect suppressed them instead.
+  assert.equal(countsAgainstPushCap('booking_cancelled'), false);
+  assert.equal(countsAgainstPushCap('booking_rescheduled'), false);
 });
 
 test('the month window is the Thai calendar month, resetting on the 1st', () => {
@@ -210,9 +221,11 @@ type RuntimeCall = { name: string; args: Record<string, unknown> };
 function dispatchHarness(rows: Array<Record<string, unknown>>) {
   const rpcCalls: RuntimeCall[] = [];
   const pushes: Array<{ url: string; body: any; authorization: string }> = [];
-  const alerts: Array<{ to: string; subject: string }> = [];
+  const alerts: Array<{ to: string; subject: string; idempotencyKey?: string }> = [];
   const claimedKeys: string[] = [];
+  const ackedKeys: string[] = [];
   const seen = new Set<string>();
+  const deliveredKeys = new Set<string>();
 
   const runtime = {
     rpc: async (name: string, args: Record<string, unknown>) => {
@@ -242,23 +255,51 @@ function dispatchHarness(rows: Array<Record<string, unknown>>) {
   };
 
   return {
-    rpcCalls, pushes, alerts, claimedKeys,
+    rpcCalls, pushes, alerts, claimedKeys, ackedKeys,
     runtime, send,
+    // A quota read that FAILS — the breaker then cannot engage, and since F3 that
+    // failure is itself reported to OPS. Cases that are not about the quota read
+    // use `quotaReadable` below so only the alert under test fires.
     quotaTransport: { getJson: async () => ({ ok: false, status: 500, body: null }) },
-    alertTransport: { send: async (input: { to: string; subject: string }) => { alerts.push(input); return { ok: true, status: 200 }; } },
-    // A ledger whose day keys are claimed once, like the real table.
-    sink: { claim: async ({ dedupeKey }: { dedupeKey: string }) => {
-      claimedKeys.push(dedupeKey);
-      if (seen.has(dedupeKey)) return { claimed: false };
-      seen.add(dedupeKey);
-      return { claimed: true };
+    // A quota read that succeeds and is comfortably under the breaker threshold.
+    quotaReadable: {
+      getJson: async (url: string) => url.endsWith('/consumption')
+        ? { ok: true, status: 200, body: { totalUsage: 10 } }
+        : { ok: true, status: 200, body: { type: 'limited', value: 300 } },
+    },
+    alertTransport: { send: async (input: { to: string; subject: string; idempotencyKey?: string }) => { alerts.push(input); return { ok: true, status: 200 }; } },
+    // A ledger whose day keys are claimed once, like the real table. An
+    // ACKNOWLEDGEMENT (`delivered: true`) records the key delivered and never
+    // authorises another send.
+    sink: { claim: async ({ key, delivered }: { key: string; delivered: boolean }) => {
+      claimedKeys.push(key);
+      if (delivered) {
+        deliveredKeys.add(key);
+        ackedKeys.push(key);
+        return { claimed: false, delivered: true };
+      }
+      if (seen.has(key) || deliveredKeys.has(key)) return { claimed: false, delivered: deliveredKeys.has(key) };
+      seen.add(key);
+      return { claimed: true, delivered: false };
     } },
   };
 }
 
+/*
+ * REAL lowercase shop UUIDs. `pushAlertDedupeKey` now REFUSES anything that is
+ * not a shops.id UUID (`{ ok: false, reason: 'shop_id_invalid' }`), and SQL's
+ * regex accepts the lowercase form only — so a display slug like `shop-1` would
+ * produce NO key at all, the cap alert would never fire, and the alert assertions
+ * below could not pass. The rows therefore carry UUIDs.
+ */
+const SHOP_UUID = '3f1e2d4c-0000-4000-8000-000000000001';
+const SHOP_UUID_FREE = '3f1e2d4c-0000-4000-8000-0000000000f1';
+const SHOP_UUID_BASIC = '3f1e2d4c-0000-4000-8000-0000000000b2';
+const SHOP_UUID_PRO = '3f1e2d4c-0000-4000-8000-0000000000a3';
+
 function contextRow(overrides: Record<string, unknown> = {}) {
   return {
-    id: 'notification-1', shop_id: 'shop-1', event_type: 'reminder_3h', recipient_type: 'customer',
+    id: 'notification-1', shop_id: SHOP_UUID, event_type: 'reminder_3h', recipient_type: 'customer',
     attempt_count: 1, line_user_id: 'U' + 'a'.repeat(32), line_oa_id: null, shop_name: 'ร้านทดสอบ',
     subscription_plan: 'basic_490', subscription_status: 'active', current_period_end: null, trial_ends_at: null,
     monthly_push_cap: 600, booking_date: '2026-10-02', start_time: '14:30:00', booking_code: 'BK-1',
@@ -294,9 +335,9 @@ test('EVERY pack sends through the central OA — the merchant OA is not on the 
   await withDispatchEnv(async () => {
     process.env.OPS_ALERT_EMAIL = 'ops@example.com';
     const harness = dispatchHarness([
-      contextRow({ id: 'free-1', shop_id: 'shop-free', subscription_plan: 'free', monthly_push_cap: 600 }),
-      contextRow({ id: 'basic-1', shop_id: 'shop-basic', subscription_plan: 'basic_490' }),
-      contextRow({ id: 'pro-1', shop_id: 'shop-pro', subscription_plan: 'pro_990' }),
+      contextRow({ id: 'free-1', shop_id: SHOP_UUID_FREE, subscription_plan: 'free', monthly_push_cap: 600 }),
+      contextRow({ id: 'basic-1', shop_id: SHOP_UUID_BASIC, subscription_plan: 'basic_490' }),
+      contextRow({ id: 'pro-1', shop_id: SHOP_UUID_PRO, subscription_plan: 'pro_990' }),
     ]);
     const response = await dispatchRoute.handleNotificationDispatch(
       dispatchRequest(), async () => harness.runtime as any, harness.send,
@@ -315,7 +356,7 @@ test('EVERY pack sends through the central OA — the merchant OA is not on the 
 });
 
 test('the send path cannot reach the per-shop merchant resolver', async () => {
-  const route = read('apps/booking-consumer/src/app/api/notifications/dispatch/route.ts');
+  const route = read('apps/booking-consumer/src/lib/notification-dispatch.ts');
   assert.doesNotMatch(route, /isMerchantPlan/);
   assert.doesNotMatch(route, /resolveMerchant(?!LineChannel)/, 'no merchant resolver is wired into the dispatcher');
   // The comment above the channel decision names the module on purpose; what must
@@ -336,7 +377,9 @@ test('a cap that could not be verified is reported to OPS_ALERT_EMAIL once per r
     ]);
     const response = await dispatchRoute.handleNotificationDispatch(
       dispatchRequest(), async () => harness.runtime as any, harness.send,
-      harness.quotaTransport as any, harness.alertTransport, async () => null, harness.sink,
+      // A READABLE quota so the F3 quota alert does not join the cap alert in this
+      // case: the assertion is about the cap alert specifically.
+      harness.quotaReadable as any, harness.alertTransport, async () => null, harness.sink,
     );
     const body = await response.json() as Record<string, any>;
     assert.equal(body.sent, 2, 'a paid-for reminder is not muted by an unreadable counter');
@@ -345,8 +388,15 @@ test('a cap that could not be verified is reported to OPS_ALERT_EMAIL once per r
     assert.equal(harness.alerts.length, 1, 'one alert per run, not one per row');
     assert.equal(harness.alerts[0].to, 'ops@example.com');
     assert.match(harness.alerts[0].subject, /cap could not be verified/i);
-    assert.equal(harness.claimedKeys.length, 1);
-    assert.match(harness.claimedKeys[0], /^push_cap_unverified:shop-1:\d{4}-\d{2}-\d{2}$/);
+    // The ledger is consulted TWICE for one alert: the claim (`delivered: false`)
+    // that authorises the send, then the acknowledgement (`delivered: true`) once
+    // the provider accepted the mail. Every call is recorded in `claimedKeys`; the
+    // acknowledgements are ALSO kept in `ackedKeys` so a claim can be told apart
+    // from an acknowledgement.
+    assert.equal(harness.claimedKeys.length, 2, 'one claim and one acknowledgement');
+    assert.equal(harness.claimedKeys[1], harness.claimedKeys[0], 'the acknowledgement reuses the claimed key');
+    assert.match(harness.claimedKeys[0], /^push_cap_unverified:3f1e2d4c-0000-4000-8000-000000000001:\d{4}-\d{2}-\d{2}$/);
+    assert.deepEqual(harness.ackedKeys, [harness.claimedKeys[0]], 'the same key is acknowledged, never a new one');
   });
 });
 
@@ -356,13 +406,20 @@ test('the cap alert is limited to once per shop per Thai day', async () => {
     const harness = dispatchHarness([contextRow({ monthly_push_cap: null })]);
     const call = () => dispatchRoute.handleNotificationDispatch(
       dispatchRequest(), async () => harness.runtime as any, harness.send,
-      harness.quotaTransport as any, harness.alertTransport, async () => null, harness.sink,
+      // A readable quota keeps the F3 quota alert out of this case, so the
+      // assertion below counts ONLY the cap alert.
+      harness.quotaReadable as any, harness.alertTransport, async () => null, harness.sink,
     );
     await call();
     await call(); // A later dispatch on the same day
     await call();
     assert.equal(harness.alerts.length, 1, 'the day key is claimed once, so a busy shop cannot storm the operator');
-    assert.equal(harness.claimedKeys.length, 3, 'the ledger is consulted every time');
+    // Run 1: claim + acknowledgement (2 calls). Runs 2 and 3: the claim is
+    // REFUSED because the key is already acknowledged, so no acknowledgement is
+    // written (1 call each) — the ledger is consulted every time, and only the
+    // first run gets past it.
+    assert.equal(harness.claimedKeys.length, 4, 'the ledger is consulted on every run, plus the one acknowledgement');
+    assert.equal(harness.ackedKeys.length, 1, 'exactly one alert was ever delivered');
     assert.equal(harness.pushes.length, 3, 'the pushes themselves continue');
   });
 });
@@ -389,7 +446,9 @@ test('a confirmed count over the injected cap is suppressed and recorded, with n
     const harness = dispatchHarness([contextRow()]);
     const response = await dispatchRoute.handleNotificationDispatch(
       dispatchRequest(), async () => harness.runtime as any, harness.send,
-      harness.quotaTransport as any, harness.alertTransport,
+      // Readable quota: "no alert" here means no CAP alert, which is the guard this
+      // case is about.
+      harness.quotaReadable as any, harness.alertTransport,
       // 600 is the injected cap; the injected count confirms it is reached.
       async () => 600, harness.sink,
     );
@@ -426,8 +485,12 @@ test('the breaker alert still fires when the shared OA passes 80%, and only for 
     assert.equal(body.sent, 1, 'the paying shop keeps sending');
     assert.equal(harness.alerts.length, 1);
     assert.match(harness.alerts[0].subject, /quota breaker open/i);
-    assert.equal(harness.claimedKeys.length, 1);
-    assert.match(harness.claimedKeys[0], /^oa_breaker_open:\d{4}-\d{2}-\d{2}$/);
+    // One claim + one acknowledgement for the single breaker alert.
+    assert.equal(harness.claimedKeys.length, 2);
+    // The system kinds are facts about the ONE central OA, so the F1/F2 migration
+    // validates the literal `global` segment — not a shop and not a bare day.
+    assert.match(harness.claimedKeys[0], /^breaker_open:global:\d{4}-\d{2}-\d{2}$/);
+    assert.deepEqual(harness.ackedKeys, [harness.claimedKeys[0]], 'the breaker key is acknowledged');
     assert.equal(harness.pushes.length, 1);
     assert.equal(harness.pushes[0].authorization, 'Bearer central-token');
   });

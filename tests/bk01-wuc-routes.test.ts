@@ -40,12 +40,25 @@ test('the service-role secret name is absent from apps, docs, and the shared env
 });
 
 test('service-role client modules are removed and route integration uses only the approved RPC identities', () => {
-  for (const route of routes) {
+  // The runtime client and the RPC calls live in the library modules now: Next
+  // 16.3.6 asserts that a route module exports nothing but HTTP methods (a
+  // non-method export fails as TS2344), so the handlers were moved out of the
+  // route files and the route modules only delegate.
+  const runtimeModules = [
+    'apps/booking-consumer/src/lib/line-webhook.ts',
+    'apps/booking-consumer/src/lib/notification-dispatch.ts',
+    'apps/booking-consumer/src/lib/deposit-slip-upload-intent.ts',
+    'apps/booking-consumer/src/lib/booking-hold.ts',
+    'apps/booking-admin/src/lib/stripe-webhook.ts',
+  ];
+  for (const route of runtimeModules) {
     const source = fs.readFileSync(route, 'utf8');
     assert.match(source, /getBk01RuntimeClient/);
-    assert.doesNotMatch(source, /\.rpc\s*\(\s*['"](?!authorize_booking_recovery_attempt|claim_due_line_notifications|claim_stripe_webhook_event|complete_line_notification|sync_subscription_state_bk_a|authorize_deposit_slip_upload|bk01_finish_line_webhook_delivery|bk01_line_bind_booking|bk01_line_bind_booking_trial|finish_stripe_webhook_event|get_line_notification_delivery_context)/);
+    // `create_booking_hold` joins the allowlist here: the hold route owns it now, and
+    // `20261002120000_bk01_council_p0.sql` grants it to bk01_runtime only.
+    assert.doesNotMatch(source, /\.rpc\s*\(\s*['"](?!authorize_booking_recovery_attempt|claim_due_line_notifications|claim_stripe_webhook_event|complete_line_notification|sync_subscription_state_bk_a|authorize_deposit_slip_upload|bk01_finish_line_webhook_delivery|bk01_line_bind_booking|bk01_line_bind_booking_trial|finish_stripe_webhook_event|get_line_notification_delivery_context|create_booking_hold)/);
   }
-  const uploadRoute = fs.readFileSync(routes[2], 'utf8');
+  const uploadRoute = fs.readFileSync(runtimeModules[2], 'utf8');
   assert.match(uploadRoute, /const BK01_DEPOSIT_SLIP_BUCKET = ['"]deposit-slips['"]/);
   assert.match(uploadRoute, /\.storage\.from\(BK01_DEPOSIT_SLIP_BUCKET\)\.createSignedUploadUrl/);
   assert.doesNotMatch(uploadRoute, /SUPABASE_SERVICE_ROLE_KEY|getSupabaseAdmin/);
@@ -55,11 +68,11 @@ test('service-role client modules are removed and route integration uses only th
 });
 
 test('webhook signatures and dispatch secret are checked before acquiring a runtime client', () => {
-  const line = fs.readFileSync(routes[0], 'utf8');
+  const line = fs.readFileSync('apps/booking-consumer/src/lib/line-webhook.ts', 'utf8');
   assert.ok(line.indexOf('verifySignature(rawBody') < line.indexOf('runtimeProvider()'));
-  const stripe = fs.readFileSync(routes[3], 'utf8');
+  const stripe = fs.readFileSync('apps/booking-admin/src/lib/stripe-webhook.ts', 'utf8');
   assert.ok(stripe.indexOf('constructEvent(') < stripe.indexOf('const duplicate = await isDuplicateEvent('));
-  const dispatch = fs.readFileSync(routes[1], 'utf8');
+  const dispatch = fs.readFileSync('apps/booking-consumer/src/lib/notification-dispatch.ts', 'utf8');
   assert.ok(dispatch.indexOf("req.headers.get('authorization')") < dispatch.indexOf('runtimeProvider()'));
 });
 

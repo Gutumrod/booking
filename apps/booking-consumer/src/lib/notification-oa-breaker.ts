@@ -32,6 +32,8 @@
  * network.
  */
 
+import { type PushAlertKind } from './notification-alert-kind';
+
 export const CENTRAL_OA_QUOTA_URL = 'https://api.line.me/v2/bot/message/quota';
 export const CENTRAL_OA_CONSUMPTION_URL = 'https://api.line.me/v2/bot/message/quota/consumption';
 
@@ -118,6 +120,25 @@ export interface BreakerDecision {
 }
 
 /**
+ * Whether the quota read FAILED for a reason the operator should hear about.
+ *
+ * Review finding F3: the breaker deliberately fails towards sending, which is
+ * right, but a blind breaker that reports nothing is how the shared OA gets
+ * exhausted with no warning. This is the "should an alert be raised" question,
+ * kept next to the decision that produced it so the route does not have to
+ * re-derive it from `openedBy`.
+ *
+ * `not_configured` is NOT an alert: no central token in this environment is a
+ * deployment fact an operator already knows, and alerting on it would fire once
+ * per shop per day on every environment that has not set the token yet.
+ * `unlimited` is NOT an alert either: there is no percentage of "unlimited" to
+ * exceed, so nothing is broken.
+ */
+export function quotaReadNeedsAlert(read: QuotaReadResult): boolean {
+  return read.status === 'unavailable';
+}
+
+/**
  * Decide the breaker state from a quota read.
  *
  * `quota_exceeded` is the only state that mutes anything. Everything unmeasurable
@@ -166,26 +187,90 @@ export interface OpsAlert {
 }
 
 export interface OpsAlertTransport {
-  send(input: { to: string; subject: string; text: string }): Promise<{ ok: boolean; status: number; error?: string }>;
+  /**
+   * Send one operator alert.
+   *
+   * `idempotencyKey` is STABLE for one (kind, day key) pair and is carried to the
+   * provider as a real idempotency header by the transport that understands one.
+   * The ledger cannot prove exactly-once EXTERNAL delivery — SQL sees only its own
+   * rows — so crash-then-retry inside the five-minute claim lease must not be able
+   * to deliver the same alert twice, and that guarantee is this key's job.
+   */
+  send(input: {
+    to: string;
+    subject: string;
+    text: string;
+    idempotencyKey: string;
+  }): Promise<{ ok: boolean; status: number; error?: string }>;
 }
 
 /**
- * The once-per-Thai-day ledger an alert must pass through. The route may only
- * reach data through allowlisted RPCs, so the ledger is injected like the other
- * transports — and a MISSING ledger is treated as fail-closed (below), never as
- * "no ledger, alert freely".
+ * The once-per-Thai-day ledger an alert must pass through, speaking the ALERT-MODE
+ * contract of `local_service.claim_due_shop_email_notifications` (the existing claim
+ * RPC — no new function name, allowlist unchanged).
+ *
+ * TWO PHASES, and the direction of the flag is the whole point:
+ *
+ *   claim({ delivered: false })  BEFORE sending. `claimed: true` is the ONLY thing
+ *                                that authorises a send. An undelivered claim holds
+ *                                a five-minute lease, so a later run may retry it.
+ *   claim({ delivered: true })   AFTER the provider ACCEPTED the message: this is an
+ *                                ACKNOWLEDGEMENT. It returns `claimed: false` and
+ *                                `delivered: true` and never authorises another send,
+ *                                and a delivered key cannot be reclaimed that day.
+ *                                Acknowledging with no prior claim raises in SQL.
+ *
+ * `kind` travels SEPARATELY from `key` on purpose: the kind is not derivable from
+ * the key — `breaker_open` and `quota_unreadable` share the `<kind>:<date>` shape —
+ * and the day key is validated in SQL against the current Bangkok date.
  */
 export interface PushAlertSink {
-  /**
-   * Atomically claims the day for `dedupeKey`.
-   *
-   * `delivered: true` means a previous attempt of this key already went out and
-   * the key must never fire again. `delivered: false` means the key may be
-   * re-claimed by a later attempt while the day lasts: if the mail was never
-   * delivered, silently swallowing it in the ledger would leave the operator
-   * believing they were told about a guard that is not running.
-   */
-  claim(input: { dedupeKey: string; delivered: boolean }): Promise<{ claimed: boolean }>;
+  claim(input: {
+    kind: PushAlertKind;
+    key: string;
+    delivered: boolean;
+  }): Promise<{ claimed: boolean; delivered: boolean }>;
+}
+
+/** The claim RPC that carries the alert ledger inside it (no new function name). */
+export const ALERT_CLAIM_RPC = 'claim_due_shop_email_notifications';
+
+/** The runtime surface the ledger needs: the allowlisted RPC call, and nothing else. */
+export interface AlertLedgerRuntime {
+  rpc(
+    name: string,
+    args: Record<string, unknown>,
+  ): PromiseLike<{ data: unknown; error: unknown }>;
+}
+
+/**
+ * The REAL sink: the alert-mode call on the existing claim RPC.
+ *
+ * Alert mode supplies all three alert arguments and the returned row carries NULL
+ * notification_id/shop_id/email/attempt_count/pending_slip_count with
+ * `event_type='ops_alert'` — so this read touches no shop and no customer data at
+ * all, which is why it needs no shop context to make the call.
+ *
+ * FAIL-CLOSED: an RPC error throws, and `sendOpsAlert` turns that into "no alert".
+ * An alert whose ledger cannot be consulted is never sent on a guess.
+ */
+export function createPushAlertSink(runtime: AlertLedgerRuntime): PushAlertSink {
+  return {
+    async claim({ kind, key, delivered }) {
+      const { data, error } = await runtime.rpc(ALERT_CLAIM_RPC, {
+        p_limit: 1,
+        p_alert_kind: kind,
+        p_alert_key: key,
+        p_delivered: delivered,
+      });
+      if (error) throw new Error('Alert ledger is unavailable');
+      const row = (Array.isArray(data) ? data[0] : data) as Record<string, unknown> | null | undefined;
+      return {
+        claimed: row?.alert_claimed === true,
+        delivered: row?.alert_delivered === true,
+      };
+    },
+  };
 }
 
 /**
@@ -205,16 +290,72 @@ export function bangkokDayKey(at: Date): string {
   return `${shifted.getUTCFullYear()}-${pad(shifted.getUTCMonth() + 1)}-${pad(shifted.getUTCDate())}`;
 }
 
-/** The ledger key for one alert kind on one Thai day. */
+/**
+ * The provider idempotency key for one (kind, day key) pair.
+ *
+ * STABLE BY CONSTRUCTION: derived from the kind and the ledger key ONLY — never
+ * from a timestamp, a counter or a random value — so a crash-then-retry inside
+ * the five-minute claim lease re-issues the SAME request and the provider
+ * collapses the two into one message. SQL cannot prove exactly-once EXTERNAL
+ * delivery (it sees only its own rows), so this key is the app's half of that
+ * promise; `createResendOpsAlertTransport` puts it on the wire as the real
+ * `Idempotency-Key` header.
+ */
+export function providerAlertIdempotencyKey(kind: PushAlertKind, alertKey: string): string {
+  return `${kind}:${alertKey}`;
+}
+
+/**
+ * The ledger key for one alert kind on one Thai day — the CURRENT key contract.
+ *
+ * AUTHORITY: `reports/CONTRACT-BK01-P0-SQL-2026-10-02.md`, section "Opencode R1
+ * review follow-up — F1/F2", carried by
+ * `supabase/bk01-migrations/20261002140000_bk01_review_f1_f2.sql`. That migration
+ * redefines `claim_due_shop_email_notifications` and VALIDATES the key it is
+ * handed; the strings below are the ones it accepts:
+ *
+ *   - shop-scoped   cap_unverified   : `push_cap_unverified:<lowercase local_service.shops.id UUID>:<YYYY-MM-DD>`
+ *   - system-scoped quota_unreadable : `quota_unreadable:global:<YYYY-MM-DD>`
+ *   - system-scoped breaker_open     : `breaker_open:global:<YYYY-MM-DD>`
+ *
+ * `<YYYY-MM-DD>` is the CURRENT Bangkok day (see `bangkokDayKey`). SQL rejects an
+ * empty, missing, dash, malformed or non-UUID shop segment, a shop UUID that is
+ * not a row in `local_service.shops`, a missing or wrong `global` segment, a
+ * mismatched kind, and a non-current day.
+ *
+ * A REFUSAL, NOT A FALLBACK. A cap alert that cannot name its shop has no valid
+ * key at all: `push_cap_unverified:-:<day>` is a string SQL refuses, and sending
+ * it would record a FAILED alert where the honest answer is NO alert. So the
+ * function returns `{ ok: false }` (visible to the caller, which then records no
+ * alert rather than a failure) instead of inventing a dash.
+ *
+ * The `:global:` segment is emitted for BOTH system kinds because they are facts
+ * about the ONE central OA, not about any shop — the earlier `${kind}:${day}`
+ * shape is a key this migration rejects, so the two system kinds must match the
+ * exact `kind:global:day` string.
+ */
+export type PushAlertDedupeKey =
+  | { ok: true; key: string }
+  | { ok: false; reason: 'shop_id_required' | 'shop_id_invalid' };
+
+/** The exact shop-UUID shape the F1/F2 migration accepts, case-insensitively. */
+const SHOP_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export function pushAlertDedupeKey(input: {
-  kind: 'cap_unverified' | 'breaker_open';
+  kind: PushAlertKind;
   shopId?: string;
   at: Date;
-}): string {
+}): PushAlertDedupeKey {
   const day = bangkokDayKey(input.at);
-  return input.kind === 'breaker_open'
-    ? `oa_breaker_open:${day}`
-    : `push_cap_unverified:${input.shopId ?? '-'}:${day}`;
+  if (input.kind === 'breaker_open' || input.kind === 'quota_unreadable') {
+    return { ok: true, key: `${input.kind}:global:${day}` };
+  }
+  const shopId = typeof input.shopId === 'string' ? input.shopId.trim() : '';
+  if (shopId.length === 0) return { ok: false, reason: 'shop_id_required' };
+  if (!SHOP_UUID.test(shopId)) return { ok: false, reason: 'shop_id_invalid' };
+  // SQL's regex is lowercase-only, so the segment is normalised rather than sent
+  // as the caller happened to spell it.
+  return { ok: true, key: `push_cap_unverified:${shopId.toLowerCase()}:${day}` };
 }
 
 export async function sendOpsAlert(input: {
@@ -226,34 +367,80 @@ export async function sendOpsAlert(input: {
   sink?: PushAlertSink | null;
   /** Required for any send that is deduped; omitted ⇒ no alert is sent. */
   dedupeKey?: string | null;
-  /** Whether this alert is already-delivered before the ledger is consulted. */
-  delivered?: boolean;
+  /** The ledger KIND for `dedupeKey`. Omitted ⇒ no alert is sent. */
+  kind?: PushAlertKind | null;
 }): Promise<OpsAlert> {
   const to = input.env.OPS_ALERT_EMAIL?.trim() ?? '';
   if (to.length === 0) return { sent: false, reason: 'not_configured', to: null, dedupeKey: null };
   if (!input.transport) return { sent: false, reason: 'transport_unavailable', to, dedupeKey: null };
 
   const dedupeKey = input.dedupeKey ?? null;
-  if (dedupeKey === null || !input.sink) {
+  const kind = input.kind ?? null;
+  if (dedupeKey === null || kind === null || !input.sink) {
     // No way to honour the once-per-day limit: the alert is withheld and the
     // caller can see why. Same direction as the missing address — never a second
-    // path, never an unlimited burst.
+    // path, never an unlimited burst. The kind is NOT derivable from the key
+    // (`breaker_open` and `quota_unreadable` share the `<kind>:<date>` shape), so
+    // an absent kind is as unledgerable as an absent key.
     return { sent: false, reason: 'transport_unavailable', to, dedupeKey: null };
   }
+
+  /*
+   * PHASE 1 — CLAIM. `delivered: false` = "this key is not yet acknowledged". A
+   * claim that comes back false is a key already ACKNOWLEDGED that Thai day (or a
+   * lease another run still holds): nothing may be sent, and no acknowledgement is
+   * owed. An unacknowledged claim holds a five-minute lease, so a later run may
+   * retry it — which is exactly what must happen when the send below fails.
+   */
   let claimed: boolean;
   try {
-    claimed = (await input.sink.claim({ dedupeKey, delivered: input.delivered ?? true })).claimed;
+    claimed = (await input.sink.claim({ kind, key: dedupeKey, delivered: false })).claimed;
   } catch {
     return { sent: false, reason: 'transport_unavailable', to, dedupeKey };
   }
   if (!claimed) return { sent: false, reason: 'already_alerted_today', to, dedupeKey };
 
+  /*
+   * PHASE 2 — SEND. The provider idempotency key `kind:key` is stable for this
+   * (kind, Thai day) pair and is handed to the transport, which puts it on the
+   * wire: a crash between the claim and this call, re-run inside the five-minute
+   * lease, sends the SAME idempotent request and the provider collapses it. SQL
+   * cannot prove exactly-once external delivery, so this is the app's job.
+   */
+  let result: { ok: boolean; status: number };
   try {
-    const result = await input.transport.send({ to, subject: input.subject, text: input.text });
-    return result.ok
-      ? { sent: true, reason: 'sent', to, dedupeKey }
-      : { sent: false, reason: 'transport_unavailable', to, dedupeKey };
+    result = await input.transport.send({
+      to,
+      subject: input.subject,
+      text: input.text,
+      // STABLE for this (kind, day key) pair: the transport carries it to the
+      // provider as the real `Idempotency-Key` header, so a retry after a crash
+      // inside the five-minute lease collapses at the provider instead of
+      // delivering a second copy.
+      idempotencyKey: providerAlertIdempotencyKey(kind, dedupeKey),
+    });
   } catch {
+    // Do NOT acknowledge: the day key must stay retryable after the lease expires
+    // rather than be recorded as delivered when nothing left.
     return { sent: false, reason: 'transport_unavailable', to, dedupeKey };
   }
+  if (!result.ok) {
+    // Same rule for a transport that reports failure: no acknowledgement, so a
+    // later run can still deliver this alert.
+    return { sent: false, reason: 'transport_unavailable', to, dedupeKey };
+  }
+
+  /*
+   * PHASE 3 — ACKNOWLEDGE, only after the provider ACCEPTED the message. The
+   * acknowledgement never authorises another send: it returns claimed=false and
+   * delivered=true, and a delivered key cannot be reclaimed that Thai day. A
+   * failure to acknowledge is not a failed alert — the mail left — so the result
+   * stays `sent` and the key simply stays claimable until the next run records it.
+   */
+  try {
+    await input.sink.claim({ kind, key: dedupeKey, delivered: true });
+  } catch {
+    // Deliberately swallowed: see above.
+  }
+  return { sent: true, reason: 'sent', to, dedupeKey };
 }

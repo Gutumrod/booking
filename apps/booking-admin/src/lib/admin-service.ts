@@ -7,6 +7,15 @@ import {
   type EntitlementStatusRow,
 } from './entitlement-status';
 
+import {
+  holdsDepositMoney,
+  DEPOSIT_REFUND_HISTORY_RPC,
+  DEPOSIT_REFUND_RPC,
+  type DepositRefundAuditEntry,
+} from './refund-eligibility';
+
+export type { DepositRefundAuditEntry } from './refund-eligibility';
+
 export type BookingStatus =
   | 'hold'
   | 'pending_review'
@@ -38,6 +47,23 @@ export interface DashboardBooking {
   status: BookingStatus;
   depositStatus: DepositStatus;
   slipObjectPath?: string;
+  /**
+   * The SERVER's appointment instants, used only to decide whether the outcome
+   * actions may be offered (H6 / G06). They are the real `timestamptz` values —
+   * never a display string re-parsed with a guessed offset, which is the F-17
+   * defect that made the old gate answer "not started" forever on a malformed row
+   * (G35's lesson).
+   */
+  startTime: string | null;
+  endTime: string | null;
+  /**
+   * `bookings.queue_released_at`, read-only. The SQL refund predicate honours a
+   * released queue as a way a booking is settled, so the UI rule needs the same
+   * fact or it would hide an action the database would allow (H5 / G23).
+   */
+  queueReleasedAt: string | null;
+  /** Service duration in minutes — the fallback source for the appointment end. */
+  durationMinutes: number | null;
 }
 
 export interface DashboardShop {
@@ -138,6 +164,10 @@ interface RelationName {
   name: string;
 }
 
+interface RelationService extends RelationName {
+  duration_minutes: number;
+}
+
 interface RelationCustomer extends RelationName {
   phone: string;
 }
@@ -151,13 +181,16 @@ interface RawBooking {
   booking_code: string;
   booking_date: string;
   start_time: string;
+  start_timestamptz?: string | null;
+  end_timestamptz?: string | null;
+  queue_released_at?: string | null;
   status: BookingStatus;
   deposit_status: DepositStatus;
   deposit_amount: number | string | null;
   total_price: number | string;
   slip_url: string | null;
   customers: RelationCustomer | RelationCustomer[] | null;
-  services: RelationName | RelationName[] | null;
+  services: RelationName | RelationService | RelationService[] | null;
   staff: RelationStaff | RelationStaff[] | null;
 }
 
@@ -268,13 +301,16 @@ export async function fetchAdminDashboardData(): Promise<AdminDashboardData> {
         booking_code,
         booking_date,
         start_time,
+        start_timestamptz,
+        end_timestamptz,
+        queue_released_at,
         status,
         deposit_status,
         deposit_amount,
         total_price,
         slip_url,
         customers ( name, phone ),
-        services ( name ),
+        services ( name, duration_minutes ),
         staff ( name, nickname )
       `)
       .eq('shop_id', membership.shop_id)
@@ -400,6 +436,13 @@ export async function fetchAdminDashboardData(): Promise<AdminDashboardData> {
       status: booking.status,
       depositStatus: booking.deposit_status,
       slipObjectPath: booking.slip_url ?? undefined,
+      // H6/G06: the raw server instants, passed through untouched. The UI gate
+      // decides whether the outcome buttons may be shown from these alone.
+      startTime: booking.start_timestamptz ?? null,
+      endTime: booking.end_timestamptz ?? null,
+      // H5/G23: the same pass-through for the refund rule's own timeline.
+      queueReleasedAt: booking.queue_released_at ?? null,
+      durationMinutes: (service as RelationService | null)?.duration_minutes ?? null,
     } satisfies DashboardBooking;
   });
 
@@ -475,8 +518,27 @@ export interface ShopSettingsInput {
   promptpayNumber: string;
   promptpayName: string;
   lineOaId: string;
+  /**
+   * H5 / G26: the two policy windows the P0 SQL added. They are sent as part of the
+   * same 9-named-argument call the CONTRACT pins, and `null` means "keep what is
+   * stored" — the SQL preserves the row's value under a row lock. A number is an
+   * explicit change. Omitting them entirely is what the old 7-argument client did,
+   * and the SQL accepts that too, but this client is never ambiguous about intent.
+   */
+  customer_cancel_before_hours?: number | null;
+  customer_reschedule_before_hours?: number | null;
 }
 
+/**
+ * Save the shop profile.
+ *
+ * H5 / G26: the CONTRACT (`reports/CONTRACT-BK01-P0-SQL-2026-10-02.md`) keeps the 9
+ * named inputs with the two new ones `DEFAULT NULL` = preserve. This client sends all
+ * NINE, so the shop's policy windows are visible and explicit rather than relying on
+ * a default, and the call resolves to a single catalog identity — no overload
+ * ambiguity. The `null` values are deliberate: the dashboard has no policy editor in
+ * this unit, so it must not silently reset the shop's settings to 24/12.
+ */
 export async function updateShopSettings(shopId: string, input: ShopSettingsInput): Promise<void> {
   const { error } = await supabase.rpc('update_shop_settings', {
     p_shop_id: shopId,
@@ -486,9 +548,30 @@ export async function updateShopSettings(shopId: string, input: ShopSettingsInpu
     p_promptpay_number: input.promptpayNumber,
     p_promptpay_name: input.promptpayName,
     p_line_oa_id: input.lineOaId,
+    p_customer_cancel_before_hours: input.customer_cancel_before_hours ?? null,
+    p_customer_reschedule_before_hours: input.customer_reschedule_before_hours ?? null,
   });
 
   if (error) throw new Error(error.message);
+}
+
+/**
+ * Set the shop's notification e-mail from the signed-in owner's address.
+ *
+ * H5 / G18: `set_shop_notification_contact(p_shop_id)` (the CONTRACT's signature)
+ * derives the address from the JWT's top-level `email` claim and refuses an anonymous
+ * session, so the app passes NO e-mail address of its own. The old code never called
+ * this function at all, which is half of why the shop e-mail feature was dead; the
+ * other two halves are SQL-side and out of this unit's scope.
+ */
+export async function setShopNotificationContact(shopId: string): Promise<{ email: string; verifiedAt: string | null }> {
+  const { data, error } = await supabase.rpc('set_shop_notification_contact', {
+    p_shop_id: shopId,
+  });
+  if (error) throw new Error(error.message);
+  const row = (Array.isArray(data) ? data[0] : data) as { email?: string; verified_at?: string | null } | null;
+  if (!row?.email) throw new Error('Notification e-mail could not be recorded');
+  return { email: row.email, verifiedAt: row.verified_at ?? null };
 }
 
 export async function saveStaffWeeklySchedule(
@@ -613,6 +696,49 @@ export async function rejectBookingDeposit(bookingId: string, reason: string): P
   });
 
   if (error) throw new Error(error.message);
+}
+
+/**
+ * BK01 P0 / H5 (G23) — record that the shop refunded a deposit off-system.
+ *
+ * The platform never moves the money: the deposit went to the shop's own PromptPay
+ * account, so the shop transfers the refund back itself and this call only writes
+ * the record (who, when, the MANDATORY transfer reference, optional note) plus the
+ * append-only money event and the audit row. The CONTRACT pins the signature — three
+ * named arguments, the same function name that already exists; no new RPC is added
+ * and no file is uploaded (merchant refund evidence stays HOLD until a separate
+ * storage contract exists).
+ */
+export async function recordBookingDepositRefund(
+  bookingId: string,
+  reference: string,
+  note?: string,
+): Promise<void> {
+  const { error } = await supabase.rpc(DEPOSIT_REFUND_RPC, {
+    p_booking_id: bookingId,
+    p_refund_reference: reference,
+    p_note: note && note.trim() ? note.trim() : null,
+  });
+  if (error) throw new Error(error.message);
+}
+
+/**
+ * The audit trail behind a refunded deposit — the append-only
+ * `local_service.deposit_money_events` rows the RPC wrote. An empty array means
+ * this booking has no recorded refund yet.
+ */
+export async function fetchDepositRefundHistory(bookingId: string): Promise<DepositRefundAuditEntry[]> {
+  const { data, error } = await supabase.rpc(DEPOSIT_REFUND_HISTORY_RPC, {
+    p_booking_id: bookingId,
+  });
+  if (error) throw new Error(error.message);
+
+  return ((data ?? []) as Array<Record<string, unknown>>).map((row) => ({
+    at: String(row.at ?? row.created_at ?? ''),
+    by: row.by === null || row.by === undefined ? null : String(row.by),
+    reference: String(row.reference ?? ''),
+    note: String(row.note ?? ''),
+  }));
 }
 
 export async function createSignedDepositSlipUrl(objectPath: string): Promise<string> {
