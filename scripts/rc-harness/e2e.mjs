@@ -32,6 +32,9 @@ try {
  browser=await chromium.launch({headless:true,...(env.RC_CHROMIUM?{executablePath:env.RC_CHROMIUM}:{})});
  const ctx=await browser.newContext();ctx.setDefaultTimeout(20000);ctx.setDefaultNavigationTimeout(45000);const page=await ctx.newPage();
  const alertShops=[crypto.randomUUID(),crypto.randomUUID()];
+ if(env.RC_EXPECTED_LEDGER==='13')await check('F1/160000 audit enforcement and private ACL proof','real-role SQL proof',async()=>{
+  const rows=JSON.parse(fs.readFileSync(path.join(dir,'f1/g10-line-audit-after-results.json'),'utf8'));assert.ok(rows.length>0);assert.ok(rows.every(x=>x.ok));return `${rows.length} inherited audit assertions against this actual RC database; baseline red before apply`;
+ });
  for(const [i,id] of alertShops.entries())await db`insert into local_service.shops(id,name,slug,phone) values(${id}::uuid,${'RC alert '+i},${'rc-alert-'+i},'0812345678')`;
  await check('W-1 PG17 UTC, operator/runtime non-superuser','catalog',async()=>{
   const [row]=await db`select current_setting('server_version_num') v,current_setting('timezone') tz,current_setting('data_directory') data`;
@@ -46,7 +49,7 @@ try {
     await page.goto(`${urls.consumer}/book/${slug}`);await page.waitForResponse(r=>r.url().includes('staff_schedules')&&r.status()===200,{timeout:30000}).catch(()=>{});
     await page.waitForFunction(()=>!document.body.innerText.includes('กำลังโหลด'),{timeout:30000});assert.equal(await page.getByText('โหลดหน้าจองไม่สำเร็จ',{exact:true}).count(),0);
     await page.locator('header h1').waitFor();assert.equal(await page.locator('header h1').textContent(),name,`Expected shop ${slug}`);}
-  assert.deepEqual(failures,[]);return `${slugs.length} slugs; exact 10-column select against actual view`;
+  assert.deepEqual(failures,[]);return `${slugs.length} slugs; exact ${columns.split(',').length}-column consumer select against actual view`;
  });
  await check('Admin app service session + real dashboard/RLS projection','app-service+PostgREST',async()=>{
   // Run the real browser module in a browser. No replacement Supabase client,
@@ -101,6 +104,8 @@ try {
   const b=await hold();await Promise.all(Array.from({length:20},()=>rpc('authorize_deposit_slip_upload',{p_booking_id:b.booking_id,p_recovery_token:b.link_token,p_content_type:'image/png',p_size_bytes:68})));
   const r=await fetch(`${urls.consumer}/api/deposit-slips/upload-intent`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({bookingId:b.booking_id,recoveryToken:b.link_token,contentType:'image/png',size:68})});const body=await r.json();
   assert.ok(JSON.stringify(body).includes('ติดต่อร้าน'),`Expected ติดต่อร้าน; HTTP ${r.status}, body=${JSON.stringify(body)}`);
+  assert.equal(r.status,429);assert.equal(body.scope,'booking_daily');assert.equal(body.code,'UPLOAD_INTENT_DAILY_LIMIT');assert.equal(r.headers.get('retry-after'),'86400');
+  return `HTTP ${r.status}; code=${body.code}; scope=${body.scope}; Retry-After=86400; error=${body.error}`;
  });
  await check('G10 shared phone cannot rebind; recipient matches booking','HTTP+DB',async()=>{
   const a=await hold('0898000001'),b=await hold('0898000001'),line='U'+'a'.repeat(32),other='U'+'b'.repeat(32);

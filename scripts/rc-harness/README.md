@@ -10,7 +10,11 @@ verification tooling for existing capabilities; no new product/backend capabilit
 - `D:/AI-Workspace/vault/06-Agent-Logs/WSTERA-House/briefs/CONTRACT-BK01-G09-G10-2026-10-02.md`
 - `D:/AI-Workspace/vault/06-Agent-Logs/WSTERA-House/STATUS-HOUSE.md`, A-26/A-27 only.
 - SQL: `codex/bk01-p1-g09-g10-20261002` at `2a772e46a5dca42df2bf23429552972d9396f49e`.
-- App: `codex/bk01-p0-app-20261002` at `3b4448256a0a4c13f9d4e7159c711daee555d581`.
+- Initial app evidence: `codex/bk01-p0-app-20261002` at `3b4448256a0a4c13f9d4e7159c711daee555d581`.
+- Continuation app: `codex/bk01-rc-app-20261002` at `6efec0ca7275b583076deb4eec1aa953f0bd9354`.
+- F1: `codex/bk01-g10-line-audit-20261002` at `9d5ca2bfd34dc50414c69536b9a6a6cd4bbf11fc`;
+  that source's `reports/REPORT-CODEX-HOUSE-BK01-G10-LINE-AUDIT-2026-10-02.md`
+  and `docs/operations/BK01-LINE-binding-reset.md`.
 - Existing W-1 replay: `scripts/proofs/bk01-p1-g09-g10-replay.mjs`; existing managed
   Auth/Storage scaffolds: `scripts/proofs/lane-b/wu1_e2e.mjs`.
 - House Storage fixture: `scripts/proofs/lane-b/fixtures/house_storage_upload_grants.sql`.
@@ -40,6 +44,37 @@ There is no merge or cherry-pick. Source tests, both builds, and typechecks are
 captured separately. Candidate failures are reported without fixes; exit 1 means
 HOLD. ESLint runs without auto-fix for both pinned apps. SKIP is never PASS. Existing evidence/worktrees are retained; no cluster is
 reset and no existing evidence is overwritten.
+
+Optional `auditSqlSha` is a separate immutable F1 pin, not a replacement for
+`sqlSha`. The runner requires its entire `supabase/` diff against the base to be
+exactly the added forward/rollback 160000 pair; older SQL changes stop the run.
+It copies those exact git objects and the audit proof scripts, preserves the full
+P1/150000 rollback/reapply baseline, then applies 160000 through the existing
+non-superuser migration runner before launching either app. Restore ledger count
+is derived from the exact selected migration files, with all restored ledger rows
+also fingerprinted. Forward and rollback SQL file hashes are captured.
+The audit author's unchanged real-role proof must be red on the pre-audit schema,
+then pass after apply. A failure is not swallowed. Its audit/ACL/role results are
+reported as a separate e2e row; the older P1 static exceptions remain visible.
+
+## Dashboard triage
+
+`triage-admin.mjs CONFIG_JSON` compares fresh worktrees at base `62e93ec`, `9f452d4`
+and RC `6efec0c`, using identical Node, exact lock bytes, clean env and explicit
+loopback URL/public placeholder. Configure `triageDependencies` to a completed
+exact-lock dependency installation; dependencies are shared read-only by junction
+for webpack dev/build/start. It probes the dashboard with empty cookies because
+`getLocale()` runs before the layout's Auth check; this measures request config,
+not Auth/RLS. Each pin's actual dev and production build/start gets browser/server
+evidence and application integrity hashes. It never inserts an i18n module/plugin.
+
+`triage-cloudflare.mjs CONFIG_JSON RC_WORKTREE` controls the RC's real deployment
+packaging offline. It creates another immutable worktree, installs fresh actual
+dependencies (no outside-root junction), runs the app's unchanged OpenNext build
+including its own Next build, then starts Wrangler strictly `--local` on loopback
+using the actual pinned config. Build/HTTP failure and opaque error bodies stay
+unclassified unless an actual error signal establishes their cause. This does not
+prove deployed Cloudflare acceptance and performs no deployment or LAB request.
 
 Evidence includes pins/file hashes, operator stdout/stderr/exit, per-case JSON and
 Markdown, raw restore comparisons, source checks, and app/SQL integrity. Sensitive

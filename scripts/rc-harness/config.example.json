@@ -1,6 +1,7 @@
 {
   "sqlSha": "2a772e46a5dca42df2bf23429552972d9396f49e",
-  "appSha": "3b4448256a0a4c13f9d4e7159c711daee555d581",
+  "appSha": "6efec0ca7275b583076deb4eec1aa953f0bd9354",
+  "auditSqlSha": "9d5ca2bfd34dc50414c69536b9a6a6cd4bbf11fc",
   "pgBin": "ABSOLUTE_PATH_TO_REVIEWED_PG17_11_BIN",
   "runtimeRoleSql": "ABSOLUTE_PATH_TO_REVIEWED_h3_bk01_runtime_role.sql",
   "postgrest": "ABSOLUTE_PATH_TO_POSTGREST_13_0_8_EXE",

@@ -55,7 +55,7 @@ try {
  const smoke=postgres(`postgresql://operator@127.0.0.1:${env.RC_PG_PORT}/${name}`,{max:1,prepare:false});
  try{const [posture]=await smoke`select rolsuper from pg_roles where rolname=current_user`;assert.equal(posture.rolsuper,false);
   const profile=await smoke`select id,name,slug,phone,address,promptpay_number,promptpay_name,require_deposit,is_accepting_online_bookings from local_service.shop_public_profile where slug='p0-proof'`;assert.equal(profile.length,1);
-  const ledger=await smoke`select count(*)::integer n from local_service_internal.schema_migrations`;assert.equal(ledger[0].n,12);result.smoke='non-superuser restored owner, public-profile projection and exact 12-entry ledger';
+  const ledger=await smoke`select count(*)::integer n from local_service_internal.schema_migrations`;const expectedLedger=Number(env.RC_EXPECTED_LEDGER);assert.ok(Number.isInteger(expectedLedger)&&expectedLedger>0);assert.equal(ledger[0].n,expectedLedger);result.smoke=`non-superuser restored owner, public-profile projection and exact ${expectedLedger}-entry ledger`;
  }finally{await smoke.end();}
  const [customer]=await source`select id,shop_id,name from local_service.customers where name<>'[deleted]' order by id limit 1`;assert.ok(customer);
  const log=[{version:1,eventId:crypto.randomUUID(),at:new Date().toISOString(),action:'anonymize_customer',customerId:customer.id,shopId:customer.shop_id,legalHold:false,authority:'local-drill-only'}];

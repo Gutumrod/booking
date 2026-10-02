@@ -14,6 +14,13 @@ for (const key of required) if (!config[key]) throw Error(`Missing configuration
 for (const key of ['sqlSha','appSha']) if (!/^[a-f0-9]{40}$/.test(config[key])) throw Error('Full immutable SHA required');
 const git = (...args) => execFileSync('git', ['-C', root, ...args], { encoding:'utf8', windowsHide:true }).trim();
 for (const key of ['sqlSha','appSha']) if (git('rev-parse',`${config[key]}^{commit}`) !== config[key]) throw Error('Unknown pin');
+const auditFile='20261002160000_bk01_g10_line_binding_audit.sql';
+if(config.auditSqlSha){
+ if(!/^[a-f0-9]{40}$/.test(config.auditSqlSha)||git('rev-parse',`${config.auditSqlSha}^{commit}`)!==config.auditSqlSha)throw Error('Unknown immutable audit pin');
+ const allowed=new Set([`supabase/bk01-migrations/${auditFile}`,'supabase/rollback/20261002160000_bk01_g10_line_binding_audit.rollback.sql']);
+ const changed=git('diff','--name-only',config.sqlSha,config.auditSqlSha,'--','supabase').split('\n').filter(Boolean);
+ if(changed.length!==2||changed.some(x=>!allowed.has(x)))throw Error('Audit pin changes the pinned SQL surface beyond the two new 160000 files');
+}
 const now = new Date().toISOString().replace(/[-:.]/g,'');
 const evidence = path.resolve(config.evidenceRoot, now);
 fs.mkdirSync(evidence,{recursive:true});
@@ -22,12 +29,17 @@ git('worktree','add','--detach',rc,config.appSha);
 execFileSync('git',['-C',rc,'restore',`--source=${config.sqlSha}`,'--','supabase'],{windowsHide:true});
 const sqlScripts=git('ls-tree','-r','--name-only',config.sqlSha,'--','scripts').split('\n').filter(Boolean);
 execFileSync('git',['-C',rc,'restore',`--source=${config.sqlSha}`,'--',...sqlScripts],{windowsHide:true});
+if(config.auditSqlSha){
+ const auditPaths=git('ls-tree','-r','--name-only',config.auditSqlSha,'--','supabase/bk01-migrations','supabase/rollback','scripts/proofs').split('\n').filter(p=>p.includes('20261002160000_')||/^scripts\/proofs\/bk01-g10-line-audit[^/]*\.mjs$/.test(p));
+ execFileSync('git',['-C',rc,'restore',`--source=${config.auditSqlSha}`,'--',...auditPaths],{windowsHide:true});
+}
 // Copies are exact git objects. App sources are never patched or committed by the harness.
 fs.mkdirSync(path.join(rc,'scripts/rc-harness'),{recursive:true});
 fs.cpSync(path.join(root,'scripts/rc-harness'),path.join(rc,'scripts/rc-harness'),{recursive:true,filter:source=>path.basename(source)!=='node_modules'});
 const hash = p => crypto.createHash('sha256').update(fs.readFileSync(p)).digest('hex');
-const files = ['supabase/bk01-migrations','supabase/migrations','supabase/shared-runtime'];
+const files = ['supabase/bk01-migrations','supabase/migrations','supabase/shared-runtime','supabase/rollback'];
 const manifest = {at:new Date().toISOString(),sqlSha:config.sqlSha,appSha:config.appSha,
+  auditSqlSha:config.auditSqlSha??null,
   appLockSha256:hash(path.join(rc,'package-lock.json')),harnessLockSha256:hash(path.join(root,'scripts/rc-harness/package-lock.json')),
   runtimeRoleSqlSha256:hash(config.runtimeRoleSql),postgrestSha256:hash(config.postgrest),files:[]};
 for(const dir of files) for(const name of fs.readdirSync(path.join(rc,dir)).sort()) {
@@ -53,7 +65,7 @@ function start(name,program,args,env,cwd=rc) {
   p.on('error',()=>{});children.push({p,out});return p;
 }
 const data=path.join(evidence,'w1/data');
-const localEnv={...baseEnv,BK01_P0_PGBIN:config.pgBin,BK01_P0_EVIDENCE_DIR:path.join(evidence,'w1'),BK01_P0_RUNTIME_ROLE_SQL:config.runtimeRoleSql,
+const localEnv={...baseEnv,RC_EXPECTED_LEDGER:String(manifest.files.filter(x=>x.path.startsWith('supabase/bk01-migrations/')&&x.path.endsWith('.sql')).length),BK01_P0_PGBIN:config.pgBin,BK01_P0_EVIDENCE_DIR:path.join(evidence,'w1'),BK01_P0_RUNTIME_ROLE_SQL:config.runtimeRoleSql,
  BK01_P0_LOCAL_PORT:String(ports.pg),BK01_P0_LOCAL_URL:`postgresql://operator@127.0.0.1:${ports.pg}/postgres`,BK01_P0_DATA_DIR:data.replaceAll('\\','/'),BK01_SHARED_RUNTIME_ENV:'local'};
 const pg=(exe,args)=>execFileSync(path.join(config.pgBin,`${exe}.exe`),args,{env:baseEnv,windowsHide:true,stdio:'ignore'});
 let pgRunning=false;
@@ -65,6 +77,8 @@ try {
   // Reuse the reviewed W-1 replay. Only the managed auth scaffold is selected from
   // the existing Supabase-compatible fixture, to support PostgREST's JSON claims.
   let replay=fs.readFileSync(path.join(rc,'scripts/proofs/bk01-p1-g09-g10-replay.mjs'),'utf8');
+  // Preserve the original P1 rollback baseline; append F1 only after its full replay.
+  replay=replay.replaceAll("['scripts/bk01-migrate.mjs','apply'],env);","['scripts/bk01-migrate.mjs','apply','--through','20261002150000_bk01_p1_g09_g10.sql'],env);");
   const authBody=fs.readFileSync(path.join(rc,'scripts/proofs/lane-b/wu1_e2e.mjs'),'utf8').match(/const AUTH_UID_BODY = `([\s\S]*?)`;/)?.[1];
   if(!authBody)throw Error('Canonical managed auth fixture unavailable');
   replay=replay.replace("SELECT NULLIF(current_setting('request.jwt.claim.sub',true),'')::uuid",authBody);
@@ -88,6 +102,16 @@ try {
   const replayPath=path.join(rc,'scripts/rc-harness/w1-replay.generated.mjs');fs.writeFileSync(replayPath,replay);
   await run('w1-replay',process.execPath,[replayPath],localEnv);
   pg('pg_ctl',['-D',data,'-l',path.join(evidence,'w1/postgres.log'),'-w','start']);pgRunning=true;
+  if(config.auditSqlSha){
+   const auditEnv={...localEnv,BK01_P0_EVIDENCE_DIR:path.join(evidence,'f1'),BK01_PLATFORM_DATABASE_URL:localEnv.BK01_P0_LOCAL_URL,BK01_OPERATOR_LOGINS:'operator',BK01_RELEASE_ID:'HOUSE-BK01-RC-HARNESS-F1'};
+   let expectedRed=false;
+   try{await run('f1-audit-baseline',process.execPath,['scripts/proofs/bk01-g10-line-audit-pg17.mjs','baseline'],auditEnv);}
+   catch(error){const rows=JSON.parse(fs.readFileSync(path.join(evidence,'f1/g10-line-audit-baseline-results.json'),'utf8'));const receipt=JSON.parse(fs.readFileSync(path.join(evidence,'f1-audit-baseline.exit.json'),'utf8'));
+    if(receipt.exit!==1||rows.length!==1||rows[0].ok||!rows[0].detail.includes('table=absent; triggers=none'))throw error;expectedRed=true;}
+   if(!expectedRed)throw Error('F1 baseline must be red before migration');
+   await run('f1-audit-apply',process.execPath,['scripts/bk01-migrate.mjs','apply','--through',auditFile],auditEnv);
+   await run('f1-audit-proof',process.execPath,['scripts/proofs/bk01-g10-line-audit-pg17.mjs','after'],auditEnv);
+  }
   try {await run('rpc-arity',process.execPath,['scripts/proofs/bk01-app-rpc-catalog-gate.mjs'],localEnv);}
   catch(error){fs.writeFileSync(path.join(evidence,'rpc-arity-result.json'),JSON.stringify({status:'FAIL',classification:'STATIC_TOOL_INCOMPATIBILITY',message:error.message}));}
   const {default:postgres}=await import('postgres');
@@ -137,7 +161,7 @@ try {
   const e2e=fs.existsSync(e2ePath)?JSON.parse(fs.readFileSync(e2ePath,'utf8')):[];
   const oldStaticFailures=(fs.existsSync(path.join(evidence,'rpc-arity-result.json'))?1:0)+(fs.existsSync(path.join(evidence,'w1/p1-g09-g10-green-legacy-static-fail.json'))?1:0);
   const sourceFile=path.join(evidence,'source-checks.json');const sourceFailures=fs.existsSync(sourceFile)?JSON.parse(fs.readFileSync(sourceFile,'utf8')).filter(x=>x.status==='FAIL').length:0;
-  const summary={status:process.exitCode||drift.length||appDiff||e2e.some(x=>x.status==='FAIL')||oldStaticFailures||sourceFailures?'HOLD':'LOCAL_ONLY',sqlSha:config.sqlSha,appSha:config.appSha,pass:e2e.filter(x=>x.status==='PASS').length,fail:e2e.filter(x=>x.status==='FAIL').length,skip:e2e.filter(x=>x.status==='SKIP').length,staticToolFailures:oldStaticFailures,sourceFailures};
+  const summary={status:process.exitCode||drift.length||appDiff||e2e.some(x=>x.status==='FAIL')||oldStaticFailures||sourceFailures?'HOLD':'LOCAL_ONLY',sqlSha:config.sqlSha,appSha:config.appSha,auditSqlSha:config.auditSqlSha??null,pass:e2e.filter(x=>x.status==='PASS').length,fail:e2e.filter(x=>x.status==='FAIL').length,skip:e2e.filter(x=>x.status==='SKIP').length,staticToolFailures:oldStaticFailures,sourceFailures};
   fs.writeFileSync(path.join(evidence,'summary.json'),JSON.stringify(summary,null,2));if(summary.status==='HOLD')process.exitCode=1;
   console.log(`Evidence: ${evidence}`);
 }
