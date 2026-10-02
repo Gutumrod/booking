@@ -20,8 +20,10 @@ import { QRCodeSVG } from 'qrcode.react';
 import { resolveBookingPageState, type BookingPageState } from '../../../lib/booking-state';
 import { resolvePaymentInstruction, preHoldServiceDeposit, isServicePaymentBlocked } from '../../../lib/payment-instruction';
 import { loadBookingRoute, createRequestGate } from '../../../lib/booking-route-load';
-
-const CENTRAL_LINE_OA_ID = process.env.NEXT_PUBLIC_CENTRAL_LINE_OA_ID || 'central_booking_oa';
+// F1: the binding target is the CENTRAL OA only. Sourced from lib/line-link.ts so
+// the page and the URL builder cannot drift apart, and never from a per-shop value
+// (the public profile no longer even exposes one).
+import { CENTRAL_LINE_OA_ID } from '../../../lib/line-link';
 
 /*
  * H4 / G01 (brief 28 §4, A-24 item 1): the booking page no longer calls
@@ -642,7 +644,7 @@ function BookingRoute({ slug }: { slug: string }) {
             {/* Central LINE OA Binding Button */}
             <div className="space-y-2">
               <a
-                href={`https://line.me/R/oaMessage/@${shop?.line_oa_id || CENTRAL_LINE_OA_ID}/?%E0%B8%9C%E0%B8%B9%E0%B8%81%E0%B8%84%E0%B8%B4%E0%B8%A7%20${holdResult?.booking_code}-${holdResult?.link_token}`}
+                href={`https://line.me/R/oaMessage/@${CENTRAL_LINE_OA_ID}/?%E0%B8%9C%E0%B8%B9%E0%B8%81%E0%B8%84%E0%B8%B4%E0%B8%A7%20${holdResult?.booking_code}-${holdResult?.link_token}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="w-full bg-[#06C755] hover:bg-[#05b34c] text-white py-3.5 px-4 rounded-xl font-bold text-sm flex flex-col items-center justify-center gap-0.5 shadow-lg shadow-emerald-950/50 transition-all text-center"

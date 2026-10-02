@@ -110,7 +110,7 @@ async function dispatch(handler, h, { usage, sink } = {}) {
     quotaTransport: h.quotaTransport,
     alertTransport: h.alertTransport,
     resolvePushUsage: usage ?? h.usage,
-    capAlertSink: sink ?? h.sink,
+    pushAlertSink: sink ?? h.sink,
   };
   return handler(...names.map((name) => values[name]));
 }

@@ -24,7 +24,8 @@
     "db:bk01:plan": "node scripts/bk01-migrate.mjs plan",
     "db:bk01:apply": "node scripts/bk01-migrate.mjs apply",
     "gate:owner-input": "node scripts/check-owner-input-placeholders.mjs",
-    "gate:owner-input:enforce": "node scripts/check-owner-input-placeholders.mjs --enforce"
+    "gate:owner-input:enforce": "node scripts/check-owner-input-placeholders.mjs --enforce",
+    "gate:route-exports": "node scripts/check-route-exports-all.mjs"
   },
   "devDependencies": {
     "postgres": "3.4.9"

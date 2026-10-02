@@ -17,7 +17,6 @@ export interface Shop {
   slug: string;
   phone: string;
   address: string;
-  line_oa_id: string;
   promptpay_number: string;
   promptpay_name: string;
   require_deposit: boolean;
@@ -103,15 +102,19 @@ export interface CreateBookingHoldMessages {
 
 export async function getShopBySlug(slug: string): Promise<Shop | null> {
   // shop_public_profile exposes only customer-facing columns (name, phone,
-  // address, PromptPay, LINE OA ID, deposit config) and already filters to
-  // active shops -- unauthenticated clients can no longer select(*) on the
+  // address, PromptPay, deposit config, booking eligibility) and already filters
+  // to active shops -- unauthenticated clients can no longer select(*) on the
   // shops table itself, which used to also return subscription_status,
   // trial_ends_at, owner_name, etc.
+  // The public profile carries NO per-shop LINE OA id: the central OA is the only
+  // binding target (see lib/line-link.ts), and the P0 SQL view
+  // (20261002120000_bk01_council_p0.sql) removed the column, so selecting it here
+  // would make EVERY /book/[slug] load return LOAD_ERROR.
   // maybeSingle(): no row -> { data: null, error: null } (SHOP_NOT_FOUND); a
   // query/network error throws so the page shows LOAD_ERROR (Codex R2-5).
   const result = await supabase
     .from('shop_public_profile')
-    .select('id, name, slug, phone, address, line_oa_id, promptpay_number, promptpay_name, require_deposit, is_accepting_online_bookings')
+    .select('id, name, slug, phone, address, promptpay_number, promptpay_name, require_deposit, is_accepting_online_bookings')
     .eq('slug', slug)
     .maybeSingle();
 

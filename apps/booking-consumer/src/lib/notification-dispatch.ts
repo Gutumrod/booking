@@ -319,9 +319,15 @@ export async function handleNotificationDispatch(
        * old pre-send `delivered` flag is gone.
        */
       const alertKey = pushAlertDedupeKey({ kind: 'quota_unreadable', at: now });
-      quotaAlertSent = true;
       if (alertKey.ok) {
-        await sendOpsAlert({
+        /* N1: report the alert only when the provider actually ACCEPTED the mail.
+         * `sendOpsAlert` answers `sent: false` for an unconfigured address, an absent
+         * transport, a key already acknowledged today, or a transport failure — in
+         * every one of those the alert did NOT leave, so the response must not claim
+         * it did. In the failure cases the ledger key stays retryable; only the
+         * reported flag changes.
+         */
+        const alert = await sendOpsAlert({
           env: process.env,
           subject: '[BK01] shared LINE OA quota could not be read — 80% breaker not active',
           text: [
@@ -334,6 +340,7 @@ export async function handleNotificationDispatch(
           kind: 'quota_unreadable',
           dedupeKey: alertKey.key,
         });
+        quotaAlertSent = alert.sent;
       }
     }
 
