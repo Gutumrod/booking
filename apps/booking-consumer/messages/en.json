@@ -153,6 +153,9 @@
     "rescheduled": "Booking rescheduled",
     "invalidLink": "This booking-management link is invalid or incomplete"
   },
+  "lineBinding": {
+    "refused": "This account cannot be linked. Please contact the shop."
+  },
   "support": {
     "title": "Support & contact",
     "subtitle": "Support for this booking portal is handled in writing.",

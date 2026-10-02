@@ -56,6 +56,55 @@ function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : 'LINE webhook processing failed';
 }
 
+/**
+ * G10 (2026-10-02 order) — the neutral copy for a REFUSED binding.
+ *
+ * The Owner order pins both sentences verbatim and requires the reply to carry
+ * BOTH, so a Thai customer and an English reader are each told the same neutral
+ * thing. They are exported so a caller can assert the shipped copy without
+ * duplicating the literal, and they are mirrored as the `lineBinding.refused` key
+ * in BOTH consumer catalogues. The copy lives here as constants rather than being
+ * read from next-intl because this module is a library shared by the two route
+ * modules and has no locale-aware catalogue reader; the catalogue keys remain the
+ * tested source of truth for parity.
+ */
+export const LINE_BINDING_REFUSED_MESSAGE_TH = 'ไม่สามารถผูกบัญชีนี้ได้ กรุณาติดต่อร้าน';
+export const LINE_BINDING_REFUSED_MESSAGE_EN = 'This account cannot be linked. Please contact the shop.';
+
+/**
+ * Send the ONE neutral reply a refused binding owes the customer.
+ *
+ * EXACTLY ONE text message, addressed to THIS event's reply token. It names
+ * nobody and leaks nothing: no booking code, no LINE id, no shop name, and no echo
+ * of the customer's message — a caller must not be able to learn whether the
+ * booking or the binding exists.
+ *
+ * FAIL-SOFT, exactly like the card reply. It is attempted only when this event has
+ * a reply token AND a channel access token is configured; a transport or provider
+ * failure is caught and logged and must NEVER fail the webhook event, change the
+ * RPC sequence, or leave the event leased.
+ */
+async function sendRefusedBindingNotice(
+  config: ResolvedLineChannelConfig,
+  event: LineWebhookEvent,
+  send: typeof fetch,
+): Promise<void> {
+  if (!event.replyToken || !config.accessToken) return;
+  try {
+    const notice = `${LINE_BINDING_REFUSED_MESSAGE_TH}\n${LINE_BINDING_REFUSED_MESSAGE_EN}`;
+    const lineResponse = await send('https://api.line.me/v2/bot/message/reply', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${config.accessToken}` },
+      body: JSON.stringify({ replyToken: event.replyToken, messages: [{ type: 'text', text: notice }] }),
+    });
+    if (!lineResponse.ok) throw new Error(`LINE refusal reply failed with HTTP ${lineResponse.status}`);
+  } catch (replyError) {
+    // The binding was refused and the event is a skip either way; only the courtesy
+    // notice was lost. Nothing here may surface as EVENT_PROCESSING_FAILED.
+    console.error('LINE binding refusal reply could not be delivered', { code: 'REFUSAL_REPLY_FAILED', reason: messageOf(replyError) });
+  }
+}
+
 export async function handleLineWebhook(
   req: Request,
   config: ResolvedLineChannelConfig,
@@ -121,7 +170,12 @@ export async function handleLineWebhook(
       if (error) throw new Error('LINE booking binding RPC failed');
       binding = (Array.isArray(data) ? data[0] : data) as LineBinding | null;
       if (!binding?.claimed) {
+        // G10 order (2026-10-02): a refused binding is NO LONGER silent. Send ONE
+        // neutral reply — this supersedes the round-1 "send nothing on claimed=false"
+        // expectation — and keep the event a SKIP, exactly as before: no RPC is
+        // added, no lease is taken, and `failedEvents` is untouched.
         skippedEvents += 1;
+        await sendRefusedBindingNotice(config, event, send);
         continue;
       }
       if (!binding.booking_context || !binding.booking_id || !binding.lease_token) throw new Error('LINE booking binding returned incomplete context');

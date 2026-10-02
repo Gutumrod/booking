@@ -78,7 +78,9 @@ test('LINE replay, RPC failure, trial RPC, and issuer failure fail closed', asyn
     rpc: async () => ({ data: [{ claimed: false }], error: null }),
   }) as any, async () => { replies += 1; return new Response('{}'); });
   assert.equal((await responseJson(replay)).skippedEvents, 1);
-  assert.equal(replies, 0);
+  // G10 order (2026-10-02) supersedes the round-1 expectation of 0: a refused
+  // binding now sends ONE neutral reply that names nobody and leaks nothing.
+  assert.equal(replies, 1);
 
   const rpcFailure = await lineRoute.handleLineWebhook(request('/line', body, headers), lineConfig, 'shop-1', async () => ({
     rpc: async () => ({ data: null, error: { code: 'XX000' } }),

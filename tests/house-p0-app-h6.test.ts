@@ -184,9 +184,97 @@ test('the dashboard offers the outcome actions only when the gate says so', () =
   assert.match(dashboard, /from '@\/lib\/booking-outcome-gate'/);
 });
 
+// The dashboard projection must be checked against the REAL query, not against loose
+// text. A mutation that drops `start_timestamptz,` from the select list leaves the
+// token `start_timestamptz` present on the mapping line, so `assert.match(service,
+// /start_timestamptz/)` survives — the exact vacuity the reviewer caught. These two
+// helpers parse the query instead of grepping the file.
+
+// PARSE the top-level select column list out of the bookings query inside the
+// exported `fetchAdminDashboardData`. The list is a template literal; split it on
+// commas at DEPTH 0 only, because embedded relation projections such as
+// `customers ( name, phone )` carry their own commas and are not top-level columns.
+function parseBookingsSelectColumns(service: string): {
+  projection: string;
+  columns: string[];
+  relationProjections: string[];
+} {
+  const fnStart = service.indexOf('export async function fetchAdminDashboardData');
+  assert.notEqual(fnStart, -1, 'fetchAdminDashboardData must exist — the test binds to the real query');
+  const fnEnd = service.indexOf('\nexport ', fnStart + 1);
+  const fn = service.slice(fnStart, fnEnd === -1 ? service.length : fnEnd);
+
+  const fromIndex = fn.indexOf(".from('bookings')");
+  assert.notEqual(fromIndex, -1, "the dashboard function must query .from('bookings')");
+  const selectIndex = fn.indexOf('.select(', fromIndex);
+  assert.notEqual(selectIndex, -1, 'the bookings query must project a column list');
+
+  const selectOpen = selectIndex + '.select('.length;
+  assert.equal(fn[selectOpen], '`', 'the bookings projection must be a template literal');
+  const templateEnd = fn.indexOf('`', selectOpen + 1);
+  assert.notEqual(templateEnd, -1, 'the projection template literal must close');
+  const projection = fn.slice(selectOpen + 1, templateEnd);
+
+  const columns: string[] = [];
+  const relationProjections: string[] = [];
+  let depth = 0;
+  let current = '';
+  const flush = () => {
+    const entry = current.trim();
+    if (entry.length > 0) {
+      if (depth === 0 && !entry.includes('(')) columns.push(entry);
+      else relationProjections.push(entry);
+    }
+    current = '';
+  };
+  for (const char of projection) {
+    if (char === '(') {
+      depth += 1;
+      current += char;
+    } else if (char === ')') {
+      depth -= 1;
+      current += char;
+    } else if (char === ',' && depth === 0) {
+      flush();
+    } else {
+      current += char;
+    }
+  }
+  flush();
+
+  return { projection, columns, relationProjections };
+}
+
+// Anchor the mapping assertions to the bookings map callback itself, so a `startTime:`
+// line anywhere else in the file cannot satisfy them.
+function isolateBookingMappingBlock(service: string): string {
+  const mapMatch = /RawBooking\[\]\)\.map\(\(booking\) => \{/.exec(service);
+  assert.ok(mapMatch, 'the dashboard must map RawBooking rows into DashboardBooking');
+  const mapIndex = mapMatch.index;
+  const satisfiesIndex = service.indexOf('satisfies DashboardBooking', mapIndex);
+  assert.notEqual(satisfiesIndex, -1, 'the bookings mapping must return a DashboardBooking');
+  return service.slice(mapIndex, satisfiesIndex);
+}
+
 test('the dashboard booking rows carry the server instants the gate needs', () => {
   const service = read('apps/booking-admin/src/lib/admin-service.ts');
-  assert.match(service, /start_timestamptz/, 'the projection must select the real instants');
-  assert.match(service, /end_timestamptz/);
-  assert.match(service, /endTime: booking\.end_timestamptz \?\? null/);
+  const { columns, relationProjections } = parseBookingsSelectColumns(service);
+
+  console.log(`[H6] parsed bookings select columns: ${JSON.stringify(columns)}`);
+
+  // (a) the parsed top-level column list carries BOTH real instants the gate reads.
+  assert.ok(columns.length >= 8, `the select list must parse into real columns, got ${columns.length}`);
+  assert.ok(columns.includes('start_timestamptz'), 'the bookings projection must select the server start instant');
+  assert.ok(columns.includes('end_timestamptz'), 'the bookings projection must select the server end instant');
+
+  // The embedded relation projections are recognised and kept out of the column list.
+  assert.deepEqual(relationProjections.map((entry) => entry.split('(')[0].trim()), ['customers', 'services', 'staff']);
+
+  // (b) the retired column is NOT selected by the bookings query.
+  assert.ok(!columns.includes('line_oa_id'), 'the bookings query must not select the retired line_oa_id');
+
+  // (c) the projection still maps the server instants, anchored to the mapping block.
+  const mapping = isolateBookingMappingBlock(service);
+  assert.match(mapping, /startTime: booking\.start_timestamptz \?\? null/, 'startTime must pass through the server start instant');
+  assert.match(mapping, /endTime: booking\.end_timestamptz \?\? null/, 'endTime must pass through the server end instant');
 });

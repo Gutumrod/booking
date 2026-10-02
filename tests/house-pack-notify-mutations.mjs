@@ -322,6 +322,31 @@ const MUTATIONS = [
     to: "export const REFUNDABLE_DEPOSIT_STATES: ReadonlyArray<RefundableDepositStatus> = Object.freeze([\n  'submitted',\n  'verified',\n]);",
     test: 'tests/house-p0-app-refund-h5.test.ts',
   },
+  // -------------------------------------------------------------------------
+  // BK01 P1 G10 (2026-10-02 order) — the tenant-scoped recipient.
+  // -------------------------------------------------------------------------
+  {
+    // Every claimed row must read its OWN delivery context. Taking the FIRST
+    // claimed row's id for every iteration makes row-b borrow row-a's context —
+    // a different `line_user_id` and shop name — which the cross-row recipient
+    // case in `tests/house-p0-app-g10-line-binding.test.ts` must catch.
+    id: 'p0-g10-recipient-takes-the-first-row',
+    file: 'apps/booking-consumer/src/lib/notification-dispatch.ts',
+    from: 'p_id: claim.id,',
+    to: 'p_id: claimRows[0].id,',
+    test: 'tests/house-p0-app-g10-line-binding.test.ts',
+  },
+  {
+    // H6 projection binding: drop the server START instant from the dashboard
+    // bookings select. The old test only grepped for the token `start_timestamptz`
+    // anywhere in the file (the mapping line keeps it), so it survived this. The
+    // rewritten case parses the select list, so it must go red.
+    id: 'p0-h6-projection-drops-the-server-start',
+    file: 'apps/booking-admin/src/lib/admin-service.ts',
+    from: '        start_timestamptz,\n',
+    to: '',
+    test: 'tests/house-p0-app-h6.test.ts',
+  },
 ];
 
 const original = new Map();
