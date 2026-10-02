@@ -249,13 +249,12 @@ test('only Owner-approved contact values appear, without inventing identity or c
   ];
   for (const locale of locales) {
     const blob = JSON.stringify(messages[locale].legal);
-    const withoutOwnerApprovedContact = blob.replaceAll('titazmth@gmail.com', '').replaceAll('https://lin.ee/WqDbJcl', '');
+    const withoutOwnerApprovedContact = blob.replaceAll('privacy@wstera.com', '');
     for (const pattern of forbidden) {
       assert.doesNotMatch(withoutOwnerApprovedContact, pattern, `${locale} legal copy matched forbidden ${pattern}`);
     }
     const contact = `${messages[locale].legal.terms.sections.contact.b} ${messages[locale].legal.privacy.sections.contact.b}`;
-    assert.match(contact, /titazmth@gmail.com/, `${locale} contact e-mail is missing`);
-    assert.match(contact, /https:\/\/lin\.ee\/WqDbJcl/, `${locale} contact LINE link is missing`);
+    assert.match(contact, /privacy@wstera\.com/, `${locale} contact e-mail is missing`);
   }
   // The retired commercial model must never come back: the old ฿490/฿990 pilot
   // reference points, the free-plan-as-14-day-trial reading, and the 100/500
@@ -349,7 +348,7 @@ test('the readable draft documents exist in both languages and stay in step with
   for (const [documentKey, locale, rel] of files) {
     assert.ok(existsSync(join(root, rel)), `${rel} must exist`);
     const text = read(rel);
-    const comparableText = text.replaceAll('titazmth@gmail.com*', 'titazmth@gmail.com');
+    const comparableText = text.replaceAll('privacy@wstera.com*', 'privacy@wstera.com');
     const doc = messages[locale].legal[documentKey];
     assert.ok(comparableText.includes(messages[locale].legal.meta.draftBadge), `${rel} must carry the draft badge`);
     assert.ok(comparableText.includes(doc.intro), `${rel} must contain the intro`);
@@ -359,4 +358,54 @@ test('the readable draft documents exist in both languages and stay in step with
     }
     assert.ok(text.includes('OWNER INPUT'), `${rel} must keep its Owner inputs visible`);
   }
+});
+
+test('no personal contact address survives in the copy the customer or the shop can read', () => {
+  // The privacy request channel moved from a personal mailbox to the organisation
+  // address. The old personal address and the personal LINE account must not come
+  // back into any rendered copy or readable draft — the guard is deliberately on the
+  // shape of a personal address, not on one literal string, so a different personal
+  // mailbox cannot slip in later.
+  const personalAddress = /[A-Za-z0-9._%+-]+@(?:gmail|googlemail|hotmail|outlook|yahoo|icloud|live|protonmail|proton)\.[A-Za-z]{2,}/i;
+  const rendered = [
+    'apps/booking-consumer/messages/th.json',
+    'apps/booking-consumer/messages/en.json',
+    'apps/booking-admin/messages/th.json',
+    'apps/booking-admin/messages/en.json',
+  ];
+  const drafts = ['docs/legal/TERMS-OF-SERVICE-TH.md', 'docs/legal/TERMS-OF-SERVICE-EN.md', 'docs/legal/PRIVACY-POLICY-TH.md', 'docs/legal/PRIVACY-POLICY-EN.md'];
+  for (const rel of [...rendered, ...drafts]) {
+    const text = read(rel);
+    assert.doesNotMatch(text, personalAddress, `${rel} still exposes a personal contact address`);
+    assert.doesNotMatch(text, /titazmth@gmail\.com/, `${rel} still exposes the old personal address`);
+    assert.doesNotMatch(text, /lin\.ee\/WqDbJcl/, `${rel} still exposes the personal LINE destination`);
+  }
+  // The approved organisation address must actually be present in both languages,
+  // in the contact section of every document, next to the Owner input that is still open.
+  for (const locale of locales) {
+    const termContact = messages[locale].legal.terms.sections.contact.b;
+    const privacyContact = messages[locale].legal.privacy.sections.contact.b;
+    assert.match(termContact, /privacy@wstera\.com/, `${locale} terms contact no longer states the approved address`);
+    assert.match(privacyContact, /privacy@wstera\.com/, `${locale} privacy contact no longer states the approved address`);
+    assert.match(termContact, /OWNER INPUT: published support hours/, `${locale} terms contact lost its published-hours Owner input`);
+    assert.match(privacyContact, /OWNER INPUT: published support hours/, `${locale} privacy contact lost its published-hours Owner input`);
+  }
+  // The DPIA data-subject-rights procedure keeps its open Owner input and now names
+  // the approved address as the request channel.
+  for (const locale of locales) {
+    const rights = messages[locale].legal.privacy.sections.dataSubjectRights.b;
+    assert.match(rights, /privacy@wstera\.com/, `${locale} rights section no longer states the request channel`);
+    assert.match(rights, /OWNER INPUT: approved identity-verification steps and response deadline/, `${locale} rights section lost its open Owner input`);
+  }
+  // No personal channel may survive in the support surface either: the approved
+  // address is the default, and the LINE OA remains the message-delivery channel.
+  const surface = [
+    'apps/booking-consumer/src/lib/support-channel.ts',
+    'apps/booking-consumer/src/components/support-contact.tsx',
+    'apps/booking-consumer/src/app/support/page.tsx',
+  ]
+    .map(read)
+    .join('\n');
+  assert.doesNotMatch(surface, personalAddress, 'the support surface still exposes a personal contact address');
+  assert.match(surface, /DEFAULT_SUPPORT_EMAIL = 'privacy@wstera\.com'/, 'the support default is no longer the approved address');
 });

@@ -138,11 +138,27 @@ test('LINE identifier normalization always yields an @handle link', () => {
   assert.equal(buildLineOaUrl('example_oa'), 'https://line.me/R/ti/p/@example_oa');
 });
 
-test('Owner-approved LINE short link is preserved as the real customer destination', () => {
-  assert.equal(DEFAULT_SUPPORT_EMAIL, 'titazmth@gmail.com');
+test('Owner-approved support destinations are preserved as the real customer destinations', () => {
+  assert.equal(DEFAULT_SUPPORT_EMAIL, 'privacy@wstera.com');
   assert.equal(DEFAULT_SUPPORT_LINE_OA_ID, 'https://lin.ee/WqDbJcl');
   assert.equal(normalizeLineOaId(DEFAULT_SUPPORT_LINE_OA_ID), 'https://lin.ee/WqDbJcl');
   assert.equal(buildLineOaUrl(DEFAULT_SUPPORT_LINE_OA_ID), 'https://lin.ee/WqDbJcl');
+});
+
+// The privacy request channel is an organisation address. A personal mailbox must not
+// be able to reach the customer copy, the drafts or the support surface again.
+test('no personal mailbox is embedded in the support surface or the customer copy', () => {
+  const personalAddress = /[A-Za-z0-9._%+-]+@(?:gmail|googlemail|hotmail|outlook|yahoo|icloud|live|protonmail|proton)\.[A-Za-z]{2,}/i;
+  const surfaces = [
+    'apps/booking-consumer/src/lib/support-channel.ts',
+    'apps/booking-consumer/src/components/support-contact.tsx',
+    'apps/booking-consumer/src/app/support/page.tsx',
+    messagesPath('th'),
+    messagesPath('en'),
+  ].map(read);
+  for (const text of surfaces) {
+    assert.doesNotMatch(text, personalAddress, 'a personal mailbox is embedded in shipped copy');
+  }
 });
 
 // No invented contact value may sit in the support surface source.

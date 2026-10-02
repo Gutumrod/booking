@@ -99,5 +99,5 @@ This draft intends these Terms to be governed by the law of Thailand and to be e
 
 ## 14. Contact
 
-Questions about these Terms are handled through e-mail at titazmth@gmail.com and LINE at https://lin.ee/WqDbJcl. Published support hours remain to be supplied: [[OWNER INPUT: published support hours]].
+Questions about these Terms are handled through e-mail at privacy@wstera.com. Published support hours remain to be supplied: [[OWNER INPUT: published support hours]].
 Support is provided through written channels only. This draft makes no response-time promise.

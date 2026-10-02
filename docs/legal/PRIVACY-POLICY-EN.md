@@ -87,7 +87,7 @@ The 60-day period records the Owner’s current decision; the remaining category
 
 Under the Thai Personal Data Protection Act (PDPA) you have the right to access and obtain a copy of your personal data, to request correction, to request deletion, to request restriction of processing, to object to processing, to withdraw consent where consent is the basis, and to complain to the Office of the Personal Data Protection Committee.
 A request is handled by verifying the requester and the scope of the request, then classifying the records into what can be removed, what can be anonymised and what must be retained for legal, accounting or security reasons, then executing the approved procedure and recording the outcome and any exception.
-Because no retention, role or lawful-basis decision has been approved yet, this draft promises no response deadline: [[OWNER INPUT: approved identity-verification steps and response deadline for data-subject requests]], titazmth@gmail.com or LINE at https://lin.ee/WqDbJcl.
+Because no retention, role or lawful-basis decision has been approved yet, this draft promises no response deadline: [[OWNER INPUT: approved identity-verification steps and response deadline for data-subject requests]], privacy@wstera.com.
 
 ## 10. How the data is protected
 
@@ -110,5 +110,5 @@ This notice will change as the Service changes and as the Owner makes the decisi
 
 ## 14. Contact for privacy requests
 
-Privacy requests and questions about this notice can be sent by e-mail to titazmth@gmail.com or through LINE at https://lin.ee/WqDbJcl. Published support hours remain to be supplied: [[OWNER INPUT: published support hours]].
+Privacy requests and questions about this notice can be sent by e-mail to privacy@wstera.com. Published support hours remain to be supplied: [[OWNER INPUT: published support hours]].
 This draft does not set a response deadline.

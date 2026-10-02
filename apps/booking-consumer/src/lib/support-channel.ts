@@ -18,7 +18,7 @@ export const SUPPORT_EMAIL_ENV_KEY = 'NEXT_PUBLIC_SUPPORT_EMAIL';
 export const SUPPORT_LINE_OA_ENV_KEY = 'NEXT_PUBLIC_SUPPORT_LINE_OA_ID';
 
 // Owner-approved public defaults; deployment env values can still override them.
-export const DEFAULT_SUPPORT_EMAIL = 'titazmth@gmail.com';
+export const DEFAULT_SUPPORT_EMAIL = 'privacy@wstera.com';
 export const DEFAULT_SUPPORT_LINE_OA_ID = 'https://lin.ee/WqDbJcl';
 
 /** Marker token that identifies a value only the Owner can supply. */
