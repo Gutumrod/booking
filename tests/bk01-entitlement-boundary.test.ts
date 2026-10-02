@@ -307,7 +307,7 @@ const freeShopsLimit = () => Number(planRow('free').shops_limit);
 
 test('forward migrations exist in timestamp order and the repository policy accepts each', () => {
   const files = readdirSync(MIGRATION_DIR).filter((name) => name.endsWith('.sql')).sort();
-  assert.deepEqual(files, [MIGRATION_FILE, '20260927120000_bk01_runtime_route_rpcs.sql', '20260927130000_bk01_trial_line_bind.sql', '20260928120000_bk01_house_upload_grants.sql', '20260930120000_bk01_link_token_no_extensions.sql', '20261001023000_bk01_queue_release.sql', '20261001130000_bk01_sql_consolidate.sql', '20261001140000_bk01_pack_notify_group67.sql', '20261002120000_bk01_council_p0.sql', '20261002130000_bk01_p0_alert_context.sql', '20261002140000_bk01_review_f1_f2.sql', '20261002150000_bk01_p1_g09_g10.sql']);
+  assert.deepEqual(files, [MIGRATION_FILE, '20260927120000_bk01_runtime_route_rpcs.sql', '20260927130000_bk01_trial_line_bind.sql', '20260928120000_bk01_house_upload_grants.sql', '20260930120000_bk01_link_token_no_extensions.sql', '20261001023000_bk01_queue_release.sql', '20261001130000_bk01_sql_consolidate.sql', '20261001140000_bk01_pack_notify_group67.sql', '20261002120000_bk01_council_p0.sql', '20261002130000_bk01_p0_alert_context.sql', '20261002140000_bk01_review_f1_f2.sql', '20261002150000_bk01_p1_g09_g10.sql', '20261002160000_bk01_g10_line_binding_audit.sql']);
   assert.match(MIGRATION_FILE, /^\d{14}_[a-z0-9_]+\.sql$/);
   assert.equal(validateBk01MigrationSql(rawSql, MIGRATION_FILE), true);
   assert.equal(validateBk01MigrationSql(readFileSync(`${MIGRATION_DIR}/20260927120000_bk01_runtime_route_rpcs.sql`, 'utf8'), '20260927120000_bk01_runtime_route_rpcs.sql'), true);
@@ -330,6 +330,10 @@ test('forward migrations exist in timestamp order and the repository policy acce
   assert.equal(validateBk01MigrationSql(packNotify, '20261001140000_bk01_pack_notify_group67.sql'), true);
   assert.match(packNotify, /ALTER TABLE local_service\.entitlement_plans[\s\S]*monthly_push_cap/);
   assert.match(packNotify, /reminder_3h/);
+  const lineBindingAudit = readFileSync(`${MIGRATION_DIR}/20261002160000_bk01_g10_line_binding_audit.sql`, 'utf8');
+  assert.equal(validateBk01MigrationSql(lineBindingAudit, '20261002160000_bk01_g10_line_binding_audit.sql'), true);
+  assert.match(lineBindingAudit, /AFTER INSERT OR UPDATE OR DELETE ON local_service\.line_users/);
+  assert.match(lineBindingAudit, /AFTER UPDATE OF line_user_id ON local_service\.customers/);
   assert.match(packNotify, /FORCE ROW LEVEL SECURITY/);
   assert.match(packNotify, /SKIP LOCKED/);
   assert.doesNotMatch(packNotify, /ALTER TABLE local_service\.shops/i);
